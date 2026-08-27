@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Colors mapping to design spec Section 2 */
+  --color-bg-canvas: #0A0B0D;
+  --color-bg-surface: #121317;
+  --color-bg-surface-raised: #1A1C21;
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+
+  --color-text-primary: #F4F5F7;
+  --color-text-secondary: #9CA3AF;
+  --color-text-tertiary: #6B7280;
+
+  --color-brand-500: #4F7CFF;
+  --color-brand-400: #6E92FF;
+
+  --color-status-good: #22C55E;
+  --color-status-good-bg: rgba(34, 197, 94, 0.12);
+  --color-status-warning: #F5A524;
+  --color-status-warning-bg: rgba(245, 165, 36, 0.12);
+  --color-status-danger: #F0464C;
+  --color-status-danger-bg: rgba(240, 70, 76, 0.14);
+
+  --color-money-accent: #FFB020;
+
+  --color-chart-1: #4F7CFF;
+  --color-chart-2: #22C55E;
+  --color-chart-3: #F5A524;
+  --color-chart-4: #F0464C;
+  --color-chart-5: #9C6ADE;
+
+  /* Typography mapping to design spec Section 3 */
+  --font-ui: "Inter", -apple-system, sans-serif;
+  --font-numeric: "IBM Plex Mono", "JetBrains Mono", monospace;
+
+  --text-xs: 12px;
+  --text-xs-line-height: 16px;
+  --text-sm: 13px;
+  --text-sm-line-height: 18px;
+  --text-base: 14px;
+  --text-base-line-height: 20px;
+  --text-lg: 16px;
+  --text-lg-line-height: 24px;
+  --text-xl: 20px;
+  --text-xl-line-height: 28px;
+  --text-2xl: 28px;
+  --text-2xl-line-height: 34px;
+  --text-3xl: 36px;
+  --text-3xl-line-height: 42px;
+
+  /* Spacing & Radius mapping to design spec Section 4 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+}
+
+:root {
+  /* Set these as variables so they can be read by pure CSS custom classes if needed */
+  --bg-canvas: #0A0B0D;
+  --bg-surface: #121317;
+  --bg-surface-raised: #1A1C21;
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.40);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  color-scheme: dark;
+  background-color: var(--bg-canvas);
+  color: #F4F5F7;
+  font-family: "Inter", -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-canvas);
+  color: #F4F5F7;
+  overflow-x: hidden;
+}
+
+/* Elevated Panel Component Spec (Section 5) */
+.panel-elevated {
+  background-color: var(--bg-surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Scrollbar customization (Section 2, User Experience) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Utility classes for desaturated dark maps */
+.dark-map-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CINEMATIC CAMERA MOVEMENT & OPTICAL EFFECTS (True Drone/Gimbal Motion)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 1. Ultra-Smooth Drone Aerial Crane & Gimbal Sweep (40s majestic loop) */
+@keyframes cinematicDroneCrane {
+  0% {
+    transform: scale(1.05) translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.13) translate3d(-22px, -12px, 0) rotate(-0.35deg);
+  }
+  55% {
+    transform: scale(1.17) translate3d(-34px, 10px, 0) rotate(0.25deg);
+  }
+  80% {
+    transform: scale(1.09) translate3d(18px, -8px, 0) rotate(0.40deg);
+  }
+  100% {
+    transform: scale(1.05) translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+/* 2. Horizontal Highway Dolly Track (36s sweeping tracking shot) */
+@keyframes cinematicDollyTrack {
+  0% {
+    transform: scale(1.08) translate3d(24px, 0, 0) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.15) translate3d(-18px, -10px, 0) rotate(0.3deg);
+  }
+  65% {
+    transform: scale(1.11) translate3d(-32px, 8px, 0) rotate(-0.25deg);
+  }
+  100% {
+    transform: scale(1.08) translate3d(24px, 0, 0) rotate(0deg);
+  }
+}
+
+/* 3. Forward Telephoto Push-In Shot (30s slow focal zoom) */
+@keyframes cinematicPushIn {
+  0% {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.18) translate3d(0, -18px, 0);
+  }
+  100% {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+}
+
+/* 4. Anamorphic Lens Flare Shimmer Sweep (18s periodic optical flare) */
+@keyframes anamorphicFlare {
+  0% {
+    transform: translateX(-100%) skewX(-25deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0;
+  }
+  42% {
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(120%) skewX(-25deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(120%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+/* Utility classes */
+.animate-cinematic-crane {
+  animation: cinematicDroneCrane 16s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.animate-cinematic-dolly {
+  animation: cinematicDollyTrack 18s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.animate-cinematic-push {
+  animation: cinematicPushIn 14s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.animate-anamorphic-flare {
+  animation: anamorphicFlare 12s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+
+/* Vignette mask for depth of field */
+.cinematic-vignette {
+  background: radial-gradient(circle at center, transparent 40%, rgba(7, 8, 10, 0.75) 100%);
+  pointer-events: none;
+}
