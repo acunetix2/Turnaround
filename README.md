@@ -3,248 +3,184 @@
 # 🚛 Turnaround
 ### Operational Intelligence Platform for Commercial Fleet & Corridor Logistics
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-19.0+-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg?style=flat&logo=supabase&logoColor=white)](https://supabase.com)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC.svg?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-Frontend-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Architecture-3178C6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-3ECF8E.svg?style=flat&logo=supabase&logoColor=white)](https://supabase.com)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Design%20System-38B2AC.svg?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 
 *Real-time fleet dwell monitoring, geofence cost tracking, and turnaround analytics for commercial trucking corridors across East Africa.*
 
-[Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Database & Migrations](#-database--migrations) • [API Documentation](#-api-endpoints) • [Tech Stack](#-tech-stack)
+[Executive Summary](#-executive-summary) • [System Architecture](#-system-architecture) • [Core Engine Modules](#-core-engine-modules) • [Data Lifecycle & Pipeline](#-data-lifecycle--pipeline) • [Role-Based Access Control](#-role-based-access-control-rbac) • [Corridor Intelligence](#-corridor-intelligence--regional-context)
 
 </div>
 
 ---
 
-## 📖 Overview
+## 📋 Executive Summary
 
-**Turnaround** is a high-performance logistics intelligence platform designed to eliminate operational bottlenecks, reduce vehicle dwell times, and quantify financial losses across major freight corridors (such as Mombasa Port $\leftrightarrow$ Nairobi ICD $\leftrightarrow$ Malaba OSBP $\leftrightarrow$ Kampala).
+**Turnaround** is a mission-critical fleet operational intelligence and dwell optimization platform engineered specifically for commercial haulage corridors across East Africa (e.g., Mombasa Port $\leftrightarrow$ Nairobi ICD $\leftrightarrow$ Malaba OSBP $\leftrightarrow$ Kampala / Kigali).
 
-By fusing high-frequency GPS telemetry with intelligent spatial geofencing and historical turnaround baselines, Turnaround automatically detects dwell anomalies, flags border and weighbridge delays, and empowers dispatchers and fleet managers to act before SLA penalties accumulate.
-
----
-
-## ⚡ Key Features
-
-- 🛰️ **Real-Time GPS Telemetry Stream**: High-throughput GPS ingestion with geodesic debounce windowing to eliminate boundary fence oscillations.
-- 📍 **Intelligent Geofence Engine**: Haversine circular proximity detection + Shapely planar polygon geofences for terminals, ICDs, and border crossings.
-- ⏱️ **4-Tier Expected Dwell Resolution**: Dynamically calculates baseline dwell based on (1) Historical visits ($\ge 10$), (2) Location SLA configs, (3) Customer SLA contracts, or (4) Global corridor defaults.
-- 💰 **Financial Impact Engine**: Calculates real-time idle vehicle cost accruals based on custom tractor unit hourly operating costs (e.g. Scania G460, Volvo FH16).
-- 🧠 **Predictive Delay & Risk Scoring**: Early warning models for corridor bottlenecks, gate holds, and customs clearance delays.
-- 🗺️ **Interactive Operations Map**: Live corridor visualization powered by Leaflet, animated fleet clusters, and dwell severity color coding.
-- 🛡️ **Multi-Tenant Isolation & RBAC**: Strict tenant boundaries (`company_id`) with role-based permissions (`admin`, `fleet_manager`, `dispatcher`, `analyst`).
+In cross-border trucking, unexplained dwell times at weighbridges, container depots, customs yards, and customer facilities generate substantial unrecovered idle costs and severe SLA penalties. Turnaround solves this by transforming continuous GPS telemetry streams into real-time financial transparency, automated bottleneck classification, and predictive turnaround analytics.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
 ```mermaid
-graph TD
-    subgraph Client Layer
-        A[React 19 + Vite SPA] -->|Auth JWT| B(Supabase Auth)
-        A -->|REST API /api/v1/*| C(FastAPI Application)
+graph TB
+    subgraph Client Application Layer
+        UI[React 19 Interactive Web App]
+        Map[Corridor Telemetry & Live Map View]
+        AnalyticsUI[Dwell Analytics & Executive Reports]
     end
 
-    subgraph Backend Services
-        C --> D[Dwell Detection Engine]
-        C --> E[Geofence & Spatial Math]
-        C --> F[Financial Cost Engine]
-        C --> G[Turnaround Prediction ML]
+    subgraph Authentication & Gateway Layer
+        Auth[Supabase Auth / JWT Validation]
+        API[FastAPI Asynchronous Gateway]
+        RBAC[Multi-Tenant & Role Authorization Filter]
     end
 
-    subgraph Data Layer
-        C -->|SQLAlchemy 2.0 Async / asyncpg| H[(Supabase PostgreSQL)]
+    subgraph Core Computational Engines
+        DebounceEngine[GPS Telemetry & Debounce Engine]
+        GeofenceEngine[Haversine & Polygon Geofence Engine]
+        DwellEngine[Dwell Lifecycle State Machine]
+        ResolutionEngine[4-Tier Baseline Resolution Engine]
+        FinancialEngine[Hourly Idle Cost & Financial Loss Engine]
+        PredictionEngine[Machine Learning Delay Risk Engine]
     end
+
+    subgraph Persistent Storage Layer
+        PostgreSQL[(Supabase PostgreSQL Relational Storage)]
+    end
+
+    UI --> Auth
+    UI --> API
+    API --> RBAC
+    RBAC --> DebounceEngine
+    DebounceEngine --> GeofenceEngine
+    GeofenceEngine --> DwellEngine
+    DwellEngine --> ResolutionEngine
+    ResolutionEngine --> FinancialEngine
+    DwellEngine --> PredictionEngine
+    PredictionEngine --> AnalyticsUI
+    FinancialEngine --> PostgreSQL
+    DwellEngine --> PostgreSQL
+    Map --> API
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## ⚙️ Core Engine Modules
 
-### Frontend (`/turnaround-frontend`)
-- **Core**: React 19, TypeScript, Vite 8
-- **State & Data Fetching**: TanStack React Query v5
-- **Styling**: Tailwind CSS v4, Framer Motion
-- **Mapping & Charts**: Leaflet, Recharts, Lucide Icons
-- **Auth SDK**: `@supabase/supabase-js`
-
-### Backend (`/turnaround-backend`)
-- **Framework**: FastAPI (Python 3.11+)
-- **ORM & Database**: SQLAlchemy 2.0 (Async), `asyncpg`
-- **Spatial Computations**: Shapely, NumPy, Pandas
-- **Migrations**: Alembic
-- **Validation**: Pydantic v2 & `pydantic-settings`
-- **ASGI Server**: Uvicorn with structured logging
+### 1. Spatial Geofencing & Telemetry Ingestion Engine
+- **Geodesic Spatial Computations**: Employs the Haversine geodesic formula ($R = 6,371,000\text{ m}$) for high-precision spherical proximity validation without equator projection distortion.
+- **Complex Polygon Boundaries**: Integrates planar polygon buffer topology for irregularly shaped container terminals, port berths, and bonded warehouses.
+- **GPS Telemetry Debounce Mechanism**: Requires consecutive confirmative coordinates outside geofence thresholds to prevent erratic state oscillation when vehicles park adjacent to facility perimeter fences.
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js** $\ge$ 18.x
-- **Python** $\ge$ 3.11
-- **Supabase** account (PostgreSQL & Auth)
+### 2. Dwell Lifecycle State Machine
+- **Event Lifecycle Tracking**: Tracks precise vehicle state transitions: `IN_TRANSIT` $\to$ `ARRIVED` $\to$ `DWELLING` $\to$ `DEPARTED`.
+- **Active Dwell Monitoring**: Computes ongoing dwell durations in real time for vehicles currently inside facility boundaries before departure records are finalized.
+- **Trip Association**: Dynamically correlates arrival events with active freight manifests and planned origin-destination routes.
 
 ---
 
-### 1. Backend Setup
+### 3. 4-Tier Expected Dwell Resolution Engine
+To determine whether an ongoing or completed dwell constitutes an operational delay, the system resolves baseline expectations through a hierarchical four-tier evaluation chain:
 
-```powershell
-cd turnaround-backend
-
-# Create virtual environment & activate
-python -m venv .venv
-.venv\Scripts\activate   # Windows
-# source .venv/bin/activate  # Linux/macOS
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment variables
-copy .env.example .env
 ```
-
-Edit `.env` with your Supabase credentials:
-```env
-PORT=8000
-ENVIRONMENT=development
-DATABASE_URL=postgresql+asyncpg://postgres.[YOUR-PROJECT-REF]:[ENCODED-PASSWORD]@[YOUR-POOLER-HOST]:5432/postgres
-SUPABASE_URL=https://[YOUR-PROJECT-REF].supabase.co
-SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
-```
-
-Run the backend development server:
-```powershell
-python run.py
-# Backend runs at http://localhost:8000
-# OpenAPI Docs at http://localhost:8000/docs
+┌────────────────────────────────────────────────────────────┐
+│ Tier 1: Historical Median (If Location Visits ≥ 10)        │
+├────────────────────────────────────────────────────────────┤
+│ Tier 2: Location-Specific Operational SLA Target           │
+├────────────────────────────────────────────────────────────┤
+│ Tier 3: Customer Contractual SLA Agreement                 │
+├────────────────────────────────────────────────────────────┤
+│ Tier 4: Global Corridor Baseline (Default: 120 minutes)    │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 2. Frontend Setup
+### 4. Financial Cost & Excess Dwell Quantification Engine
+- **Tractor Operating Cost Matrix**: Calculates exact financial losses per incident by combining individual vehicle operating hourly rates ($C_{\text{hourly}}$) with quantified excess dwell time:
+$$\text{Financial Loss} = \max(0, \text{Actual Dwell} - \text{Expected Dwell}) \times \frac{C_{\text{hourly}}}{60}$$
+- **Severity Scoring Model**:
+  - 🟢 **LOW**: $\text{Actual Dwell} \le 1.2 \times \text{Expected Dwell}$
+  - 🟡 **MEDIUM**: $1.2 \times \text{Expected Dwell} < \text{Actual Dwell} \le 1.5 \times \text{Expected Dwell}$
+  - 🔴 **HIGH**: $\text{Actual Dwell} > 1.5 \times \text{Expected Dwell}$
 
-```powershell
-cd ../turnaround-frontend
+---
 
-# Install dependencies
-npm install
+### 5. Predictive Delay & Bottleneck Intelligence Engine
+- **Pre-Arrival Turnaround Estimation**: Predicts expected turnaround durations based on time of day, day of week, seasonal congestion, and recent queue lengths.
+- **Automated Root Cause Classification**: Identifies and tags chronic bottleneck patterns:
+  - `EXCESSIVE_DWELL`: Prolonged loading/unloading exceeding contractual SLA.
+  - `RECURRING_BOTTLENECK`: Systemic facility delays across multiple carrier fleets.
+  - `GATE_HOLD`: Terminal gate processing delays and documentation holdups.
+  - `WEIGHBRIDGE_CONGESTION`: Axle-load verification delays on primary transit highways.
+  - `SLA_BREACH`: Imminent or finalized contractual delay penalty risk.
 
-# Configure environment variables
-copy .env.example .env
+---
+
+### 6. Corridor Analytics & Fleet Visualization Module
+- **Live Fleet Tracking**: Real-time geospatial corridor visualization showing animated fleet positions, speed, heading, and live dwell badges.
+- **Facility Benchmarking**: Comparative analysis of turnaround efficiency across ports (Kilindini), inland dry ports (Nairobi ICD), and One-Stop Border Posts (Malaba, Namanga, Busia).
+- **Executive Loss Dashboards**: Aggregated financial metrics, cumulative monthly dwell loss, truck utilization rates, and turnaround trend analysis.
+
+---
+
+## 🔄 Data Lifecycle & Pipeline
+
 ```
+1. TELEMETRY STREAM
+   GPS Device ──► Coordinate Payload (Lat, Lon, Speed, Heading, Timestamp)
 
-Ensure `.env` contains:
-```env
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-VITE_SUPABASE_URL=https://[YOUR-PROJECT-REF].supabase.co
-VITE_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
-VITE_USE_MOCKS=false
-```
+2. SPATIAL CLASSIFICATION
+   Geofence Matcher ──► Geodesic Distance / Polygon Containment Check
 
-Start Vite dev server:
-```powershell
-npm run dev
-# Frontend runs at http://localhost:5175 (or 5173)
+3. STATE RESOLUTION
+   Debounce Validator ──► Entry / Exit Event Transition Confirmation
+
+4. BENCHMARKING & AUDIT
+   4-Tier Engine ──► Baseline Resolution & Excess Minutes Calculation
+
+5. FINANCIAL ASSESSMENT
+   Cost Model ──► Operating Rate Applied ──► Real-Time Cost Accumulation
+
+6. ACTIONABLE INTELLIGENCE
+   Insights Engine ──► Alert Dispatched ──► Dispatcher Mitigation
 ```
 
 ---
 
-## 🗄️ Database & Migrations
+## 🛡️ Role-Based Access Control (RBAC)
 
-### Apply Migrations to Supabase
+The system enforces strict multi-tenant isolation through tenant keys (`company_id`), ensuring data privacy across independent logistics operators.
 
-You can apply the schema in either of two ways:
-
-1. **Via Supabase SQL Editor (Instant)**:
-   - Copy the SQL script from [`turnaround-backend/alembic/initial_schema.sql`](turnaround-backend/alembic/initial_schema.sql)
-   - Paste into **Supabase Dashboard → SQL Editor** and click **Run**.
-
-2. **Via Alembic CLI**:
-   ```powershell
-   cd turnaround-backend
-   .venv\Scripts\alembic upgrade head
-   ```
-
-### Schema Overview
-
-| Table | Description |
+| Role | Operational Scope & Permissions |
 |---|---|
-| `companies` | Multi-tenant organization accounts |
-| `users` | Fleet staff accounts with RBAC roles |
-| `vehicles` | Fleet tractor units, types, and hourly costs |
-| `locations` | Corridor sites, terminals, ports, and geofence radii |
-| `trips` | Freight dispatch routes and schedules |
-| `gps_events` | Telemetry timeseries (lat, lon, speed, heading) |
-| `dwell_events` | Dwell tracking, baseline excess, and calculated loss |
-| `insights` | Bottleneck alerts, risk scores, and recommendations |
+| **Administrator** | Organization provisioning, billing, system configuration, user lifecycle management. |
+| **Fleet Manager** | Vehicle asset registry, location & geofence setup, financial loss tracking, root-cause insights. |
+| **Dispatcher** | Live corridor map monitoring, active trip routing, immediate dwell incident mitigation. |
+| **Data Analyst** | Historical turnaround reporting, terminal KPI benchmarking, cross-corridor efficiency exports. |
 
 ---
 
-## 📡 API Endpoints
+## 🌍 Corridor Intelligence & Regional Context
 
-All backend endpoints are documented interactively via Swagger UI at `http://localhost:8000/docs`.
+Turnaround is purpose-built for the northern and central logistics corridors across Eastern Africa:
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | Service and database health check |
-| `GET` / `POST` | `/api/v1/vehicles` | List or register fleet vehicles |
-| `GET` / `POST` | `/api/v1/locations` | List or configure corridor geofences |
-| `GET` / `POST` | `/api/v1/trips` | Dispatch and monitor haulage trips |
-| `POST` | `/api/v1/gps/events` | Ingest real-time GPS telemetry point |
-| `GET` | `/api/v1/dwell/events` | Query detected dwell incidents & financial loss |
-| `GET` | `/api/v1/analytics/dashboard` | Aggregated fleet KPIs and dwell breakdown |
-| `GET` | `/api/v1/insights` | Actionable bottleneck alerts and recommendations |
-| `POST` | `/api/v1/predictions/dwell` | Predict estimated dwell time for site arrival |
+- **Mombasa Port (Kilindini Terminal)**: Real-time container yard dwell tracking and gate clearance monitoring.
+- **Nairobi Inland Container Depot (ICD)**: Last-mile haulage and rail-to-road turnaround auditing.
+- **Malaba & Busia One-Stop Border Posts (OSBP)**: Cross-border customs, transit bond, and axle-load verification dwell management.
+- **Athi River & Gilgil Weighbridges**: Transit weighbridge delay quantification.
 
 ---
 
-## 📂 Repository Structure
+## 📄 License & Intellectual Property
 
-```text
-Turnaround/
-├── .gitignore
-├── README.md
-├── turnaround-backend/
-│   ├── alembic/                 # Database migrations (Python & SQL)
-│   ├── app/
-│   │   ├── auth/                # Supabase JWT validation & RBAC
-│   │   ├── db/                  # SQLAlchemy async models & session factory
-│   │   ├── engines/             # Dwell, Geofencing, Financial, ML engines
-│   │   ├── routers/             # FastAPI REST endpoints (/api/v1/*)
-│   │   └── schemas/             # Pydantic validation schemas
-│   ├── scripts/                 # Demo database seed scripts
-│   ├── requirements.txt
-│   └── run.py                   # ASGI launch runner
-│
-└── turnaround-frontend/
-    ├── public/                  # Static assets & brand imagery
-    ├── src/
-    │   ├── app/                 # Router configuration
-    │   ├── auth/                # AuthProvider, Login, Signup, Landing
-    │   ├── components/          # Reusable UI tokens, maps, charts, layout
-    │   ├── features/            # Dashboard, Map, Vehicles, Locations, Insights
-    │   ├── hooks/               # TanStack query data hooks
-    │   └── lib/                 # API client & mock fixtures
-    ├── package.json
-    └── vite.config.ts
-```
-
----
-
-## 👥 Roles & Access Control
-
-| Role | Permissions |
-|---|---|
-| **`admin`** | Full organization control, user management, system configs |
-| **`fleet_manager`** | Add/edit vehicles, configure geofences, view financial losses |
-| **`dispatcher`** | Real-time map tracking, trip management, live status updates |
-| **`analyst`** | Historical dwell benchmarking, turnaround reports, KPI export |
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+Copyright © 2026 Turnaround Logistics Systems. All rights reserved. Proprietary software for commercial fleet logistics optimization.
