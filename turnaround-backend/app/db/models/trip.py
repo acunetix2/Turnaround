@@ -31,7 +31,11 @@ class Trip(Base):
     planned_arrival: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_departure: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_arrival: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    status: Mapped[TripStatus] = mapped_column(SQLEnum(TripStatus), default=TripStatus.PLANNED, nullable=False)
+    status: Mapped[TripStatus] = mapped_column(
+        SQLEnum(TripStatus, values_callable=lambda obj: [e.value for e in obj], name="tripstatus"),
+        default=TripStatus.PLANNED,
+        nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationships

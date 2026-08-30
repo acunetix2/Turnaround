@@ -4,7 +4,7 @@ import {
   formatMinutes,
   formatDateTime,
   formatRelative,
-} from '../src/lib/format';
+} from '../lib/format';
 
 describe('formatCurrency', () => {
   it('formats zero', () => {

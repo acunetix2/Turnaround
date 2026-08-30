@@ -29,7 +29,11 @@ class Location(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     company_id: Mapped[str] = mapped_column(String(36), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    location_type: Mapped[LocationType] = mapped_column(SQLEnum(LocationType), default=LocationType.WAREHOUSE, nullable=False)
+    location_type: Mapped[LocationType] = mapped_column(
+        SQLEnum(LocationType, values_callable=lambda obj: [e.value for e in obj], name="locationtype"),
+        default=LocationType.WAREHOUSE,
+        nullable=False
+    )
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     geofence_radius: Mapped[float] = mapped_column(Float, default=250.0, nullable=False)  # in meters

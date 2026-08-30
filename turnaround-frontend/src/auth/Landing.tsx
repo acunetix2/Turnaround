@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, TrendingDown, Zap, BarChart3, MapPin, Shield,
-  Clock, DollarSign, Truck, ChevronRight, ChevronDown, CheckCircle2,
-  Radio, Globe, ShieldCheck, FileText, ArrowUpRight, Cpu, Layers,
-  Building2, Navigation, Activity, Server, Sliders, ExternalLink
+  ArrowRight, TrendingDown, Zap, MapPin, Shield,
+  Clock, DollarSign, ChevronRight, ChevronDown, CheckCircle2,
+  Radio, Cpu, Layers, Server
 } from 'lucide-react';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { OperationalFlashcards } from '../components/landing/OperationalFlashcards';

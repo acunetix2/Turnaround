@@ -30,7 +30,11 @@ class Vehicle(Base):
     vehicle_type: Mapped[str] = mapped_column(String(100), default="Semi-Trailer Truck", nullable=False)
     capacity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # in tonnes / cbm
     hourly_operating_cost: Mapped[float] = mapped_column(Float, default=3500.0, nullable=False)  # in KES
-    status: Mapped[VehicleStatus] = mapped_column(SQLEnum(VehicleStatus), default=VehicleStatus.ACTIVE, nullable=False)
+    status: Mapped[VehicleStatus] = mapped_column(
+        SQLEnum(VehicleStatus, values_callable=lambda obj: [e.value for e in obj], name="vehiclestatus"),
+        default=VehicleStatus.ACTIVE,
+        nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationships

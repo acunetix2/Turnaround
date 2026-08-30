@@ -110,19 +110,19 @@ def _utc(dt: datetime) -> datetime:
 
 
 async def seed(db: AsyncSession):
-    print("🌱 Seeding Turnaround demo data into Supabase PostgreSQL...")
+    print("Seeding Turnaround demo data into Supabase PostgreSQL...")
 
     # Company
     company = Company(id=COMPANY["id"], name=COMPANY["name"])
     db.add(company)
     await db.flush()
-    print(f"  ✓ Company: {company.name}")
+    print(f"  - Company: {company.name}")
 
     # Users
     for u in USERS:
         db.add(User(id=u["id"], company_id=company.id, name=u["name"], email=u["email"], role=u["role"]))
     await db.flush()
-    print(f"  ✓ {len(USERS)} users created")
+    print(f"  - {len(USERS)} users created")
 
     # Vehicles
     vehicles = []
@@ -138,7 +138,7 @@ async def seed(db: AsyncSession):
         db.add(veh)
         vehicles.append(veh)
     await db.flush()
-    print(f"  ✓ {len(vehicles)} vehicles registered")
+    print(f"  - {len(vehicles)} vehicles registered")
 
     # Locations
     locations = []
@@ -147,7 +147,7 @@ async def seed(db: AsyncSession):
         db.add(loc)
         locations.append(loc)
     await db.flush()
-    print(f"  ✓ {len(locations)} corridor locations created")
+    print(f"  - {len(locations)} corridor locations created")
 
     # Simulate 30 days of dwell events (incl. the spec's 5h12m KDA 123X scenario)
     now = datetime.now(timezone.utc)
@@ -200,11 +200,11 @@ async def seed(db: AsyncSession):
                 hour = (hour + int(dwell_mins / 60) + 1) % 24
 
     await db.flush()
-    print(f"  ✓ {dwell_events_created} dwell events generated (30 days)")
-    print(f"    → Spec scenario: KDA 123X at Kilindini Gate 14 — 5h 12m dwell seeded")
+    print(f"  - {dwell_events_created} dwell events generated (30 days)")
+    print(f"    -> Spec scenario: KDA 123X at Kilindini Gate 14 - 5h 12m dwell seeded")
 
     await db.commit()
-    print("\n✅ Seed complete. Start the API: uvicorn app.main:app --reload --port 8000")
+    print("\nSeed complete. Start the API: uvicorn app.main:app --reload --port 8000")
 
 
 async def main():

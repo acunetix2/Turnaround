@@ -1,90 +1,88 @@
 import React, { useState } from 'react';
 import {
-  Sliders, Save, RefreshCw, Bell, DollarSign, Clock, MapPin,
-  Building, ShieldCheck, CheckCircle2, AlertTriangle, Radio
+  Save, Bell, DollarSign, Clock, Globe
 } from 'lucide-react';
-import { Select } from '../../components/ui/Select';
 import { useToast } from '../../components/ui/Toast';
 
 export const Settings: React.FC = () => {
-  const { showToast } = useToast();
+  const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'baselines' | 'rates' | 'telematics' | 'alerts'>('baselines');
 
-  // Settings State
   const [settings, setSettings] = useState({
-    companyName: 'Turnaround Haulage Ltd',
+    companyName: 'Siginon Global Logistics',
     operatingCurrency: 'KES',
     defaultCorridor: 'northern_corridor',
-    gpsPollingInterval: '15',
+    gpsPollingInterval: '8',
     geofenceBufferMeters: '50',
     warehouseExpectedDwell: '90',
     depotExpectedDwell: '45',
     portExpectedDwell: '180',
     borderExpectedDwell: '240',
-    hourlyOperatingCost: '3500',
+    hourlyOperatingCost: '7500',
     demurrageMultiplier: '1.5',
-    fuelIdleCostPerHour: '950',
+    fuelIdleCostPerHour: '1200',
     alertExcessThreshold: '30',
     emailAlertsEnabled: true,
     smsAlertsEnabled: true,
-    webhookUrl: 'https://api.turnaround.io/v1/telematics/events',
+    webhookUrl: 'https://telematics.siginon.com/v1/events/turnaround',
   });
 
-  const handleChange = (key: string, value: any) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+  const handleChange = (field: string, value: any) => {
+    setSettings((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    // Simulate persisting system configuration
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 400));
     setSaving(false);
-    showToast('System configuration saved successfully', 'success');
+    toast({
+      variant: 'success',
+      title: 'Configuration Saved',
+      message: 'System SLA baselines, cost rates, and telemetry intervals updated.'
+    });
   };
 
   const handleResetDefaults = () => {
-    if (window.confirm('Reset all threshold values to factory logistics defaults?')) {
+    if (window.confirm('Reset all operational parameters to standard default baselines?')) {
       setSettings((prev) => ({
         ...prev,
-        gpsPollingInterval: '15',
+        gpsPollingInterval: '8',
         geofenceBufferMeters: '50',
         warehouseExpectedDwell: '90',
         depotExpectedDwell: '45',
         portExpectedDwell: '180',
         borderExpectedDwell: '240',
-        hourlyOperatingCost: '3500',
+        hourlyOperatingCost: '7500',
         demurrageMultiplier: '1.5',
-        fuelIdleCostPerHour: '950',
+        fuelIdleCostPerHour: '1200',
         alertExcessThreshold: '30',
       }));
-      showToast('Thresholds reset to standard baselines', 'info');
+      toast({
+        variant: 'info',
+        title: 'Defaults Restored',
+        message: 'Corridor threshold baselines reset to default parameters.'
+      });
     }
   };
 
-  const inputCls =
-    'w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-2.5 text-sm text-[#F4F5F7] placeholder:text-[#4B5563] focus:border-[#4F7CFF]/60 focus:bg-white/[0.06] focus:outline-none transition-colors font-mono';
-  const labelCls = 'block text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1.5';
-
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-12">
-      {/* HUD Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border-default pb-5">
+    <div className="space-y-6 max-w-5xl">
+      {/* ── HEADER ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-ui text-xl font-bold text-text-primary flex items-center gap-2.5">
-            <Sliders size={20} className="text-[#4F7CFF]" />
-            Fleet System Configuration
-          </h1>
-          <p className="text-xs text-text-secondary mt-1">
-            Configure baseline dwell allowances, telemetry refresh rates, and automated cost calculation algorithms.
+          <h1 className="text-lg font-bold text-text-primary tracking-tight">Configuration</h1>
+          <p className="text-xs text-text-secondary mt-0.5">
+            Set your target stop times, costs, tracking intervals, and alert thresholds.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={handleResetDefaults}
-            className="rounded-xl border border-border-default bg-bg-surface px-4 py-2 text-xs font-semibold text-text-secondary hover:bg-bg-surface-raised transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-lg border border-border-default bg-bg-surface hover:bg-bg-surface-raised text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
           >
             Reset Defaults
           </button>
@@ -92,252 +90,266 @@ export const Settings: React.FC = () => {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-[#4F7CFF] hover:bg-[#6E92FF] px-4 py-2 text-xs font-bold text-white shadow-lg shadow-[#4F7CFF]/20 disabled:opacity-50 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
           >
-            <Save size={14} />
-            {saving ? 'Saving Changes…' : 'Save Configuration'}
+            <Save size={13} />
+            {saving ? 'Saving...' : 'Save Configuration'}
           </button>
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-8">
-        {/* SECTION 1: Dwell Threshold Baselines */}
-        <div className="rounded-2xl border border-border-default bg-bg-surface p-6 space-y-6">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                <Clock size={18} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
-                  Location Dwell Thresholds (Minutes)
-                </h2>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  Expected time allowed per facility type before excess delay and demurrage costs trigger.
-                </p>
-              </div>
-            </div>
-          </div>
+      {/* ── TABS ── */}
+      <div className="flex items-center gap-1 border-b border-border-default overflow-x-auto pb-px">
+        {[
+          { id: 'baselines', label: 'Stop Time Targets',    icon: <Clock size={14} /> },
+          { id: 'rates',     label: 'Costs & Penalties',     icon: <DollarSign size={14} /> },
+          { id: 'telematics', label: 'Tracking & Webhooks',  icon: <Globe size={14} /> },
+          { id: 'alerts',    label: 'Alerts & Notifications', icon: <Bell size={14} /> },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
+              activeTab === tab.id
+                ? 'border-brand-500 text-brand-400 bg-brand-500/5'
+                : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-bg-surface-raised'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── TAB PANELS ── */}
+      <div className="rounded-xl border border-border-default bg-bg-surface p-6 shadow-sm">
+        {/* TAB 1: SLA BASELINES */}
+        {activeTab === 'baselines' && (
+          <div className="space-y-6">
             <div>
-              <label className={labelCls}>Warehouse & DC</label>
-              <input
-                type="number"
-                value={settings.warehouseExpectedDwell}
-                onChange={(e) => handleChange('warehouseExpectedDwell', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Default: 90 mins</span>
-            </div>
-
-            <div>
-              <label className={labelCls}>Transit Depot</label>
-              <input
-                type="number"
-                value={settings.depotExpectedDwell}
-                onChange={(e) => handleChange('depotExpectedDwell', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Default: 45 mins</span>
-            </div>
-
-            <div>
-              <label className={labelCls}>Port Terminal</label>
-              <input
-                type="number"
-                value={settings.portExpectedDwell}
-                onChange={(e) => handleChange('portExpectedDwell', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Default: 180 mins</span>
-            </div>
-
-            <div>
-              <label className={labelCls}>Border Crossing</label>
-              <input
-                type="number"
-                value={settings.borderExpectedDwell}
-                onChange={(e) => handleChange('borderExpectedDwell', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Default: 240 mins</span>
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 2: Financial & Loss Quantification Engine */}
-        <div className="rounded-2xl border border-border-default bg-bg-surface p-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <DollarSign size={18} />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
-                Cost Quantification Engine
-              </h2>
+              <h3 className="text-sm font-bold text-text-primary">Facility SLA Expected Dwell Benchmarks</h3>
               <p className="text-xs text-text-secondary mt-0.5">
-                Parameters used to compute monetary financial loss per excess dwell hour across the fleet.
+                Maximum expected duration inside geofence before excess dwell flags and demurrage calculations trigger.
               </p>
             </div>
-          </div>
 
-          <div className="grid sm:grid-cols-3 gap-4">
-            <div>
-              <label className={labelCls}>Hourly Vehicle Rate (KES/hr)</label>
-              <input
-                type="number"
-                value={settings.hourlyOperatingCost}
-                onChange={(e) => handleChange('hourlyOperatingCost', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Driver salary + capital depreciation</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-text-primary">Warehouse Hub Benchmark</label>
+                  <span className="font-numeric text-xs font-bold text-brand-400">{settings.warehouseExpectedDwell} mins</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={settings.warehouseExpectedDwell}
+                    onChange={(e) => handleChange('warehouseExpectedDwell', e.target.value)}
+                    className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-text-tertiary">Standard offloading and staging allowance.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-text-primary">Transit Depot Benchmark</label>
+                  <span className="font-numeric text-xs font-bold text-brand-400">{settings.depotExpectedDwell} mins</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={settings.depotExpectedDwell}
+                    onChange={(e) => handleChange('depotExpectedDwell', e.target.value)}
+                    className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-text-tertiary">Refueling, driver changeover, and brief rest stops.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-text-primary">Maritime Port Benchmark</label>
+                  <span className="font-numeric text-xs font-bold text-brand-400">{settings.portExpectedDwell} mins</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={settings.portExpectedDwell}
+                    onChange={(e) => handleChange('portExpectedDwell', e.target.value)}
+                    className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-text-tertiary">Gate-in, crane container pickup, and terminal clearance.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-text-primary">Border Crossing Benchmark</label>
+                  <span className="font-numeric text-xs font-bold text-brand-400">{settings.borderExpectedDwell} mins</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={settings.borderExpectedDwell}
+                    onChange={(e) => handleChange('borderExpectedDwell', e.target.value)}
+                    className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-text-tertiary">Customs manifest inspection and OSBP cross-border transit.</p>
+              </div>
             </div>
 
-            <div>
-              <label className={labelCls}>Demurrage Multiplier</label>
-              <input
-                type="number"
-                step="0.1"
-                value={settings.demurrageMultiplier}
-                onChange={(e) => handleChange('demurrageMultiplier', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Applied to port/border delays</span>
-            </div>
-
-            <div>
-              <label className={labelCls}>Fuel Idle Burn (KES/hr)</label>
-              <input
-                type="number"
-                value={settings.fuelIdleCostPerHour}
-                onChange={(e) => handleChange('fuelIdleCostPerHour', e.target.value)}
-                className={inputCls}
-              />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Auxiliary engine consumption</span>
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 3: Telemetry & GPS Ingestion */}
-        <div className="rounded-2xl border border-border-default bg-bg-surface p-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4F7CFF]/10 border border-[#4F7CFF]/20 text-[#6E92FF]">
-              <Radio size={18} />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
-                Telemetry & Geofence Sync
-              </h2>
-              <p className="text-xs text-text-secondary mt-0.5">
-                Live GPS ingestion rate and spatial geofence buffer distance for accurate arrival/departure detection.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <Select
-                label="GPS Sync Polling Interval"
-                value={settings.gpsPollingInterval}
-                onChange={(v) => handleChange('gpsPollingInterval', v)}
-                options={[
-                  { value: '10', label: '10 Seconds', description: 'Highest live precision (higher bandwidth)' },
-                  { value: '15', label: '15 Seconds (Recommended)', description: 'Balanced real-time tracking' },
-                  { value: '30', label: '30 Seconds', description: 'Standard long-haul telemetry' },
-                  { value: '60', label: '60 Seconds', description: 'Low bandwidth mode' },
-                ]}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Geofence Entry Buffer (Meters)</label>
+            <div className="pt-4 border-t border-border-default">
+              <label className="block text-xs font-semibold text-text-primary mb-1">Geofence Boundary Buffer (Meters)</label>
               <input
                 type="number"
                 value={settings.geofenceBufferMeters}
                 onChange={(e) => handleChange('geofenceBufferMeters', e.target.value)}
-                className={inputCls}
+                className="w-full sm:w-64 bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
               />
-              <span className="text-[10px] text-text-tertiary mt-1 block">Tolerance for GPS jitter near gate entrance</span>
+              <p className="text-[11px] text-text-tertiary mt-1">Extra GPS tolerance buffer before triggering arrival detection.</p>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* SECTION 4: Alerts & Escalations */}
-        <div className="rounded-2xl border border-border-default bg-bg-surface p-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
-              <Bell size={18} />
-            </div>
+        {/* TAB 2: COST & RATES */}
+        {activeTab === 'rates' && (
+          <div className="space-y-6">
             <div>
-              <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
-                Alert Escalations & Webhooks
-              </h2>
+              <h3 className="text-sm font-bold text-text-primary">Demurrage & Fleet Operating Cost Rates</h3>
               <p className="text-xs text-text-secondary mt-0.5">
-                Automated alert dispatch thresholds for dispatchers and fleet operations managers.
+                Financial multipliers used by the analytical engine to quantify wasted capital.
               </p>
             </div>
-          </div>
 
-          <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Excess Dwell Alert Trigger (Minutes Over Limit)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <label className="text-xs font-semibold text-text-primary block">Default Fleet Rate (KES/hr)</label>
                 <input
                   type="number"
-                  value={settings.alertExcessThreshold}
-                  onChange={(e) => handleChange('alertExcessThreshold', e.target.value)}
-                  className={inputCls}
+                  value={settings.hourlyOperatingCost}
+                  onChange={(e) => handleChange('hourlyOperatingCost', e.target.value)}
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
                 />
+                <p className="text-[11px] text-text-tertiary">Base commercial operating rate per truck hour.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <label className="text-xs font-semibold text-text-primary block">Idle Fuel Surcharge (KES/hr)</label>
+                <input
+                  type="number"
+                  value={settings.fuelIdleCostPerHour}
+                  onChange={(e) => handleChange('fuelIdleCostPerHour', e.target.value)}
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                />
+                <p className="text-[11px] text-text-tertiary">Auxiliary engine idle fuel burn rate.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <label className="text-xs font-semibold text-text-primary block">Demurrage Penalty Multiplier</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={settings.demurrageMultiplier}
+                  onChange={(e) => handleChange('demurrageMultiplier', e.target.value)}
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                />
+                <p className="text-[11px] text-text-tertiary">Multiplier applied when excess dwell exceeds 2.0x SLA baseline.</p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
+                <label className="text-xs font-semibold text-text-primary block">Operating Currency</label>
+                <input
+                  type="text"
+                  value={settings.operatingCurrency}
+                  disabled
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-tertiary font-numeric"
+                />
+                <p className="text-[11px] text-text-tertiary">Kenya Shilling (KES) - Standard corridor billing unit.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: TELEMATICS */}
+        {activeTab === 'telematics' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">Telematics & Webhook Stream Integration</h3>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Real-time GPS ingestion settings and automated outbound webhook endpoints.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1">GPS Telemetry Refresh Interval</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={settings.gpsPollingInterval}
+                    onChange={(e) => handleChange('gpsPollingInterval', e.target.value)}
+                    className="w-32 bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                  />
+                  <span className="text-xs text-text-secondary">seconds</span>
+                </div>
+                <p className="text-[11px] text-text-tertiary mt-1">Live tracking interval on corridor map views.</p>
               </div>
 
               <div>
-                <label className={labelCls}>Telematics Webhook URL</label>
+                <label className="block text-xs font-semibold text-text-primary mb-1">Outbound Dwell Alert Webhook URL</label>
                 <input
                   type="url"
                   value={settings.webhookUrl}
                   onChange={(e) => handleChange('webhookUrl', e.target.value)}
-                  className={inputCls}
+                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
                 />
+                <p className="text-[11px] text-text-tertiary mt-1">HTTP POST webhook payload fired on excess dwell triggers.</p>
               </div>
             </div>
+          </div>
+        )}
 
-            <div className="flex flex-wrap gap-6 pt-2">
-              <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+        {/* TAB 4: ALERTS */}
+        {activeTab === 'alerts' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">Dispatch Escalation & Notifications</h3>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Configure instant alerts for dispatchers when trucks exceed facility benchmarks.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-text-primary">Automated Dispatch Email Digest</p>
+                  <p className="text-[11px] text-text-tertiary">Daily executive summary of leaked turnaround capital.</p>
+                </div>
                 <input
                   type="checkbox"
                   checked={settings.emailAlertsEnabled}
                   onChange={(e) => handleChange('emailAlertsEnabled', e.target.checked)}
-                  className="rounded border-border-default bg-bg-surface text-[#4F7CFF] focus:ring-0"
+                  className="rounded accent-brand-500 cursor-pointer h-4 w-4"
                 />
-                <span>Email alerts on High Severity bottlenecks</span>
-              </label>
+              </div>
 
-              <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+              <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-text-primary">SMS Critical Dwell Alerts to Fleet Managers</p>
+                  <p className="text-[11px] text-text-tertiary">Immediate SMS trigger when a unit exceeds 60m past SLA threshold.</p>
+                </div>
                 <input
                   type="checkbox"
                   checked={settings.smsAlertsEnabled}
                   onChange={(e) => handleChange('smsAlertsEnabled', e.target.checked)}
-                  className="rounded border-border-default bg-bg-surface text-[#4F7CFF] focus:ring-0"
+                  className="rounded accent-brand-500 cursor-pointer h-4 w-4"
                 />
-                <span>SMS alerts to active driver dispatchers</span>
-              </label>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Bottom save button bar */}
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-[#4F7CFF] hover:bg-[#6E92FF] px-6 py-3 text-sm font-bold text-white shadow-xl shadow-[#4F7CFF]/25 disabled:opacity-50 transition-all cursor-pointer"
-          >
-            <Save size={16} />
-            {saving ? 'Saving System Configuration…' : 'Save System Configuration'}
-          </button>
-        </div>
-      </form>
+        )}
+      </div>
     </div>
   );
 };

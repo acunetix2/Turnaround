@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const supabaseUser = session.user;
           setUser({
             id: supabaseUser.id,
-            company_id: supabaseUser.user_metadata?.company_id || 'co_129847',
+            company_id: supabaseUser.user_metadata?.company_id || 'seed-company-siginon-001',
             name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
             email: supabaseUser.email || '',
             role: (supabaseUser.user_metadata?.role as UserRole) || 'fleet_manager',
@@ -78,7 +78,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const supabaseUser = session.user;
           setUser({
             id: supabaseUser.id,
-            company_id: supabaseUser.user_metadata?.company_id || 'co_129847',
+            company_id: supabaseUser.user_metadata?.company_id || 'seed-company-siginon-001',
+            company_name: supabaseUser.user_metadata?.company || undefined,
             name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
             email: supabaseUser.email || '',
             role: (supabaseUser.user_metadata?.role as UserRole) || 'fleet_manager',
@@ -120,11 +121,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...mockUser,
           email,
           name,
-          role
+          role,
+          company_name: company,
+          company_id: 'seed-company-siginon-001'
         };
         setUser(mockSessionUser);
         localStorage.setItem('supabase_mock_session', JSON.stringify(mockSessionUser));
-        localStorage.setItem('supabase_session_jwt', 'mock_jwt_token_claims_here');
+        localStorage.setItem('supabase_session_jwt', 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager');
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -143,7 +146,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('supabase_session_jwt', data.session.access_token);
           setUser({
             id: data.user!.id,
-            company_id: data.user!.user_metadata?.company_id || 'co_129847',
+            company_id: data.user!.user_metadata?.company_id || 'seed-company-siginon-001',
+            company_name: company,
             name: name,
             email: email,
             role: role,
@@ -164,11 +168,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const mockSessionUser: User = {
           ...mockUser,
           email,
-          role: desiredRole
+          role: desiredRole,
+          company_id: 'seed-company-siginon-001'
         };
         setUser(mockSessionUser);
         localStorage.setItem('supabase_mock_session', JSON.stringify(mockSessionUser));
-        localStorage.setItem('supabase_session_jwt', 'mock_jwt_token_claims_here');
+        localStorage.setItem('supabase_session_jwt', 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager');
       } else {
         if (!password) {
           const { error } = await supabase.auth.signInWithOtp({ email });

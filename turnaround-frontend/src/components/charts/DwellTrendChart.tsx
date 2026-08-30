@@ -1,45 +1,9 @@
-import React from 'react';
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import React, { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
+import type { EChartsOption } from 'echarts';
 import type { TrendDataPoint } from '../../lib/api/types';
-
-const CHART_COLORS = {
-  dwell: '#4F7CFF',
-  excess: '#F5A524',
-  cost: '#F0464C',
-  grid: 'rgba(255,255,255,0.06)',
-  axis: '#6B7280',
-};
-
-interface TooltipProps {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
-  label?: string;
-}
-
-const DarkTooltip: React.FC<TooltipProps> = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-[#1A1C21] border border-white/[0.14] rounded-xl p-3 shadow-xl text-xs">
-      <p className="text-[#9CA3AF] mb-2">{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }} className="font-medium">
-          {p.name}: {p.value.toLocaleString()}
-        </p>
-      ))}
-    </div>
-  );
-};
+import { useTheme } from '../../lib/ThemeContext';
+import { formatCurrency } from '../../lib/format';
 
 interface DwellTrendChartProps {
   data: TrendDataPoint[];
@@ -49,46 +13,79 @@ interface DwellTrendChartProps {
 export const DwellTrendChart: React.FC<DwellTrendChartProps> = ({
   data,
   height = 260,
-}) => (
-  <ResponsiveContainer width="100%" height={height}>
-    <LineChart data={data} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
-      <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
-      <XAxis
-        dataKey="date"
-        tick={{ fill: CHART_COLORS.axis, fontSize: 11 }}
-        axisLine={false}
-        tickLine={false}
-      />
-      <YAxis
-        tick={{ fill: CHART_COLORS.axis, fontSize: 11 }}
-        axisLine={false}
-        tickLine={false}
-      />
-      <Tooltip content={<DarkTooltip />} />
-      <Legend
-        wrapperStyle={{ color: CHART_COLORS.axis, fontSize: 12 }}
-      />
-      <Line
-        type="monotone"
-        dataKey="avg_dwell_minutes"
-        name="Avg Dwell (min)"
-        stroke={CHART_COLORS.dwell}
-        strokeWidth={2}
-        dot={false}
-        activeDot={{ r: 4 }}
-      />
-      <Line
-        type="monotone"
-        dataKey="excess_dwell_minutes"
-        name="Excess Dwell (min)"
-        stroke={CHART_COLORS.excess}
-        strokeWidth={2}
-        dot={false}
-        activeDot={{ r: 4 }}
-      />
-    </LineChart>
-  </ResponsiveContainer>
-);
+}) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const option = useMemo<EChartsOption>(() => {
+    const dates = data.map((d) => d.date);
+    const avgDwells = data.map((d) => Math.round(d.average_dwell_minutes ?? 0));
+    const excessDwells = data.map((d) => Math.round(d.excess_dwell_minutes ?? 0));
+
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: isDark ? '#180B4A' : '#FFFFFF',
+        borderColor: '#ED642B',
+        borderWidth: 1,
+        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11 },
+      },
+      legend: {
+        show: true,
+        top: 0,
+        right: 0,
+        textStyle: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 11 },
+        itemWidth: 12,
+        itemHeight: 8,
+      },
+      grid: {
+        top: 30,
+        right: 15,
+        bottom: 25,
+        left: 35,
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' } },
+        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Mins',
+        nameTextStyle: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+        splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', type: 'dashed' } },
+        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+      },
+      series: [
+        {
+          name: 'Avg Dwell (min)',
+          type: 'line',
+          smooth: true,
+          data: avgDwells,
+          lineStyle: { width: 2.5, color: '#250C77' },
+          itemStyle: { color: '#250C77' },
+        },
+        {
+          name: 'Excess Dwell (min)',
+          type: 'line',
+          smooth: true,
+          data: excessDwells,
+          lineStyle: { width: 2.5, color: '#ED642B' },
+          itemStyle: { color: '#ED642B' },
+        },
+      ],
+    };
+  }, [data, isDark]);
+
+  return (
+    <div style={{ width: '100%', height }}>
+      <ReactECharts option={option} style={{ width: '100%', height: '100%' }} opts={{ renderer: 'svg' }} />
+    </div>
+  );
+};
 
 interface FinancialImpactChartProps {
   data: TrendDataPoint[];
@@ -98,38 +95,77 @@ interface FinancialImpactChartProps {
 export const FinancialImpactChart: React.FC<FinancialImpactChartProps> = ({
   data,
   height = 260,
-}) => (
-  <ResponsiveContainer width="100%" height={height}>
-    <AreaChart data={data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-      <defs>
-        <linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor={CHART_COLORS.cost} stopOpacity={0.25} />
-          <stop offset="95%" stopColor={CHART_COLORS.cost} stopOpacity={0} />
-        </linearGradient>
-      </defs>
-      <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="4 4" vertical={false} />
-      <XAxis
-        dataKey="date"
-        tick={{ fill: CHART_COLORS.axis, fontSize: 11 }}
-        axisLine={false}
-        tickLine={false}
-      />
-      <YAxis
-        tick={{ fill: CHART_COLORS.axis, fontSize: 11 }}
-        axisLine={false}
-        tickLine={false}
-        tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`}
-      />
-      <Tooltip content={<DarkTooltip />} />
-      <Area
-        type="monotone"
-        dataKey="financial_loss"
-        name="Financial Loss (KES)"
-        stroke={CHART_COLORS.cost}
-        strokeWidth={2}
-        fill="url(#costGrad)"
-        dot={false}
-      />
-    </AreaChart>
-  </ResponsiveContainer>
-);
+}) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const option = useMemo<EChartsOption>(() => {
+    const dates = data.map((d) => d.date);
+    const costs = data.map((d) => d.estimated_cost ?? 0);
+
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: isDark ? '#180B4A' : '#FFFFFF',
+        borderColor: '#ED642B',
+        borderWidth: 1,
+        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11 },
+        formatter: (params: any) => {
+          const item = params[0];
+          return `<div style="font-weight:700">${item.name}</div><div style="color:#ED642B">Cost: ${formatCurrency(item.value)}</div>`;
+        },
+      },
+      grid: {
+        top: 15,
+        right: 15,
+        bottom: 25,
+        left: 45,
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' } },
+        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+      },
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', type: 'dashed' } },
+        axisLabel: {
+          color: isDark ? '#9CA3AF' : '#6B7280',
+          fontSize: 10,
+          formatter: (v: number) => `${(v / 1000).toFixed(0)}K`,
+        },
+      },
+      series: [
+        {
+          name: 'Financial Loss (KES)',
+          type: 'line',
+          smooth: true,
+          data: costs,
+          lineStyle: { width: 2.5, color: '#ED642B' },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(237, 100, 43, 0.4)' },
+                { offset: 1, color: 'rgba(237, 100, 43, 0.0)' },
+              ],
+            },
+          },
+        },
+      ],
+    };
+  }, [data, isDark]);
+
+  return (
+    <div style={{ width: '100%', height }}>
+      <ReactECharts option={option} style={{ width: '100%', height: '100%' }} opts={{ renderer: 'svg' }} />
+    </div>
+  );
+};

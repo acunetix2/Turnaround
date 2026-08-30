@@ -24,7 +24,11 @@ class User(Base):
     company_id: Mapped[str] = mapped_column(String(36), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.FLEET_MANAGER, nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        SQLEnum(UserRole, values_callable=lambda obj: [e.value for e in obj], name="userrole"),
+        default=UserRole.FLEET_MANAGER,
+        nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationships

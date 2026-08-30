@@ -41,7 +41,11 @@ class Settings(BaseSettings):
     # JWT secret — used only as dev fallback when SUPABASE_URL is not set
     SUPABASE_JWT_SECRET: Optional[str] = "dev-secret-key-for-local-testing-turnaround"
 
-    # Engines Configuration
+    # AI / LLM Engine (Groq)
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Engine Configuration
     DEFAULT_EXPECTED_DWELL_MINUTES: float = 120.0
     HISTORICAL_VISITS_THRESHOLD: int = 10
     GPS_DEBOUNCE_POINTS: int = 2

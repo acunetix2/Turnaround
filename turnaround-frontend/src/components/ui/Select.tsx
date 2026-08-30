@@ -125,7 +125,7 @@ export const Select: React.FC<SelectProps> = ({
       {label && (
         <label
           htmlFor={id}
-          className="block text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1.5"
+          className="block text-xs font-semibold text-[#9CA3AF] mb-1.5"
         >
           {label}
         </label>

@@ -15,7 +15,7 @@ from app.db.models import (  # noqa: F401
 )
 from app.routers import (
     health, vehicles, locations, trips,
-    gps_events, dwell_events, analytics, insights, predictions
+    gps_events, dwell_events, analytics, insights, predictions, ai
 )
 
 # ── Structured Logging ──────────────────────────────────────────────────────
@@ -116,6 +116,7 @@ app.include_router(dwell_events.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(predictions.router, prefix=API_PREFIX)
+app.include_router(ai.router, prefix=API_PREFIX)
 
 
 @app.get("/", tags=["Root"], summary="API root redirect")

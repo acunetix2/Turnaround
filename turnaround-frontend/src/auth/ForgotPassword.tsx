@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck, Truck } from 'lucide-react';
+import { Mail, ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { BrandLogo } from '../components/common/BrandLogo';
 

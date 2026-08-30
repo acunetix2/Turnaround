@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle, Building2, Users, BarChart3, Lock, Mail, User, Shield } from 'lucide-react';
+import { ArrowRight, CheckCircle, Building2, Users, BarChart3 } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { BrandLogo } from '../components/common/BrandLogo';

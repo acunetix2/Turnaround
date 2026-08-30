@@ -14,6 +14,7 @@ import { LocationDetail } from '../features/locations/LocationDetail';
 import { Insights } from '../features/insights/Insights';
 import { Analytics } from '../features/analytics/Analytics';
 import { Settings } from '../features/settings/Settings';
+import { AIAdvisor } from '../features/ai-advisor/AIAdvisor';
 import { RouteErrorBoundary } from '../components/common/RouteErrorBoundary';
 
 export const router = createBrowserRouter([
@@ -57,7 +58,9 @@ export const router = createBrowserRouter([
       { path: '/insights',      element: <Insights />,       errorElement: <RouteErrorBoundary /> },
       { path: '/analytics',     element: <Analytics />,      errorElement: <RouteErrorBoundary /> },
       { path: '/settings',      element: <Settings />,       errorElement: <RouteErrorBoundary /> },
+      { path: '/ai-advisor',    element: <AIAdvisor />,      errorElement: <RouteErrorBoundary /> },
     ],
   },
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '*', element: <Navigate to="/dashboard" replace /> },
 ]);
+

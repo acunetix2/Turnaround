@@ -9,7 +9,7 @@ export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const fromPath = (location.state as any)?.from?.pathname || '/';
+  const fromPath = (location.state as any)?.from?.pathname || '/dashboard';
 
   const [email, setEmail]               = useState('');
   const [password, setPassword]         = useState('');

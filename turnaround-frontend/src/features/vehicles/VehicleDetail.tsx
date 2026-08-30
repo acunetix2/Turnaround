@@ -3,39 +3,22 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatMinutes, formatDateTime } from '../../lib/format';
+import { useAuth } from '../../auth/AuthProvider';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
-import { useAuth } from '../../auth/AuthProvider';
 import {
-  ArrowLeft,
-  Calendar,
-  Clock,
-  Coins,
-  TrendingUp,
-  MapPin,
-  Lock,
-  Edit2,
-  Check
+  ArrowLeft, Clock, Edit2, Truck, MapPin, X
 } from 'lucide-react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import type { Vehicle } from '../../lib/api/types';
-import { Select } from '../../components/ui/Select';
-
+import { useToast } from '../../components/ui/Toast';
 
 const updateSchema = zod.object({
   registration_number: zod.string().min(3),
   vehicle_type: zod.string().min(2),
-  capacity: zod.coerce.number().positive(),
-  hourly_operating_cost: zod.coerce.number().positive(),
+  capacity: zod.number().positive(),
+  hourly_operating_cost: zod.number().positive(),
   status: zod.enum(['moving', 'stationary', 'delayed'] as const)
 });
 
@@ -45,32 +28,30 @@ export const VehicleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { role } = useAuth();
+  const { toast } = useToast();
   const canMutate = role === 'admin' || role === 'fleet_manager';
 
   const [isEditing, setIsEditing] = useState(false);
   const [updateError, setUpdateError] = useState('');
 
-  // Fetch Vehicle
   const { data: vehicle, isLoading: loadingVehicle, isError: vehicleError } = useQuery({
     queryKey: ['vehicle', id],
     queryFn: () => apiClient.getVehicleById(id || ''),
     enabled: !!id
   });
 
-  // Fetch Dwells for this vehicle
   const { data: dwells, isLoading: loadingDwells } = useQuery({
     queryKey: ['dwellEvents', 'vehicle', id],
     queryFn: () => apiClient.getDwellEvents(id),
     enabled: !!id
   });
 
-  // Fetch Vehicle Stats
-  const { data: fleetStats } = useQuery({
-    queryKey: ['vehicleStats'],
-    queryFn: apiClient.getVehicleStats
+  const { data: gpsPositions } = useQuery({
+    queryKey: ['liveGpsEvents'],
+    queryFn: () => apiClient.getLiveGPSEvents(),
+    refetchInterval: 15000
   });
 
-  // Update mutation
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Vehicle>) => apiClient.updateVehicle(id || '', data),
     onSuccess: () => {
@@ -78,6 +59,11 @@ export const VehicleDetail: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
       setIsEditing(false);
+      toast({
+        variant: 'success',
+        title: 'Vehicle Updated',
+        message: 'Fleet asset specifications saved.'
+      });
     },
     onError: (err: any) => {
       setUpdateError(err?.message || 'Failed to update vehicle details.');
@@ -87,9 +73,7 @@ export const VehicleDetail: React.FC = () => {
   const {
     register,
     handleSubmit,
-    setValue,
-    watch,
-    formState: { errors }
+    formState: { isSubmitting }
   } = useForm<UpdateFormValues>({
     resolver: zodResolver(updateSchema),
     values: vehicle ? {
@@ -107,328 +91,413 @@ export const VehicleDetail: React.FC = () => {
   };
 
   if (loadingVehicle || loadingDwells) {
-    return <div className="p-12 text-center text-text-secondary">Retrieving vehicle profile...</div>;
+    return (
+      <div className="space-y-5 animate-pulse">
+        <div className="h-6 w-32 bg-bg-surface-raised rounded" />
+        <div className="h-32 rounded-xl bg-bg-surface border border-border-default" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-xl bg-bg-surface border border-border-default" />
+          ))}
+        </div>
+        <div className="h-80 rounded-xl bg-bg-surface border border-border-default" />
+      </div>
+    );
   }
 
   if (vehicleError || !vehicle) {
     return (
-      <div className="p-12 text-center">
-        <p className="text-status-danger font-semibold">Vehicle profile not found.</p>
-        <Link to="/vehicles" className="mt-4 inline-flex items-center gap-1 text-xs text-brand-400">
-          <ArrowLeft size={12} /> Back to list
+      <div className="flex flex-col items-center justify-center p-12 text-center bg-bg-surface border border-border-default rounded-xl">
+        <Truck size={36} className="text-status-danger" />
+        <h2 className="text-sm font-bold text-text-primary mt-3">Vehicle Not Found</h2>
+        <p className="text-xs text-text-secondary mt-1">The requested asset telemetry record does not exist.</p>
+        <Link
+          to="/vehicles"
+          className="mt-4 rounded-lg bg-brand-500 hover:bg-brand-400 px-4 py-2 text-xs font-semibold text-white shadow transition-colors"
+        >
+          Back to Fleet Registry
         </Link>
       </div>
     );
   }
 
-  // Get specific stats for this vehicle
-  const stats = fleetStats?.find((s) => s.vehicle_id === vehicle.id) || {
-    total_trips: dwells?.length || 0,
-    total_dwell_events: dwells?.length || 0,
-    total_excess_dwell_minutes: dwells?.reduce((acc, d) => acc + d.excess_minutes, 0) || 0,
-    total_financial_loss: dwells?.reduce((acc, d) => acc + d.estimated_cost, 0) || 0,
-    avg_dwell_minutes: dwells?.length ? Math.round(dwells.reduce((acc, d) => acc + d.dwell_minutes, 0) / dwells.length) : 0
-  };
+  const gps = gpsPositions ? gpsPositions[vehicle.id] : null;
+  const dwellList = dwells || [];
 
-  // Format trend data for the small chart
-  const chartData = dwells
-    ? [...dwells]
-        .reverse()
-        .slice(-10) // last 10 visits
-        .map((d, index) => ({
-          name: `Visit ${index + 1}`,
-          cost: d.estimated_cost,
-          delay: d.excess_minutes
-        }))
-    : [];
+  const totalDwellMinutes = dwellList.reduce((acc, d) => acc + (d.dwell_minutes || 0), 0);
+  const totalExcessMinutes = dwellList.reduce((acc, d) => acc + (d.excess_minutes || 0), 0);
+  const totalDelayCost = (totalExcessMinutes / 60) * vehicle.hourly_operating_cost;
+
+  const chartData = dwellList.slice(0, 10).reverse().map((d, i) => ({
+    visit: d.location_name ? d.location_name.substring(0, 10) : `Stop #${i + 1}`,
+    dwell: d.dwell_minutes,
+    expected: d.expected_minutes,
+    excess: d.excess_minutes
+  }));
+
+  const isDelayed = vehicle.status === 'delayed';
+  const isMoving = vehicle.status === 'moving';
 
   return (
-    <div className="space-y-6">
-      {/* Navigation & Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-5">
+      {/* ── BREADCRUMB & BACK ── */}
+      <div className="flex items-center justify-between">
         <Link
           to="/vehicles"
-          className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors"
         >
-          <ArrowLeft size={14} />
-          Back to Vehicles
+          <ArrowLeft size={14} /> Back to Commercial Fleet
         </Link>
 
-        {canMutate ? (
+        {canMutate && !isEditing && (
           <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="flex items-center justify-center gap-1.5 rounded border border-border-default bg-bg-surface hover:bg-bg-surface-raised px-3 py-1.5 text-xs font-semibold text-brand-400 hover:text-brand-300 transition-colors cursor-pointer"
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border-default bg-bg-surface hover:bg-bg-surface-raised text-xs font-semibold text-text-primary transition-colors cursor-pointer"
           >
-            <Edit2 size={12} />
-            {isEditing ? 'Cancel Edit' : 'Edit Asset'}
+            <Edit2 size={13} />
+            Edit Asset
           </button>
-        ) : (
-          <div className="flex items-center gap-1 text-xs text-text-tertiary">
-            <Lock size={12} />
-            <span>Config Locked</span>
-          </div>
         )}
       </div>
 
-      {/* Main Info Blocks */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Card: Vehicle Specs / Edit Form */}
-        <div className="panel-elevated bg-bg-surface p-5 lg:col-span-1">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-4">
-            Asset Specifications
-          </h2>
+      {/* ── ASSET HERO HEADER ── */}
+      <div className="rounded-xl border border-border-default bg-bg-surface p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className={`h-12 w-12 rounded-xl border flex items-center justify-center shrink-0 ${
+              isDelayed ? 'bg-status-danger-bg border-status-danger/30 text-status-danger' : 'bg-brand-500/10 border-brand-500/20 text-brand-400'
+            }`}>
+              <Truck size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="font-numeric text-xl font-bold text-text-primary">
+                  {vehicle.registration_number}
+                </h1>
+                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full border font-numeric uppercase ${
+                  isDelayed
+                    ? 'bg-status-danger-bg text-status-danger border-status-danger/30'
+                    : isMoving
+                    ? 'bg-status-good-bg text-status-good border-status-good/30'
+                    : 'bg-bg-surface-raised text-text-tertiary border-border-default'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${isDelayed ? 'bg-status-danger animate-pulse' : isMoving ? 'bg-status-good' : 'bg-text-tertiary'}`} />
+                  {vehicle.status}
+                </span>
+              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                {vehicle.vehicle_type} • {vehicle.capacity} Tonnes Payload Capacity
+              </p>
+            </div>
+          </div>
+
+          {/* Location & GPS Info */}
+          <div className="flex flex-wrap items-center gap-4 text-xs text-text-secondary">
+            <div className="p-2.5 rounded-lg bg-bg-surface-raised border border-border-default">
+              <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Current Geofence</span>
+              <span className="text-xs font-semibold text-text-primary flex items-center gap-1 mt-0.5">
+                <MapPin size={12} className="text-brand-400" />
+                {vehicle.current_location_name || 'En Route (GPS)'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-bg-surface-raised border border-border-default">
+              <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Operating Rate</span>
+              <span className="font-numeric text-xs font-semibold text-text-primary block mt-0.5">
+                {formatCurrency(vehicle.hourly_operating_cost)} / hr
+              </span>
+            </div>
+
+            {gps && (
+              <div className="p-2.5 rounded-lg bg-bg-surface-raised border border-border-default font-numeric">
+                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">GPS Telemetry</span>
+                <span className="text-xs text-text-secondary block mt-0.5">
+                  {gps.latitude.toFixed(4)}, {gps.longitude.toFixed(4)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── EDIT FORM INLINE (When Active) ── */}
+      {isEditing && (
+        <div className="rounded-xl border border-brand-500/40 bg-bg-surface p-5 shadow-lg space-y-4">
+          <div className="flex items-center justify-between border-b border-border-default pb-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-brand-400">
+              Edit Vehicle Specifications
+            </h3>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="p-1 text-text-tertiary hover:text-text-primary cursor-pointer"
+            >
+              <X size={15} />
+            </button>
+          </div>
 
           {updateError && (
-            <div className="mb-4 rounded bg-status-danger-bg border border-status-danger/20 p-2 text-xs text-status-danger">
+            <div className="p-3 rounded-lg bg-status-danger-bg border border-status-danger/30 text-xs text-status-danger">
               {updateError}
             </div>
           )}
 
-          {isEditing ? (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                  Registration
-                </label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Registration Number</label>
                 <input
                   type="text"
                   {...register('registration_number')}
-                  className="mt-1 w-full rounded border border-border-default bg-bg-surface-raised px-3 py-2 text-xs text-text-primary focus:outline-none"
+                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary uppercase font-numeric focus:border-brand-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                  Type / Class
-                </label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Classification</label>
                 <input
                   type="text"
                   {...register('vehicle_type')}
-                  className="mt-1 w-full rounded border border-border-default bg-bg-surface-raised px-3 py-2 text-xs text-text-primary focus:outline-none"
+                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-brand-500 focus:outline-none"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                    Capacity (T)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    {...register('capacity')}
-                    className="mt-1 w-full rounded border border-border-default bg-bg-surface-raised px-3 py-2 text-xs text-text-primary focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                    Hourly Cost (KES)
-                  </label>
-                  <input
-                    type="number"
-                    {...register('hourly_operating_cost')}
-                    className="mt-1 w-full rounded border border-border-default bg-bg-surface-raised px-3 py-2 text-xs text-text-primary focus:outline-none"
-                  />
-                </div>
               </div>
 
               <div>
-                <Select
-                  label="Current Status"
-                  value={watch('status') || 'stationary'}
-                  onChange={(val) => setValue('status', val as any, { shouldValidate: true })}
-                  options={[
-                    { value: 'stationary', label: 'Stationary' },
-                    { value: 'moving', label: 'Moving' },
-                    { value: 'delayed', label: 'Delayed' },
-                  ]}
+                <label className="block text-xs font-medium text-text-secondary mb-1">Payload (Tonnes)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('capacity', { valueAsNumber: true })}
+                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Rate (KES/hr)</label>
+                <input
+                  type="number"
+                  step="100"
+                  {...register('hourly_operating_cost', { valueAsNumber: true })}
+                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-3.5 py-1.5 rounded-lg border border-border-default text-xs font-semibold text-text-secondary hover:bg-bg-surface-raised transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
               <button
                 type="submit"
-                disabled={updateMutation.isPending}
-                className="w-full flex items-center justify-center gap-1.5 rounded bg-brand-500 hover:bg-brand-400 py-2 text-xs font-bold text-white shadow transition-colors cursor-pointer"
+                disabled={isSubmitting}
+                className="px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
               >
-                <Check size={14} />
-                Save Changes
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
               </button>
-            </form>
-          ) : (
-            <div className="space-y-4 font-ui">
-              <div className="flex items-center justify-between">
-                <span className="font-numeric text-xl font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">
-                  {vehicle.registration_number}
-                </span>
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
-                  vehicle.status === 'delayed'
-                    ? 'bg-status-danger-bg text-status-danger'
-                    : vehicle.status === 'stationary'
-                    ? 'bg-status-warning-bg text-status-warning'
-                    : 'bg-status-good-bg text-status-good'
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${
-                    vehicle.status === 'delayed' ? 'bg-status-danger' : vehicle.status === 'stationary' ? 'bg-status-warning' : 'bg-status-good'
-                  }`} />
-                  {vehicle.status}
-                </span>
-              </div>
-
-              <div className="border-t border-border-default pt-4 space-y-2.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Asset Classification:</span>
-                  <span className="font-semibold text-text-primary">{vehicle.vehicle_type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Load Limit:</span>
-                  <span className="font-semibold text-text-primary font-numeric">{vehicle.capacity} Tonnes</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Hourly Rate:</span>
-                  <span className="font-semibold text-text-primary font-numeric">{formatCurrency(vehicle.hourly_operating_cost)}/hr</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Registered On:</span>
-                  <span className="font-semibold text-text-primary font-numeric">{formatDateTime(vehicle.created_at).split(',')[0]}</span>
-                </div>
-              </div>
             </div>
-          )}
+          </form>
+        </div>
+      )}
+
+      {/* ── KPI METRICS STRIP ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
+          <span className="text-xs font-medium text-text-secondary">Total Dwell Logged</span>
+          <p className="font-numeric text-2xl font-bold text-text-primary mt-2">
+            {formatMinutes(totalDwellMinutes)}
+          </p>
+          <span className="text-[11px] text-text-tertiary">Across {dwellList.length} terminal stops</span>
         </div>
 
-        {/* Right Cards: Lifetime Metrics + Small Trend Graph */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Lifetime Operational Summary HUD */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="panel-elevated bg-bg-surface p-4 flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Trips Logged</span>
-              <span className="font-numeric text-2xl font-bold mt-2 text-text-primary">{stats.total_trips}</span>
-            </div>
+        <div className={`rounded-xl border p-4 shadow-sm ${
+          totalExcessMinutes > 0 ? 'bg-status-danger-bg/30 border-status-danger/30' : 'bg-bg-surface border-border-default'
+        }`}>
+          <span className="text-xs font-medium text-text-secondary">Cumulative Excess Delay</span>
+          <p className={`font-numeric text-2xl font-bold mt-2 ${totalExcessMinutes > 0 ? 'text-status-danger' : 'text-text-primary'}`}>
+            +{formatMinutes(totalExcessMinutes)}
+          </p>
+          <span className="text-[11px] text-text-tertiary">Over SLA allowance</span>
+        </div>
 
-            <div className="panel-elevated bg-bg-surface p-4 flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Avg Turnaround</span>
-              <span className="font-numeric text-2xl font-bold mt-2 text-text-primary">{formatMinutes(stats.avg_dwell_minutes)}</span>
-            </div>
+        <div className="rounded-xl border border-money-accent/25 bg-bg-surface p-4 shadow-sm">
+          <span className="text-xs font-medium text-money-accent">Estimated Demurrage Loss</span>
+          <p className="font-numeric text-2xl font-bold text-money-accent mt-2">
+            {formatCurrency(totalDelayCost)}
+          </p>
+          <span className="text-[11px] text-text-tertiary">Based on {formatCurrency(vehicle.hourly_operating_cost)}/hr</span>
+        </div>
 
-            <div className="panel-elevated bg-bg-surface p-4 flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Excess Delay</span>
-              <span className="font-numeric text-2xl font-bold mt-2 text-text-primary">{formatMinutes(stats.total_excess_dwell_minutes)}</span>
-            </div>
-
-            {/* Lifetime Financial Loss (Saturated Money Accent) */}
-            <div className="panel-elevated border-money-accent/10 bg-bg-surface p-4 flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-money-accent">Loss Overhead</span>
-              <span className="font-numeric text-xl font-bold mt-2 text-money-accent">{formatCurrency(stats.total_financial_loss)}</span>
-            </div>
-          </div>
-
-          {/* Mini-Chart: Dwell Cost Trend (Section 8) */}
-          <div className="panel-elevated bg-bg-surface p-5">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-4 flex items-center gap-2">
-              <TrendingUp size={14} className="text-brand-400" />
-              Excess Dwell Overhead Trend (Last 10 Visits)
-            </h2>
-            <div className="h-44 w-full">
-              {chartData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-xs text-text-tertiary">
-                  No historical visits recorded.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="name" stroke="#6B7280" fontSize={9} />
-                    <YAxis stroke="#6B7280" fontSize={9} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1A1C21',
-                        borderColor: 'rgba(255, 255, 255, 0.14)',
-                        color: '#F4F5F7',
-                        fontSize: 11
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="cost"
-                      name="Excess Cost (KES)"
-                      stroke="#FFB020"
-                      fill="rgba(255, 176, 32, 0.15)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
+        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
+          <span className="text-xs font-medium text-text-secondary">Efficiency Rating</span>
+          <p className="font-numeric text-2xl font-bold text-brand-400 mt-2">
+            {totalDwellMinutes > 0 ? `${Math.max(0, Math.round(100 - (totalExcessMinutes / totalDwellMinutes) * 100))}%` : '100%'}
+          </p>
+          <span className="text-[11px] text-text-tertiary">On-time ratio</span>
         </div>
       </div>
 
-      {/* Dwell Events Table */}
-      <div className="panel-elevated bg-bg-surface p-5">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-4">
-          Terminal Dwell History
-        </h2>
+      {/* ── CHARTS & AUDIT LOG ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Left 2 Cols: Dwell Audit Trail Table */}
+        <div className="lg:col-span-2 rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
+          <div className="px-4 py-3.5 border-b border-border-default bg-bg-surface-raised/40 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock size={15} className="text-brand-400" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary">
+                Geofence Dwell Audit Trail
+              </h2>
+            </div>
+            <span className="font-numeric text-[11px] text-text-tertiary">
+              {dwellList.length} Recorded Cycles
+            </span>
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-border-default text-[10px] font-bold uppercase text-text-secondary tracking-wider">
-                <th className="py-2.5">Arrival Date</th>
-                <th className="py-2.5">Terminal / Facility</th>
-                <th className="py-2.5">Location Type</th>
-                <th className="py-2.5">Dwell Duration</th>
-                <th className="py-2.5">Allowed Dwell</th>
-                <th className="py-2.5">Excess Delay</th>
-                <th className="py-2.5 text-right">Estimated Cost</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-default font-ui">
-              {!dwells || dwells.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-text-tertiary">
-                    No terminal log data available.
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse table-dense">
+              <thead>
+                <tr className="bg-bg-surface-raised/50">
+                  <th>Location Geofence</th>
+                  <th>Arrival Time</th>
+                  <th>Departure</th>
+                  <th>Elapsed Dwell</th>
+                  <th>SLA Baseline</th>
+                  <th className="text-right">Excess Delay</th>
                 </tr>
-              ) : (
-                dwells.map((d) => (
-                  <tr key={d.id} className="hover:bg-bg-surface-raised/40 transition-colors">
-                    <td className="py-3 font-numeric text-text-secondary">
-                      {formatDateTime(d.arrival_time)}
-                    </td>
-                    <td className="py-3 font-semibold text-text-primary">
-                      {d.location_name || 'In Transit'}
-                    </td>
-                    <td className="py-3 text-text-secondary capitalize">
-                      {d.location_type?.replace('_', ' ') || 'N/A'}
-                    </td>
-                    <td className="py-3 font-numeric text-text-secondary">
-                      {formatMinutes(d.dwell_minutes)}
-                    </td>
-                    <td className="py-3 font-numeric text-text-secondary">
-                      {formatMinutes(d.expected_minutes)}
-                    </td>
-                    <td className="py-3">
-                      {d.excess_minutes > 0 ? (
-                        <span className="font-numeric font-bold text-status-danger">
-                          +{formatMinutes(d.excess_minutes)}
-                        </span>
-                      ) : (
-                        <span className="font-numeric text-status-good">0m</span>
-                      )}
-                    </td>
-                    <td className="py-3 text-right font-numeric font-bold text-money-accent">
-                      {d.estimated_cost > 0 ? formatCurrency(d.estimated_cost) : '—'}
+              </thead>
+              <tbody className="divide-y divide-border-default">
+                {dwellList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-xs text-text-tertiary">
+                      No geofence dwell events recorded for this vehicle.
                     </td>
                   </tr>
-                ))
+                ) : (
+                  dwellList.map((d) => {
+                    const isExcess = d.excess_minutes > 0;
+                    return (
+                      <tr key={d.id} className="hover:bg-bg-surface-raised/30 transition-colors">
+                        <td className="text-xs font-semibold text-text-primary">
+                          {d.location_name || 'Terminal Geofence'}
+                        </td>
+                        <td className="font-numeric text-[11px] text-text-secondary">
+                          {formatDateTime(d.arrival_time)}
+                        </td>
+                        <td className="font-numeric text-[11px] text-text-secondary">
+                          {d.departure_time ? formatDateTime(d.departure_time) : (
+                            <span className="text-status-warning font-semibold">Active Dwell</span>
+                          )}
+                        </td>
+                        <td className="font-numeric text-xs font-bold text-text-primary">
+                          {formatMinutes(d.dwell_minutes)}
+                        </td>
+                        <td className="font-numeric text-xs text-text-tertiary">
+                          {formatMinutes(d.expected_minutes)}
+                        </td>
+                        <td className="text-right font-numeric text-xs font-bold">
+                          {isExcess ? (
+                            <span className="text-status-danger">+{formatMinutes(d.excess_minutes)}</span>
+                          ) : (
+                            <span className="text-status-good">Within SLA</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Right Col: Historical Dwell Chart */}
+        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary mb-1">
+              Turnaround vs SLA (Recent Stops)
+            </h2>
+            <p className="text-[11px] text-text-tertiary mb-4">
+              Visualizing dwell duration (mins) relative to geofence SLA threshold.
+            </p>
+
+            <div className="h-64 w-full">
+              {chartData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-text-tertiary">
+                  Insufficient stop history
+                </div>
+              ) : (
+                <ReactECharts
+                  option={{
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                      trigger: 'axis',
+                      backgroundColor: '#180B4A',
+                      borderColor: '#ED642B',
+                      borderWidth: 1,
+                      textStyle: { color: '#FFFFFF', fontSize: 11 },
+                    },
+                    grid: { top: 15, right: 15, bottom: 25, left: 35 },
+                    xAxis: {
+                      type: 'category',
+                      data: chartData.map(d => d.visit),
+                      axisLabel: { color: '#9CA3AF', fontSize: 10 },
+                    },
+                    yAxis: {
+                      type: 'value',
+                      name: 'Mins',
+                      nameTextStyle: { color: '#9CA3AF', fontSize: 10 },
+                      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)', type: 'dashed' } },
+                      axisLabel: { color: '#9CA3AF', fontSize: 10 },
+                    },
+                    series: [
+                      {
+                        name: 'Actual Dwell (m)',
+                        type: 'line',
+                        smooth: true,
+                        data: chartData.map(d => d.dwell),
+                        lineStyle: { width: 2.5, color: '#250C77' },
+                        areaStyle: {
+                          color: {
+                            type: 'linear',
+                            x: 0,
+                            y: 0,
+                            x2: 0,
+                            y2: 1,
+                            colorStops: [
+                              { offset: 0, color: 'rgba(37, 12, 119, 0.4)' },
+                              { offset: 1, color: 'rgba(37, 12, 119, 0.0)' },
+                            ],
+                          },
+                        },
+                      },
+                      {
+                        name: 'SLA Target (m)',
+                        type: 'line',
+                        smooth: true,
+                        data: chartData.map(d => d.expected),
+                        lineStyle: { width: 2, color: '#10B981', type: 'dashed' },
+                      },
+                    ],
+                  }}
+                  style={{ height: '100%', width: '100%' }}
+                  opts={{ renderer: 'svg' }}
+                />
               )}
-            </tbody>
-          </table>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-border-default flex items-center justify-between text-xs text-text-tertiary">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#250C77]" /> Actual
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-status-good" /> SLA Baseline
+            </span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-
-
