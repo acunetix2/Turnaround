@@ -97,8 +97,9 @@ class AIAdvisorEngine:
             '  ],\n'
             '  "immediate_actions": ["Action 1", "Action 2", "Action 3"],\n'
             '  "strategic_recommendations": ["Recommendation 1", "Recommendation 2"],\n'
-            '  "estimated_monthly_savings_kes": 450000\n'
-            "}"
+            '  "estimated_monthly_savings_kes": 0\n'
+            "}\n"
+            "IMPORTANT: Base estimated_monthly_savings_kes strictly on the provided real financial loss data. If there are 0 delays/losses, set estimated_monthly_savings_kes to 0."
         )
 
         user_content = (
@@ -132,15 +133,32 @@ class AIAdvisorEngine:
                 logger.warning(f"Failed to parse Groq LLM JSON response: {e}. Using expert fallback.")
 
         # Heuristic Expert Fallback
-        total_loss = kpi_summary.get("estimated_financial_impact", 85000.0)
-        top_name = kpi_summary.get("top_bottleneck", "Corridor Transfer Points")
+        total_loss = float(kpi_summary.get("estimated_financial_impact", 0.0) or 0.0)
+        top_name = kpi_summary.get("top_bottleneck", "Corridor Nodes")
+        
+        if total_loss == 0 and not top_bottlenecks:
+            return {
+                "executive_summary": f"Fleet operations for {company_name} are currently operating at peak turnaround efficiency with zero excess dwell detected today.",
+                "financial_impact_analysis": "All vehicle geofences and facility stops are clearing within expected SLA thresholds. Zero active demurrage exposure.",
+                "primary_bottlenecks": [],
+                "immediate_actions": [
+                    "Maintain current dispatch scheduling windows.",
+                    "Continue monitoring live geofence dwell timestamps."
+                ],
+                "strategic_recommendations": [
+                    "Benchmark current on-time clearance metrics across all carrier partners."
+                ],
+                "estimated_monthly_savings_kes": 0.0,
+                "model_used": "turnaround-heuristic-v1"
+            }
+
         return {
             "executive_summary": (
                 f"Fleet operations across East African transit nodes are experiencing localized dwell friction. "
                 f"The highest operational delay is concentrated at {top_name}, driving today's estimated cost bleed to KES {total_loss:,.2f}."
             ),
             "financial_impact_analysis": (
-                f"Cumulative excess dwell represents a significant financial liability. Unplanned dwell exceeding expected SLA thresholds "
+                f"Cumulative excess dwell represents a measurable financial liability. Unplanned dwell exceeding expected SLA thresholds "
                 f"depresses fleet turnaround velocity and incurs an estimated monthly productivity loss exceeding KES {total_loss * 26:,.2f}."
             ),
             "primary_bottlenecks": [
@@ -151,13 +169,6 @@ class AIAdvisorEngine:
                     "recommendation": "Coordinate pre-clearance documentation before terminal gate-in."
                 }
                 for b in top_bottlenecks[:3]
-            ] or [
-                {
-                    "location": "Kilindini Port Gate 14",
-                    "severity": "high",
-                    "issue": "Terminal gate congestion and document verification delays during afternoon peak hours.",
-                    "recommendation": "Stagger dispatch slots to arrive before 10:00 AM or utilize off-peak night gate passes."
-                }
             ],
             "immediate_actions": [
                 "Deploy digital document pre-checks before trucks depart inland container depots (ICD).",

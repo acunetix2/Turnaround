@@ -49,11 +49,11 @@ const PRESET_CONFIGS = [
 ];
 
 const vehicleSchema = zod.object({
-  registration_number:  zod.string().min(3, 'Min 3 characters').max(15),
+  registration_number:  zod.string().min(3, 'Min 3 characters').max(20),
   vehicle_type:         zod.string().min(2, 'Enter a vehicle classification'),
   capacity:             zod.number().positive('Must be > 0'),
   hourly_operating_cost: zod.number().positive('Must be positive'),
-  status:               zod.enum(['moving', 'stationary', 'delayed'] as const),
+  status:               zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'moving', 'stationary', 'delayed'] as const),
   // Driver
   driver_name:          zod.string().optional(),
   driver_phone:         zod.string().optional(),
@@ -71,17 +71,25 @@ const vehicleSchema = zod.object({
   maintenance_status:   zod.enum(['good', 'due_soon', 'in_service']).optional(),
   next_inspection_date: zod.string().optional(),
   odometer_km:          zod.number().optional(),
+  fuel_level:           zod.number().min(0).max(100).optional(),
 });
 
 type VehicleFormValues = zod.infer<typeof vehicleSchema>;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+const normalizeFormStatus = (s?: string): 'moving' | 'stationary' | 'delayed' => {
+  if (!s) return 'stationary';
+  if (s === 'moving' || s === 'in_transit' || s === 'active') return 'moving';
+  if (s === 'delayed') return 'delayed';
+  return 'stationary';
+};
+
 const statusLabel = (s: string) =>
-  s === 'moving' ? 'In Transit' : s === 'delayed' ? 'Delayed' : 'Stationary';
+  s === 'moving' || s === 'in_transit' || s === 'active' ? 'In Transit' : s === 'delayed' ? 'Delayed' : 'Stationary';
 
 const statusColor = (s: string) =>
-  s === 'moving'  ? 'bg-status-good/15 text-status-good' :
+  s === 'moving' || s === 'in_transit' || s === 'active' ? 'bg-status-good/15 text-status-good' :
   s === 'delayed' ? 'bg-red-500/15 text-red-500' :
                     'bg-bg-surface-raised text-text-tertiary';
 
@@ -223,35 +231,69 @@ export const Vehicles: React.FC = () => {
 
   const handleOpenAdd = () => {
     setSubmitError(''); setActiveTab('specs');
-    reset({ registration_number: '', vehicle_type: '', capacity: 28, hourly_operating_cost: 7500, status: 'stationary', driver_status: 'on_duty', maintenance_status: 'good' });
+    setEditingVehicle(null);
+    reset({
+      registration_number: '',
+      vehicle_type: '',
+      capacity: 28,
+      hourly_operating_cost: 3500,
+      status: 'stationary',
+      driver_name: '',
+      driver_phone: '',
+      driver_license: '',
+      driver_status: 'on_duty',
+      trailer_number: '',
+      container_number: '',
+      container_type: '',
+      cargo_type: '',
+      telematics_provider: '',
+      tracker_imei: '',
+      maintenance_status: 'good',
+      next_inspection_date: '',
+      odometer_km: undefined,
+      fuel_level: undefined,
+    });
     setImageDataUrl(undefined);
     setShowAddModal(true);
   };
 
-  const handleOpenEdit = (v: Vehicle) => {
-    setSubmitError(''); setActiveTab('specs');
+  const populateVehicleForm = (v: Vehicle) => {
     setEditingVehicle(v);
     setImageDataUrl(v.image_url);
     reset({
-      registration_number:  v.registration_number,
-      vehicle_type:         v.vehicle_type,
-      capacity:             v.capacity,
-      hourly_operating_cost: v.hourly_operating_cost,
-      status:               v.status,
-      driver_name:          v.driver_name,
-      driver_phone:         v.driver_phone,
-      driver_license:       v.driver_license,
+      registration_number:  v.registration_number || '',
+      vehicle_type:         v.vehicle_type || '',
+      capacity:             v.capacity || 28,
+      hourly_operating_cost: v.hourly_operating_cost || 3500,
+      status:               normalizeFormStatus(v.status),
+      driver_name:          v.driver_name || '',
+      driver_phone:         v.driver_phone || '',
+      driver_license:       v.driver_license || '',
       driver_status:        (v.driver_status as any) || 'on_duty',
-      trailer_number:       v.trailer_number,
-      container_number:     v.container_number,
-      container_type:       v.container_type,
-      cargo_type:           v.cargo_type,
-      telematics_provider:  v.telematics_provider,
-      tracker_imei:         v.tracker_imei,
+      trailer_number:       v.trailer_number || '',
+      container_number:     v.container_number || '',
+      container_type:       v.container_type || '',
+      cargo_type:           v.cargo_type || '',
+      telematics_provider:  v.telematics_provider || '',
+      tracker_imei:         v.tracker_imei || '',
       maintenance_status:   (v.maintenance_status as any) || 'good',
-      next_inspection_date: v.next_inspection_date,
-      odometer_km:          v.odometer_km,
+      next_inspection_date: v.next_inspection_date || '',
+      odometer_km:          v.odometer_km ?? undefined,
+      fuel_level:           v.fuel_level ?? undefined,
     });
+  };
+
+  const handleOpenEdit = async (v: Vehicle) => {
+    setSubmitError('');
+    setActiveTab('specs');
+    populateVehicleForm(v);
+    // Fetch full details asynchronously in case list response had partial fields
+    try {
+      const full = await apiClient.getVehicleById(v.id);
+      if (full) populateVehicleForm(full);
+    } catch {
+      // Fallback already populated
+    }
   };
 
   const applyPreset = (idx: number) => {

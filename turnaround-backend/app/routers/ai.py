@@ -142,7 +142,7 @@ async def copilot_query(
                 "avg_actual_dwell_minutes": l.avg_dwell_minutes,
                 "avg_excess_delay": l.avg_excess_delay_minutes,
                 "total_visits": l.total_visits,
-                "financial_loss_kes": l.financial_impact
+                "financial_loss_kes": getattr(l, 'total_excess_cost', 0)
             }
             for l in loc_analytics[:8]
         ],

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTheme } from '../../lib/ThemeContext';
 
 interface BrandLogoProps {
   size?: number;
@@ -13,6 +14,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   showText = true,
   textSize = 'text-base',
 }) => {
+  let isLight = false;
+  try {
+    const { theme } = useTheme();
+    isLight = theme === 'light';
+  } catch {
+    isLight = false;
+  }
+
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
       {/* Clean FedEx-inspired geometric vector emblem */}
@@ -54,7 +63,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       {showText && (
         <div className="flex flex-col leading-tight">
           <div className="flex items-center">
-            <span className={`${textSize} font-extrabold tracking-tight text-[#250C77] dark:text-white`}>
+            <span className={`${textSize} font-extrabold tracking-tight ${isLight ? 'text-blue-600' : 'text-white'}`}>
               Turn<span className="text-[#ED642B]">around</span>
             </span>
           </div>

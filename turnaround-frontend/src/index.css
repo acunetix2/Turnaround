@@ -57,7 +57,7 @@
   --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-ui: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", "Fira Code", monospace;
-  --font-numeric: "Geist Mono", "JetBrains Mono", monospace;
+  --font-numeric: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* ── TYPE SCALE */
   --text-xs: 11.5px;

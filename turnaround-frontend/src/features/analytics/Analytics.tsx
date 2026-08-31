@@ -212,13 +212,23 @@ export const Analytics: React.FC = () => {
               <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#ED642B] text-white uppercase tracking-wider">
                 Analyst Finding
               </span>
-              <span className="text-xs text-text-tertiary font-numeric">Live Diagnostic Model</span>
+              <span className="text-xs text-text-tertiary">Live Diagnostic Model</span>
             </div>
             <p className="text-xs sm:text-sm font-medium text-text-primary leading-snug">
-              {analystReport.executive_summary || 'Telemetry indicates recurring queue congestion at primary border crossings and harbor terminals.'}
+              {analystReport.executive_summary || (totalLoss > 0
+                ? `Telemetry indicates recurring queue congestion across active locations with KES ${totalLoss.toLocaleString()} in demurrage losses.`
+                : 'All fleet assets operating within expected SLA turnaround thresholds. Zero excess demurrage detected.')}
             </p>
             <p className="text-xs text-text-secondary">
-              Estimated Monthly Recovery: <span className="font-numeric font-semibold text-[#ED642B]">+{formatCurrency(analystReport.estimated_monthly_savings_kes || 580000)}</span> through gate window staggering.
+              {totalLoss > 0 ? (
+                <>
+                  Estimated Monthly Opportunity: <span className="font-semibold text-[#ED642B]">+{formatCurrency(Math.round(totalLoss * 4 * 0.45))}</span> via queue staggering and pre-clearance SLA enforcement.
+                </>
+              ) : (
+                <span className="text-status-good">
+                  Fleet operating at optimal velocity · Zero excess delay losses recorded for this period.
+                </span>
+              )}
             </p>
           </div>
 

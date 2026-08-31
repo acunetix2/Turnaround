@@ -168,8 +168,20 @@ export const Trips: React.FC = () => {
     const dest = (locationsData || []).find(l => l.id === values.destination_id);
     const vehicle = selectedVehicleObj;
 
+    const toIsoSafe = (val?: string, fallbackOffsetHours = 0) => {
+      try {
+        if (!val) return new Date(Date.now() + fallbackOffsetHours * 3600 * 1000).toISOString();
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? new Date(Date.now() + fallbackOffsetHours * 3600 * 1000).toISOString() : d.toISOString();
+      } catch {
+        return new Date(Date.now() + fallbackOffsetHours * 3600 * 1000).toISOString();
+      }
+    };
+
     const payload: any = {
       ...values,
+      planned_departure: toIsoSafe(values.planned_departure, 0),
+      planned_arrival: toIsoSafe(values.planned_arrival, 8),
       vehicle_reg: vehicle?.registration_number || 'TRUCK',
       vehicle_type: vehicle?.vehicle_type,
       driver_name: vehicle?.driver_name || 'Fleet Operator',

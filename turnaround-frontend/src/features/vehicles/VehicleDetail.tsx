@@ -49,11 +49,11 @@ const TRACKER_MODELS = [
 ];
 
 const updateSchema = zod.object({
-  registration_number: zod.string().min(3, 'Min 3 characters').max(15),
+  registration_number: zod.string().min(3, 'Min 3 characters').max(20),
   vehicle_type: zod.string().min(2, 'Enter a vehicle classification'),
   capacity: zod.number().positive('Must be > 0'),
   hourly_operating_cost: zod.number().positive('Must be positive'),
-  status: zod.enum(['moving', 'stationary', 'delayed'] as const),
+  status: zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'moving', 'stationary', 'delayed'] as const),
   // Driver
   driver_name: zod.string().optional(),
   driver_phone: zod.string().optional(),
@@ -76,8 +76,15 @@ const updateSchema = zod.object({
 
 type UpdateFormValues = zod.infer<typeof updateSchema>;
 
+const normalizeFormStatus = (s?: string): 'moving' | 'stationary' | 'delayed' => {
+  if (!s) return 'stationary';
+  if (s === 'moving' || s === 'in_transit' || s === 'active') return 'moving';
+  if (s === 'delayed') return 'delayed';
+  return 'stationary';
+};
+
 const statusColor = (s: string) =>
-  s === 'moving' ? 'bg-status-good/15 text-status-good border-status-good/30'
+  s === 'moving' || s === 'in_transit' || s === 'active' ? 'bg-status-good/15 text-status-good border-status-good/30'
   : s === 'delayed' ? 'bg-red-500/15 text-red-500 border-red-500/30'
   : 'bg-bg-surface-raised text-text-tertiary border-border-default';
 
@@ -218,25 +225,25 @@ export const VehicleDetail: React.FC = () => {
   } = useForm<UpdateFormValues>({
     resolver: zodResolver(updateSchema),
     values: vehicle ? {
-      registration_number: vehicle.registration_number,
-      vehicle_type: vehicle.vehicle_type,
-      capacity: vehicle.capacity,
-      hourly_operating_cost: vehicle.hourly_operating_cost,
-      status: vehicle.status,
+      registration_number: vehicle.registration_number || '',
+      vehicle_type: vehicle.vehicle_type || '',
+      capacity: vehicle.capacity || 28,
+      hourly_operating_cost: vehicle.hourly_operating_cost || 3500,
+      status: normalizeFormStatus(vehicle.status),
       driver_name: vehicle.driver_name || '',
       driver_phone: vehicle.driver_phone || '',
       driver_license: vehicle.driver_license || '',
-      driver_status: vehicle.driver_status || 'on_duty',
+      driver_status: (vehicle.driver_status as any) || 'on_duty',
       trailer_number: vehicle.trailer_number || '',
       container_number: vehicle.container_number || '',
       container_type: vehicle.container_type || '',
       cargo_type: vehicle.cargo_type || '',
       telematics_provider: vehicle.telematics_provider || '',
       tracker_imei: vehicle.tracker_imei || '',
-      maintenance_status: vehicle.maintenance_status || 'good',
+      maintenance_status: (vehicle.maintenance_status as any) || 'good',
       next_inspection_date: vehicle.next_inspection_date || '',
-      odometer_km: vehicle.odometer_km,
-      fuel_level: vehicle.fuel_level,
+      odometer_km: vehicle.odometer_km ?? undefined,
+      fuel_level: vehicle.fuel_level ?? undefined,
     } : undefined,
   });
 

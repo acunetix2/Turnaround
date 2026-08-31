@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React from 'react'
 import { Info, ArrowUpRight, ArrowDownRight, Minus, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -129,7 +129,7 @@ export const MetricCardValue: React.FC<MetricCardValueProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`font-numeric text-2xl font-bold tracking-tight text-text-primary ${className}`}>
+    <div className={`text-2xl font-semibold tracking-tight text-text-primary ${className}`}>
       {children}
     </div>
   )
@@ -160,7 +160,7 @@ export const MetricCardDifferential: React.FC<MetricCardDifferentialProps> = ({
 
   return (
     <span
-      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-numeric font-semibold ${variantStyles[variant]} ${className}`}
+      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-medium ${variantStyles[variant]} ${className}`}
     >
       {icons[variant]}
       {children}
@@ -168,36 +168,8 @@ export const MetricCardDifferential: React.FC<MetricCardDifferentialProps> = ({
   )
 }
 
-// ── SMOOTH SPLINE BEZIER CURVE GENERATOR ──
-function getSmoothSplinePath(points: Array<{ x: number; y: number }>) {
-  if (points.length === 0) return ''
-  if (points.length === 1) return `M ${points[0].x},${points[0].y}`
-  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`
-
-  let path = `M ${points[0].x},${points[0].y}`
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const current = points[i]
-    const next = points[i + 1]
-    const prev = points[i - 1] || current
-    const afterNext = points[i + 2] || next
-
-    const tension = 0.25
-
-    const cp1x = current.x + (next.x - prev.x) * tension
-    const cp1y = current.y + (next.y - prev.y) * tension
-
-    const cp2x = next.x - (afterNext.x - current.x) * tension
-    const cp2y = next.y - (afterNext.y - current.y) * tension
-
-    path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${next.x},${next.y}`
-  }
-
-  return path
-}
-
 export interface MetricCardSparklineProps {
-  data: Array<{ value: number; timestamp?: string; [key: string]: any }>
+  data?: Array<{ value: number; timestamp?: string; [key: string]: any }>
   dataKey?: string
   height?: number
   color?: string
@@ -206,138 +178,7 @@ export interface MetricCardSparklineProps {
   showTooltip?: boolean
 }
 
-export const MetricCardSparkline: React.FC<MetricCardSparklineProps> = ({
-  data,
-  dataKey = 'value',
-  height = 46,
-  color = '#ED642B',
-  className = '',
-  showGrid = true,
-  showTooltip = true,
-}) => {
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  if (!data || data.length < 2) return null
-
-  const values = data.map((d) => Number(d[dataKey]) || 0)
-  const minVal = Math.min(...values)
-  const maxVal = Math.max(...values)
-  const range = maxVal - minVal || 1
-
-  const width = 240
-  const paddingTop = 4
-  const paddingBottom = 6
-  const usableHeight = height - paddingTop - paddingBottom
-
-  const points = values.map((val, idx) => {
-    const x = (idx / (values.length - 1)) * width
-    const y = paddingTop + usableHeight - ((val - minVal) / range) * usableHeight
-    return { x, y, val, original: data[idx] }
-  })
-
-  const linePath = getSmoothSplinePath(points)
-  const areaPath = `${linePath} L ${width},${height} L 0,${height} Z`
-  const gradId = `spark-grad-${color.replace('#', '')}-${Math.random().toString(36).substr(2, 5)}`
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !showTooltip) return
-    const rect = containerRef.current.getBoundingClientRect()
-    const relativeX = e.clientX - rect.left
-    const percent = Math.max(0, Math.min(1, relativeX / rect.width))
-    const nearestIndex = Math.round(percent * (points.length - 1))
-    setHoverIndex(nearestIndex)
-  }
-
-  const handleMouseLeave = () => {
-    setHoverIndex(null)
-  }
-
-  const activePoint = hoverIndex !== null ? points[hoverIndex] : null
-
-  return (
-    <div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className={`relative w-full overflow-hidden select-none cursor-crosshair group ${className}`}
-      style={{ height }}
-    >
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-full overflow-visible"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.32" />
-            <stop offset="85%" stopColor={color} stopOpacity="0.04" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
-
-        {/* Subtle Horizontal Gridlines */}
-        {showGrid && (
-          <g className="opacity-20 stroke-current text-border-default">
-            <line x1="0" y1={paddingTop + usableHeight * 0.25} x2={width} y2={paddingTop + usableHeight * 0.25} strokeDasharray="3 3" strokeWidth="0.8" />
-            <line x1="0" y1={paddingTop + usableHeight * 0.75} x2={width} y2={paddingTop + usableHeight * 0.75} strokeDasharray="3 3" strokeWidth="0.8" />
-          </g>
-        )}
-
-        {/* Gradient Area Fill */}
-        <path d={areaPath} fill={`url(#${gradId})`} />
-
-        {/* Real Smooth Curved Line Graph */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke={color}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Interactive Scrub Line & Highlight Dot */}
-        {activePoint && (
-          <g>
-            <line
-              x1={activePoint.x}
-              y1={paddingTop}
-              x2={activePoint.x}
-              y2={height}
-              stroke={color}
-              strokeWidth="1"
-              strokeDasharray="2 2"
-              opacity="0.6"
-            />
-            <circle
-              cx={activePoint.x}
-              cy={activePoint.y}
-              r="4.5"
-              fill={color}
-              stroke="#ffffff"
-              strokeWidth="2"
-            />
-          </g>
-        )}
-      </svg>
-
-      {/* Interactive Tooltip Callout */}
-      {activePoint && (
-        <div
-          className="absolute z-20 pointer-events-none -top-2 bg-bg-surface-raised border border-border-default px-2 py-0.5 rounded shadow-lg text-[10px] font-numeric font-bold text-text-primary whitespace-nowrap transform -translate-x-1/2 -translate-y-full transition-all duration-75"
-          style={{
-            left: `${(activePoint.x / width) * 100}%`,
-          }}
-        >
-          <span>{activePoint.val.toLocaleString()}</span>
-          {activePoint.original?.timestamp && (
-            <span className="text-[8.5px] font-normal text-text-tertiary ml-1">
-              {new Date(activePoint.original.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  )
+export const MetricCardSparkline: React.FC<MetricCardSparklineProps> = () => {
+  // Lines removed from metric cards per user request
+  return null
 }
