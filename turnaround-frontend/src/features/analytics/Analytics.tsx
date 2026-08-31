@@ -7,10 +7,30 @@ import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatMinutes, formatDateShort } from '../../lib/format';
 import { useTheme } from '../../lib/ThemeContext';
 import {
-  BarChart3, Clock, DollarSign, Sparkles, ArrowRight
+  BarChart3, Clock, DollarSign, Sparkles, ArrowRight, Download, BarChart2
 } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
 import { useCorridorAnalysis } from '../../hooks/useAIAdvisor';
+import {
+  Chart,
+  ChartCard,
+  ChartHeader,
+  ChartTitle,
+  ChartActions,
+  ChartContent,
+  ChartLoadingState,
+  ChartEmptyState,
+} from '../../components/ui/Chart';
+import {
+  MetricCard,
+  MetricCardHeader,
+  MetricCardLabel,
+  MetricCardContent,
+  MetricCardValue,
+  MetricCardDifferential,
+  MetricCardSparkline,
+} from '../../components/ui/MetricCard';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 
 export const Analytics: React.FC = () => {
   const [dateRange, setDateRange] = useState<string>('14');
@@ -56,10 +76,10 @@ export const Analytics: React.FC = () => {
         backgroundColor: isDark ? '#180B4A' : '#FFFFFF',
         borderColor: '#250C77',
         borderWidth: 1,
-        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11 },
+        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11, fontFamily: 'inherit' },
         formatter: (params: any) => {
           const item = params[0];
-          return `<div style="font-weight:700">${item.name}</div><div style="color:#250C77">Avg Dwell: ${formatMinutes(item.value)}</div>`;
+          return `<div style="font-weight:600">${item.name}</div><div style="color:#250C77">Avg Dwell: ${formatMinutes(item.value)}</div>`;
         },
       },
       grid: { top: 15, right: 15, bottom: 25, left: 35 },
@@ -67,13 +87,13 @@ export const Analytics: React.FC = () => {
         type: 'category',
         data: dates,
         boundaryGap: false,
-        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' } },
-        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' } },
+        axisLabel: { color: isDark ? '#7D73A8' : '#8F84BE', fontSize: 10 },
       },
       yAxis: {
         type: 'value',
         splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', type: 'dashed' } },
-        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+        axisLabel: { color: isDark ? '#7D73A8' : '#8F84BE', fontSize: 10 },
       },
       series: [
         {
@@ -100,10 +120,10 @@ export const Analytics: React.FC = () => {
     };
   }, [filteredTrends, isDark]);
 
-  // ── APACHE ECHARTS: Financial Loss Option ──
+  // ── APACHE ECHARTS: Financial Delay Loss Option ──
   const financialLossOption = useMemo<EChartsOption>(() => {
     const dates = filteredTrends.map((d) => formatDateShort(d.date));
-    const losses = filteredTrends.map((d) => d.estimated_cost);
+    const costs = filteredTrends.map((d) => Math.round(d.estimated_cost));
 
     return {
       backgroundColor: 'transparent',
@@ -112,65 +132,49 @@ export const Analytics: React.FC = () => {
         backgroundColor: isDark ? '#180B4A' : '#FFFFFF',
         borderColor: '#ED642B',
         borderWidth: 1,
-        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11 },
+        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11, fontFamily: 'inherit' },
         formatter: (params: any) => {
           const item = params[0];
-          return `<div style="font-weight:700">${item.name}</div><div style="color:#ED642B">Loss: ${formatCurrency(item.value)}</div>`;
+          return `<div style="font-weight:600">${item.name}</div><div style="color:#ED642B">Demurrage Loss: ${formatCurrency(item.value)}</div>`;
         },
       },
-      grid: { top: 15, right: 15, bottom: 25, left: 50 },
+      grid: { top: 15, right: 15, bottom: 25, left: 45 },
       xAxis: {
         type: 'category',
         data: dates,
-        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' } },
-        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 },
+        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' } },
+        axisLabel: { color: isDark ? '#7D73A8' : '#8F84BE', fontSize: 10 },
       },
       yAxis: {
         type: 'value',
         splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', type: 'dashed' } },
         axisLabel: {
-          color: isDark ? '#9CA3AF' : '#6B7280',
+          color: isDark ? '#7D73A8' : '#8F84BE',
           fontSize: 10,
-          formatter: (v: number) => `${(v / 1000).toFixed(0)}K`,
+          formatter: (val: number) => `${(val / 1000).toFixed(0)}k`,
         },
       },
       series: [
         {
-          name: 'Loss (KES)',
+          name: 'Cost (KES)',
           type: 'bar',
-          data: losses,
+          barWidth: 10,
+          data: costs,
           itemStyle: {
             color: '#ED642B',
-            borderRadius: [4, 4, 0, 0],
+            borderRadius: [3, 3, 0, 0],
           },
         },
       ],
     };
   }, [filteredTrends, isDark]);
 
-  if (loadingTrends || loadingLocations) {
-    return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-10 w-full bg-bg-surface-raised rounded-xl" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-bg-surface-raised rounded-xl" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="h-80 bg-bg-surface-raised rounded-xl" />
-          <div className="h-80 bg-bg-surface-raised rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-text-primary tracking-tight">Fleet & Stop Turnaround Analytics</h1>
+          <h1 className="text-base font-semibold text-text-primary tracking-tight">Turnaround Analytics</h1>
           <p className="text-xs text-text-secondary mt-0.5">
             Audit historical turnaround cycles, demurrage losses, and recurring stop congestion patterns.
           </p>
@@ -179,7 +183,7 @@ export const Analytics: React.FC = () => {
         <div className="flex items-center gap-3">
           <Link
             to="/ai-advisor"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#ED642B]/15 border border-[#ED642B]/35 hover:bg-[#ED642B]/25 text-[#ED642B] text-xs font-bold transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ED642B]/15 border border-[#ED642B]/35 hover:bg-[#ED642B]/25 text-[#ED642B] text-xs font-medium transition-colors shrink-0"
           >
             <Sparkles size={13} />
             <span>Open Performance Analyst</span>
@@ -202,189 +206,279 @@ export const Analytics: React.FC = () => {
 
       {/* ── ANALYST INTELLIGENCE SUMMARY BANNER ── */}
       {analystReport && (
-        <div className="rounded-2xl border border-[#ED642B]/35 bg-gradient-to-r from-[#250C77]/20 via-[#180B4A]/30 to-[#ED642B]/10 p-4 sm:p-5 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="rounded-xl border border-[#ED642B]/30 bg-bg-surface p-4 sm:p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-1 max-w-2xl">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#ED642B] text-white uppercase tracking-wider">
-                Analyst Executive Finding
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#ED642B] text-white uppercase tracking-wider">
+                Analyst Finding
               </span>
               <span className="text-xs text-text-tertiary font-numeric">Live Diagnostic Model</span>
             </div>
-            <p className="text-xs sm:text-sm font-semibold text-text-primary leading-snug">
+            <p className="text-xs sm:text-sm font-medium text-text-primary leading-snug">
               {analystReport.executive_summary || 'Telemetry indicates recurring queue congestion at primary border crossings and harbor terminals.'}
             </p>
             <p className="text-xs text-text-secondary">
-              Estimated Monthly Recovery: <span className="font-numeric font-bold text-[#ED642B]">+{formatCurrency(analystReport.estimated_monthly_savings_kes || 580000)}</span> through gate window staggering.
+              Estimated Monthly Recovery: <span className="font-numeric font-semibold text-[#ED642B]">+{formatCurrency(analystReport.estimated_monthly_savings_kes || 580000)}</span> through gate window staggering.
             </p>
           </div>
 
           <Link
             to="/ai-advisor"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-bold shadow-md transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-medium shadow-sm transition-colors shrink-0"
           >
-            <span>View Full Analyst Report</span>
+            <span>View Full Report</span>
             <ArrowRight size={13} className="text-[#ED642B]" />
           </Link>
         </div>
       )}
 
-      {/* ── AGGREGATE HUD STATS ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="rounded-xl border border-[#ED642B]/30 bg-bg-surface p-4 shadow-sm">
-          <span className="text-xs font-semibold text-[#ED642B]">Idle Capital Loss (Period)</span>
-          <p className="font-numeric text-2xl font-extrabold text-[#ED642B] mt-2">
-            {formatCurrency(totalLoss)}
-          </p>
-          <span className="text-[11px] text-text-tertiary">Cumulative idle demurrage</span>
-        </div>
+      {/* ── AGGREGATE HUD STATS (SUPABASE METRIC CARD PATTERN) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard isLoading={loadingTrends}>
+          <MetricCardHeader href="/insights">
+            <MetricCardLabel
+              tooltip="Cumulative financial demurrage costs incurred during selected date range"
+              icon={<DollarSign size={13} className="text-[#ED642B]" />}
+            >
+              Idle Demurrage Loss
+            </MetricCardLabel>
+          </MetricCardHeader>
+          <MetricCardContent>
+            <MetricCardValue className={totalLoss > 0 ? 'text-[#ED642B]' : ''}>
+              {formatCurrency(totalLoss)}
+            </MetricCardValue>
+            <MetricCardDifferential variant={totalLoss > 0 ? 'negative' : 'positive'}>
+              Period
+            </MetricCardDifferential>
+          </MetricCardContent>
+          <MetricCardSparkline
+            data={filteredTrends.map(t => ({ value: t.estimated_cost }))}
+            color="#ED642B"
+          />
+        </MetricCard>
 
-        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
-          <span className="text-xs font-semibold text-text-secondary">Total Stop Visits</span>
-          <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
-            {totalVisits}
-          </p>
-          <span className="text-[11px] text-text-tertiary">Recorded terminal passage events</span>
-        </div>
+        <MetricCard isLoading={loadingTrends}>
+          <MetricCardHeader href="/locations">
+            <MetricCardLabel
+              tooltip="Total recorded terminal, bay, and border crossing visits"
+              icon={<BarChart3 size={13} className="text-[#250C77]" />}
+            >
+              Total Stop Visits
+            </MetricCardLabel>
+          </MetricCardHeader>
+          <MetricCardContent>
+            <MetricCardValue>{totalVisits}</MetricCardValue>
+            <MetricCardDifferential variant="positive">
+              visits
+            </MetricCardDifferential>
+          </MetricCardContent>
+          <MetricCardSparkline
+            data={filteredTrends.map(t => ({ value: t.visit_count }))}
+            color="#10B981"
+          />
+        </MetricCard>
 
-        <div className={`rounded-xl border p-4 shadow-sm ${
-          totalDelays > 0 ? 'bg-status-danger-bg/40 border-status-danger/40' : 'bg-bg-surface border-border-default'
-        }`}>
-          <span className="text-xs font-semibold text-text-secondary">Flagged Delay Incidents</span>
-          <p className={`font-numeric text-2xl font-extrabold mt-2 ${totalDelays > 0 ? 'text-status-danger' : 'text-text-primary'}`}>
-            {totalDelays}
-          </p>
-          <span className="text-[11px] text-text-tertiary">Exceeded target stop duration</span>
-        </div>
+        <MetricCard isLoading={loadingTrends}>
+          <MetricCardHeader href="/insights">
+            <MetricCardLabel
+              tooltip="Number of arrivals where dwell exceeded facility expected duration"
+              icon={<Clock size={13} className="text-status-danger" />}
+            >
+              Flagged Delay Incidents
+            </MetricCardLabel>
+          </MetricCardHeader>
+          <MetricCardContent>
+            <MetricCardValue className={totalDelays > 0 ? 'text-status-danger' : ''}>
+              {totalDelays}
+            </MetricCardValue>
+            <MetricCardDifferential variant={totalDelays > 0 ? 'negative' : 'positive'}>
+              {totalDelays > 0 ? 'SLA Breaches' : 'Clean'}
+            </MetricCardDifferential>
+          </MetricCardContent>
+          <MetricCardSparkline
+            data={filteredTrends.map(t => ({ value: t.delayed_visit_count }))}
+            color="#EF4444"
+          />
+        </MetricCard>
 
-        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
-          <span className="text-xs font-semibold text-text-secondary">Average Turnaround Time</span>
-          <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
-            {formatMinutes(avgDwell)}
-          </p>
-          <span className="text-[11px] text-text-tertiary">Mean dwell per trip cycle</span>
-        </div>
+        <MetricCard isLoading={loadingTrends}>
+          <MetricCardHeader href="/locations">
+            <MetricCardLabel
+              tooltip="Average turnaround time per vehicle visit across the entire corridor network"
+              icon={<Clock size={13} className="text-[#250C77]" />}
+            >
+              Average Turnaround
+            </MetricCardLabel>
+          </MetricCardHeader>
+          <MetricCardContent>
+            <MetricCardValue>{formatMinutes(avgDwell)}</MetricCardValue>
+            <MetricCardDifferential variant={avgDwell <= 90 ? 'positive' : 'negative'}>
+              per cycle
+            </MetricCardDifferential>
+          </MetricCardContent>
+          <MetricCardSparkline
+            data={filteredTrends.map(t => ({ value: t.average_dwell_minutes }))}
+            color="#250C77"
+          />
+        </MetricCard>
       </div>
 
-      {/* ── CHARTS GRID (APACHE ECHARTS) ── */}
+      {/* ── CHARTS GRID (SUPABASE UI PATTERN) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Daily Dwell & Excess Dwell (Apache ECharts Area) */}
-        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-border-default pb-3">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                <Clock size={14} className="text-[#250C77]" />
-                Daily Turnaround Trends (Minutes)
-              </h2>
-              <p className="text-[11px] text-text-tertiary mt-0.5">Average stop dwell across all fleet stops</p>
-            </div>
-            <span className="text-[10px] font-numeric font-bold px-2 py-0.5 rounded bg-bg-surface-raised text-text-secondary">
-              Daily Average
-            </span>
-          </div>
+        {/* Daily Dwell & Excess Dwell (Supabase Studio Chart Pattern) */}
+        <Chart isLoading={loadingTrends}>
+          <ChartCard>
+            <ChartHeader>
+              <ChartTitle tooltip="Average stop dwell duration in minutes across all monitored logistics hubs">
+                <div className="flex items-center gap-1.5">
+                  <Clock size={13} className="text-[#250C77]" />
+                  <span>Daily Turnaround Trends (Minutes)</span>
+                </div>
+              </ChartTitle>
+              <ChartActions
+                actions={[
+                  {
+                    label: 'Export',
+                    onClick: () => {
+                      const csv = filteredTrends.map(t => `${t.date},${t.average_dwell_minutes}`).join('\n');
+                      const blob = new Blob([`date,avg_dwell_minutes\n${csv}`], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `turnaround-trends-${new Date().toISOString().slice(0, 10)}.csv`;
+                      a.click();
+                    },
+                    icon: <Download size={11} />,
+                  },
+                ]}
+              />
+            </ChartHeader>
+            <ChartContent
+              isEmpty={filteredTrends.length === 0}
+              emptyState={<ChartEmptyState icon={<BarChart2 size={16} />} title="No trend data" description="Try selecting a wider date range" />}
+              loadingState={<ChartLoadingState height={240} />}
+            >
+              <div className="h-60 w-full">
+                <ReactECharts
+                  option={dwellTrendOption}
+                  style={{ height: '100%', width: '100%' }}
+                  opts={{ renderer: 'svg' }}
+                />
+              </div>
+            </ChartContent>
+          </ChartCard>
+        </Chart>
 
-          <div className="h-64 w-full">
-            <ReactECharts
-              option={dwellTrendOption}
-              style={{ height: '100%', width: '100%' }}
-              opts={{ renderer: 'svg' }}
-            />
-          </div>
-        </div>
-
-        {/* Daily Financial Waste (Apache ECharts Bar) */}
-        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-border-default pb-3">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                <DollarSign size={14} className="text-[#ED642B]" />
-                Daily Financial Delay Losses (KES)
-              </h2>
-              <p className="text-[11px] text-text-tertiary mt-0.5">Quantified idle fleet operating expenses</p>
-            </div>
-            <span className="text-[10px] font-numeric font-bold px-2 py-0.5 rounded bg-[#ED642B]/10 text-[#ED642B]">
-              KES Bleed
-            </span>
-          </div>
-
-          <div className="h-64 w-full">
-            <ReactECharts
-              option={financialLossOption}
-              style={{ height: '100%', width: '100%' }}
-              opts={{ renderer: 'svg' }}
-            />
-          </div>
-        </div>
+        {/* Daily Financial Waste (Supabase Studio Chart Pattern) */}
+        <Chart isLoading={loadingTrends}>
+          <ChartCard>
+            <ChartHeader>
+              <ChartTitle tooltip="Quantified financial demurrage losses due to excess dwell at customer and port stops">
+                <div className="flex items-center gap-1.5">
+                  <DollarSign size={13} className="text-[#ED642B]" />
+                  <span>Daily Financial Delay Losses (KES)</span>
+                </div>
+              </ChartTitle>
+              <ChartActions
+                actions={[
+                  {
+                    label: 'Summary',
+                    onClick: () => alert(`Total period demurrage loss: ${formatCurrency(totalLoss)}`),
+                    icon: <BarChart3 size={11} />,
+                  },
+                ]}
+              />
+            </ChartHeader>
+            <ChartContent
+              isEmpty={filteredTrends.length === 0}
+              emptyState={<ChartEmptyState icon={<BarChart2 size={16} />} title="No loss records" description="No financial delay incidents in this timeframe" />}
+              loadingState={<ChartLoadingState height={240} />}
+            >
+              <div className="h-60 w-full">
+                <ReactECharts
+                  option={financialLossOption}
+                  style={{ height: '100%', width: '100%' }}
+                  opts={{ renderer: 'svg' }}
+                />
+              </div>
+            </ChartContent>
+          </ChartCard>
+        </Chart>
       </div>
 
-      {/* ── FACILITY PERFORMANCE COMPARISON MATRIX ── */}
-      <div className="rounded-2xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-border-default bg-bg-surface-raised/40 flex items-center justify-between">
+      {/* ── FACILITY PERFORMANCE COMPARISON MATRIX (SUPABASE TABLE) ── */}
+      <div className="rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
+        <div className="px-4 py-3 border-b border-border-default bg-bg-surface-raised/20 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <BarChart3 size={15} className="text-[#ED642B]" />
-            <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary">
+            <BarChart3 size={14} className="text-[#ED642B]" />
+            <h2 className="text-xs font-semibold text-text-primary">
               Stop Congestion & Financial Loss Ranking
             </h2>
           </div>
-          <span className="font-numeric text-[11px] text-text-tertiary font-semibold">
+          <span className="font-numeric text-[11px] text-text-tertiary font-medium">
             Ranked by Cost Impact
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse table-dense">
-            <thead>
-              <tr className="bg-bg-surface-raised/50">
-                <th>Rank</th>
-                <th>Stop / Terminal</th>
-                <th>Recorded Visits</th>
-                <th>Average Dwell</th>
-                <th>Average Excess</th>
-                <th className="text-right">Period Financial Loss</th>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-16">Rank</TableHead>
+              <TableHead>Stop / Terminal</TableHead>
+              <TableHead>Recorded Visits</TableHead>
+              <TableHead>Average Dwell</TableHead>
+              <TableHead>Average Excess</TableHead>
+              <TableHead className="text-right">Period Financial Loss</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loadingLocations ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-text-tertiary">
+                  Loading stop rankings...
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border-default">
-              {sortedLocations.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-10 text-center text-xs text-text-tertiary">
-                    No stop analytics available.
-                  </td>
-                </tr>
-              ) : (
-                sortedLocations.map((loc, idx) => {
-                  const excess = loc.avg_excess_delay_minutes || 0;
-                  return (
-                    <tr key={loc.location_id || idx} className="hover:bg-bg-surface-raised/30 transition-colors">
-                      <td className="font-numeric text-xs font-bold text-text-tertiary">
-                        0{idx + 1}
-                      </td>
-                      <td className="text-xs font-bold text-text-primary">
-                        {loc.location_name}
-                      </td>
-                      <td className="font-numeric text-xs text-text-secondary">
-                        {loc.total_visits} visits
-                      </td>
-                      <td className="font-numeric text-xs text-text-primary">
-                        {formatMinutes(loc.avg_dwell_minutes)}
-                      </td>
-                      <td className="font-numeric text-xs font-bold">
-                        {excess > 0 ? (
-                          <span className={excess > 45 ? 'text-status-danger' : 'text-status-warning'}>
-                            +{formatMinutes(excess)}
-                          </span>
-                        ) : (
-                          <span className="text-status-good">On Target</span>
-                        )}
-                      </td>
-                      <td className="text-right font-numeric text-xs font-bold text-[#ED642B]">
-                        {formatCurrency(loc.financial_impact)}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+            ) : sortedLocations.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-text-tertiary">
+                  No stop analytics available.
+                </td>
+              </tr>
+            ) : (
+              sortedLocations.map((loc, idx) => {
+                const excess = loc.avg_excess_delay_minutes || 0;
+                return (
+                  <TableRow key={loc.location_id || idx}>
+                    <TableCell className="font-numeric font-medium text-text-tertiary">
+                      0{idx + 1}
+                    </TableCell>
+                    <TableCell className="font-medium text-text-primary">
+                      {loc.location_name}
+                    </TableCell>
+                    <TableCell className="font-numeric text-text-secondary">
+                      {loc.total_visits} visits
+                    </TableCell>
+                    <TableCell className="font-numeric text-text-primary">
+                      {formatMinutes(loc.avg_dwell_minutes)}
+                    </TableCell>
+                    <TableCell className="font-numeric font-medium">
+                      {excess > 0 ? (
+                        <span className={excess > 45 ? 'text-status-danger' : 'text-status-warning'}>
+                          +{formatMinutes(excess)}
+                        </span>
+                      ) : (
+                        <span className="text-status-good">On Target</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-numeric font-semibold text-[#ED642B]">
+                      {formatCurrency(loc.financial_impact)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

@@ -9,10 +9,35 @@ import { useTheme } from '../../lib/ThemeContext';
 import {
   Truck, AlertTriangle, Clock, DollarSign,
   MapPin, ArrowRight, RefreshCw, CheckCircle2,
-  Download, Search, Calendar as CalendarIcon,
-  BarChart3, TrendingUp
+  Download, Search,
+  BarChart3, TrendingUp, User, Container, Layers
 } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
+import {
+  Chart,
+  ChartCard,
+  ChartHeader,
+  ChartTitle,
+  ChartContent,
+} from '../../components/ui/Chart';
+import { format } from 'date-fns';
+import {
+  DatePicker,
+  DatePickerTrigger,
+  DatePickerButton,
+  DatePickerContent,
+} from '../../components/ui/DatePicker';
+import { Calendar } from '../../components/ui/Calendar';
+import { Button } from '../../components/ui/Button';
+import {
+  MetricCard,
+  MetricCardHeader,
+  MetricCardLabel,
+  MetricCardContent,
+  MetricCardValue,
+  MetricCardDifferential,
+  MetricCardSparkline,
+} from '../../components/ui/MetricCard';
 
 export const Dashboard: React.FC = () => {
   const queryClient = useQueryClient();
@@ -20,9 +45,18 @@ export const Dashboard: React.FC = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [timeframe, setTimeframe] = useState<'Day' | 'Week' | 'Month' | 'Year'>('Month');
   const [chartRange, setChartRange] = useState<'3M' | '6M' | '12M'>('12M');
   const [actionSearch, setActionSearch] = useState('');
+
+  // ── ROI CALCULATOR STATE ──
+  const [roiTrucks, setRoiTrucks] = useState<number>(24);
+  const [roiDelaySaved, setRoiDelaySaved] = useState<number>(25); // minutes saved per trip
+  const [roiHourlyRate, setRoiHourlyRate] = useState<number>(3500); // KES per hour
+
+  // ── LIVE FINANCIAL DEMURRAGE BURN TICKER ──
+  const [liveBurnCounter, setLiveBurnCounter] = useState<number>(0);
 
   // ── REAL BACKEND DATA ──
   const { data: stats, isLoading, isError, refetch } = useQuery({
@@ -79,6 +113,24 @@ export const Dashboard: React.FC = () => {
     : '0.0';
   const idleLoss = stats?.estimated_financial_impact ?? 0;
   const onScheduleCount = Math.max(0, activeTrucks - delayedTrucks);
+
+  // Live Demurrage Cost Burn Ticker Effect
+  React.useEffect(() => {
+    if (delayedTrucks === 0) return;
+    const interval = setInterval(() => {
+      // Each delayed truck burns hourly rate / 3600 per second
+      const burnPerSec = (delayedTrucks * 3500) / 3600;
+      setLiveBurnCounter((prev) => prev + burnPerSec);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [delayedTrucks]);
+
+  // Derived ROI Savings
+  const monthlySavings = Math.round(roiTrucks * 22 * 2 * (roiDelaySaved / 60) * roiHourlyRate);
+  const annualSavings = Math.round(monthlySavings * 12);
+  const fuelSavedLiters = Math.round(roiTrucks * 250 * 2 * (roiDelaySaved / 60) * 4.2); // ~4.2L idle burn/hr
+  const co2ReductionTonnes = ((fuelSavedLiters * 2.68) / 1000).toFixed(1);
+  const roiMultiplier = ((annualSavings / 450000)).toFixed(1); // Baseline platform cost vs savings
 
   // Filter urgent dwells for action queue
   const urgentDwells = (dwellEvents || [])
@@ -307,35 +359,43 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-default bg-bg-surface text-xs font-semibold text-text-secondary">
-            <span>{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            <CalendarIcon size={13} className="text-text-tertiary" />
-          </div>
-          <button
+          <DatePicker>
+            <DatePickerTrigger asChild>
+              <DatePickerButton variant="outline" className="w-auto min-w-[140px]">
+                {selectedDate ? format(selectedDate, 'MMM d, yyyy') : <span>Pick date</span>}
+              </DatePickerButton>
+            </DatePickerTrigger>
+            <DatePickerContent align="right">
+              <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} initialFocus />
+            </DatePickerContent>
+          </DatePicker>
+
+          <Button
+            variant="secondary"
+            size="small"
+            icon={<Download size={13} className="text-[#ED642B]" />}
             onClick={() => apiClient.exportDwellEventsCSV(dwellEvents || [])}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
           >
-            <Download size={13} className="text-[#ED642B]" />
             Export
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* ── HERO KPI STRIP ── */}
-      <div className="rounded-2xl border border-border-default bg-bg-surface p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="rounded-xl border border-border-default bg-bg-surface p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border-default pb-4">
           <div>
-            <h1 className="text-base sm:text-lg font-extrabold text-text-primary tracking-tight">Operations overview</h1>
+            <h1 className="text-base font-semibold text-text-primary tracking-tight">Operations overview</h1>
             <p className="text-xs text-text-secondary mt-0.5">
               Active fleet velocity, stop pressure, and demurrage cost in real-time.
             </p>
           </div>
-          <div className="flex items-center p-1 rounded-xl bg-bg-surface-raised border border-border-default self-start sm:self-auto">
+          <div className="flex items-center p-0.5 rounded-lg bg-bg-surface-raised border border-border-default self-start sm:self-auto">
             {(['Day', 'Week', 'Month', 'Year'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTimeframe(t)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${timeframe === t ? 'bg-bg-surface text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-primary'}`}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${timeframe === t ? 'bg-bg-surface text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-primary'}`}
               >
                 {t}
               </button>
@@ -343,74 +403,245 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-              <Truck size={14} className="text-[#250C77]" />
-              <span>Active Fleet</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-numeric text-3xl font-extrabold text-text-primary tracking-tight">{activeTrucks}</span>
-              <span className="font-numeric text-xs font-bold text-status-good px-1.5 py-0.5 rounded bg-status-good/10">live</span>
-            </div>
-            <svg viewBox="0 0 100 24" className="w-full h-7"><path d="M 0 18 C 20 18, 25 12, 45 15 C 65 18, 75 6, 100 2" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" /></svg>
-          </div>
+        {/* 4 Metric Cards (Supabase UI Pattern) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard isLoading={isLoading}>
+            <MetricCardHeader href="/vehicles">
+              <MetricCardLabel
+                tooltip="Active units in transit across corridors"
+                icon={<Truck size={13} className="text-[#250C77]" />}
+              >
+                Active Fleet
+              </MetricCardLabel>
+            </MetricCardHeader>
+            <MetricCardContent>
+              <MetricCardValue>{activeTrucks}</MetricCardValue>
+              <MetricCardDifferential variant="positive">
+                live
+              </MetricCardDifferential>
+            </MetricCardContent>
+            <MetricCardSparkline
+              data={Array.from({ length: 8 }, (_, i) => ({ value: 12 + i * 2 + Math.sin(i) * 3 }))}
+              color="#10B981"
+            />
+          </MetricCard>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-              <Clock size={14} className="text-[#ED642B]" />
-              <span>Delayed Units</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className={`font-numeric text-3xl font-extrabold tracking-tight ${delayedTrucks > 0 ? 'text-[#ED642B]' : 'text-text-primary'}`}>{delayedTrucks}</span>
-              {delayedTrucks > 0 && (
-                <span className="font-numeric text-xs font-bold text-[#ED642B] px-1.5 py-0.5 rounded bg-[#ED642B]/10">active</span>
+          <MetricCard isLoading={isLoading}>
+            <MetricCardHeader href="/insights">
+              <MetricCardLabel
+                tooltip="Units currently exceeding dwell target threshold"
+                icon={<Clock size={13} className="text-[#ED642B]" />}
+              >
+                Delayed Units
+              </MetricCardLabel>
+            </MetricCardHeader>
+            <MetricCardContent>
+              <MetricCardValue className={delayedTrucks > 0 ? 'text-[#ED642B]' : ''}>
+                {delayedTrucks}
+              </MetricCardValue>
+              {delayedTrucks > 0 ? (
+                <MetricCardDifferential variant="negative">
+                  active
+                </MetricCardDifferential>
+              ) : (
+                <MetricCardDifferential variant="positive">
+                  0 delay
+                </MetricCardDifferential>
               )}
-            </div>
-            <svg viewBox="0 0 100 24" className="w-full h-7"><path d="M 0 16 C 25 16, 35 2, 55 8 C 75 14, 85 4, 100 12" fill="none" stroke="#ED642B" strokeWidth="2.5" strokeLinecap="round" /></svg>
-          </div>
+            </MetricCardContent>
+            <MetricCardSparkline
+              data={Array.from({ length: 8 }, (_, i) => ({ value: delayedTrucks > 0 ? 5 + i * 3 : 1 }))}
+              color="#ED642B"
+            />
+          </MetricCard>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-              <CheckCircle2 size={14} className="text-[#250C77]" />
-              <span>On-Time Rate</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-numeric text-3xl font-extrabold text-text-primary tracking-tight">{onTimeRate}%</span>
-              <span className="font-numeric text-xs font-bold text-status-good px-1.5 py-0.5 rounded bg-status-good/10">live</span>
-            </div>
-            <svg viewBox="0 0 100 24" className="w-full h-7"><path d="M 0 20 C 30 20, 40 8, 60 12 C 80 16, 85 4, 100 3" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" /></svg>
-          </div>
+          <MetricCard isLoading={isLoading}>
+            <MetricCardHeader href="/analytics">
+              <MetricCardLabel
+                tooltip="Percentage of fleet on schedule according to planned turnaround SLA"
+                icon={<CheckCircle2 size={13} className="text-[#250C77]" />}
+              >
+                On-Time Rate
+              </MetricCardLabel>
+            </MetricCardHeader>
+            <MetricCardContent>
+              <MetricCardValue>{onTimeRate}%</MetricCardValue>
+              <MetricCardDifferential variant={Number(onTimeRate) >= 80 ? 'positive' : 'negative'}>
+                {Number(onTimeRate) >= 80 ? 'Optimal' : 'Attention'}
+              </MetricCardDifferential>
+            </MetricCardContent>
+            <MetricCardSparkline
+              data={Array.from({ length: 8 }, (_, i) => ({ value: 75 + i * 3 + Math.sin(i) * 4 }))}
+              color="#10B981"
+            />
+          </MetricCard>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-              <DollarSign size={14} className="text-[#ED642B]" />
-              <span>Demurrage Loss Today</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className={`font-numeric text-2xl sm:text-3xl font-extrabold tracking-tight ${idleLoss > 0 ? 'text-[#ED642B]' : 'text-text-primary'}`}>
+          <MetricCard isLoading={isLoading}>
+            <MetricCardHeader href="/analytics">
+              <MetricCardLabel
+                tooltip="Cumulative financial demurrage cost incurred today from excessive loading/clearing dwell"
+                icon={<DollarSign size={13} className="text-[#ED642B]" />}
+              >
+                Demurrage Loss Today
+              </MetricCardLabel>
+            </MetricCardHeader>
+            <MetricCardContent>
+              <MetricCardValue className={idleLoss > 0 ? 'text-[#ED642B]' : ''}>
                 {formatCurrency(idleLoss)}
-              </span>
-            </div>
-            <svg viewBox="0 0 100 24" className="w-full h-7"><path d="M 0 10 C 20 8, 30 18, 50 14 C 70 10, 80 20, 100 16" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" /></svg>
-          </div>
+              </MetricCardValue>
+              <MetricCardDifferential variant={idleLoss > 0 ? 'negative' : 'positive'}>
+                {idleLoss > 0 ? 'Cost' : 'Zero'}
+              </MetricCardDifferential>
+            </MetricCardContent>
+            <MetricCardSparkline
+              data={Array.from({ length: 8 }, (_, i) => ({ value: (idleLoss || 20000) * (0.6 + i * 0.06) }))}
+              color="#EF4444"
+            />
+          </MetricCard>
         </div>
 
         {/* Top bottleneck ticker */}
-        <div className="flex items-center justify-between pt-3 border-t border-border-default text-xs text-text-tertiary">
-          <div className="flex items-center gap-2 font-medium">
+        <div className="flex items-center justify-between pt-3 border-t border-border-default text-xs text-text-tertiary flex-wrap gap-2">
+          <div className="flex items-center gap-2 font-normal">
             <MapPin size={13} className="text-text-tertiary" />
             {stats.top_bottleneck
-              ? <span>Worst bottleneck: <strong className="text-text-primary">{stats.top_bottleneck.location_name}</strong> — {formatCurrency(stats.top_bottleneck.financial_impact)} idle cost.</span>
+              ? <span>Worst bottleneck: <strong className="text-text-primary font-medium">{stats.top_bottleneck.location_name}</strong> — {formatCurrency(stats.top_bottleneck.financial_impact)} idle cost.</span>
               : <span>All transit nodes operating within scheduled windows.</span>
             }
           </div>
-          <Link to="/analytics" className="font-bold text-text-primary hover:text-[#ED642B] flex items-center gap-1 transition-colors">
+
+          {/* Live Demurrage Cost Burn Ticker */}
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#ED642B]/10 border border-[#ED642B]/20 text-[11px]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#ED642B] animate-ping" />
+            <span className="text-text-secondary font-medium">Active Fleet Burn:</span>
+            <span className="font-numeric font-bold text-[#ED642B]">
+              +{formatCurrency(idleLoss + liveBurnCounter)}
+            </span>
+          </div>
+
+          <Link to="/analytics" className="font-medium text-text-primary hover:text-[#ED642B] flex items-center gap-1 transition-colors">
             Full analytics <ArrowRight size={13} />
           </Link>
         </div>
       </div>
+
+      {/* ── FLEET COMPOSITION OVERVIEW ── */}
+      {vehiclesData && vehiclesData.length > 0 && (() => {
+        // Compute derived fleet metrics here
+        const totalVehicles    = vehiclesData.length;
+        const driversOnDuty    = vehiclesData.filter(v => v.driver_name).length;
+        const containersActive = vehiclesData.filter(v => v.container_number).length;
+        const inTransitNow     = vehiclesData.filter(v => v.status === 'moving').length;
+        const inService        = vehiclesData.filter(v => v.maintenance_status === 'in_service').length;
+
+        // Vehicle type breakdown
+        const typeMap: Record<string, number> = {};
+        vehiclesData.forEach(v => {
+          const cat = v.vehicle_type?.split('(')[0]?.trim() || 'Other';
+          typeMap[cat] = (typeMap[cat] || 0) + 1;
+        });
+        const sortedTypes = Object.entries(typeMap).sort((a, b) => b[1] - a[1]);
+        const paletteColors = ['#250C77', '#ED642B', '#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+
+        return (
+          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-border-default pb-3">
+              <div>
+                <h2 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
+                  <Layers size={15} className="text-[#ED642B]" />
+                  Fleet Composition
+                </h2>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Live breakdown of assets, drivers, containers, and vehicle categories.
+                </p>
+              </div>
+              <a href="/vehicles" className="text-xs font-bold text-[#ED642B] hover:underline flex items-center gap-1">
+                Manage assets <ArrowRight size={12} />
+              </a>
+            </div>
+
+            {/* 4 summary chips */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-surface-raised/60 border border-border-default">
+                <div className="h-8 w-8 rounded-lg bg-[#250C77]/20 flex items-center justify-center shrink-0">
+                  <Truck size={15} className="text-[#250C77]" />
+                </div>
+                <div>
+                  <p className="font-numeric text-lg font-extrabold text-text-primary">{totalVehicles}</p>
+                  <p className="text-[10px] text-text-tertiary font-semibold">Total Assets</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-surface-raised/60 border border-border-default">
+                <div className="h-8 w-8 rounded-lg bg-[#ED642B]/10 flex items-center justify-center shrink-0">
+                  <User size={15} className="text-[#ED642B]" />
+                </div>
+                <div>
+                  <p className="font-numeric text-lg font-extrabold text-text-primary">{driversOnDuty}</p>
+                  <p className="text-[10px] text-text-tertiary font-semibold">Drivers Assigned</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-surface-raised/60 border border-border-default">
+                <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                  <Container size={15} className="text-indigo-500" />
+                </div>
+                <div>
+                  <p className="font-numeric text-lg font-extrabold text-text-primary">{containersActive}</p>
+                  <p className="text-[10px] text-text-tertiary font-semibold">Containers Tracked</p>
+                </div>
+              </div>
+              <div className={`flex items-center gap-3 p-3 rounded-xl border ${
+                inService > 0
+                  ? 'bg-yellow-500/5 border-yellow-500/30'
+                  : 'bg-bg-surface-raised/60 border-border-default'
+              }`}>
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  inService > 0 ? 'bg-yellow-500/15' : 'bg-status-good/10'
+                }`}>
+                  <CheckCircle2 size={15} className={inService > 0 ? 'text-yellow-500' : 'text-status-good'} />
+                </div>
+                <div>
+                  <p className={`font-numeric text-lg font-extrabold ${
+                    inService > 0 ? 'text-yellow-500' : 'text-text-primary'
+                  }`}>{inTransitNow}</p>
+                  <p className="text-[10px] text-text-tertiary font-semibold">In Transit Now</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Vehicle type bar */}
+            {sortedTypes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">By Vehicle Category</p>
+                <div className="flex flex-wrap gap-2">
+                  {sortedTypes.map(([type, count], idx) => {
+                    const pct = Math.round((count / totalVehicles) * 100);
+                    const color = paletteColors[idx % paletteColors.length];
+                    return (
+                      <div
+                        key={type}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border-default bg-bg-surface-raised/40 text-xs"
+                      >
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        <span className="font-semibold text-text-primary">{type}</span>
+                        <span className="font-numeric font-bold" style={{ color }}>{count}</span>
+                        <span className="text-text-tertiary text-[10px]">({pct}%)</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Stacked proportional bar */}
+                <div className="h-2 w-full rounded-full overflow-hidden flex">
+                  {sortedTypes.map(([type, count], idx) => {
+                    const pct = (count / totalVehicles) * 100;
+                    const color = paletteColors[idx % paletteColors.length];
+                    return <div key={type} title={`${type}: ${count}`} style={{ width: `${pct}%`, backgroundColor: color }} />;
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── 2-COLUMN LAYOUT ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -418,38 +649,38 @@ export const Dashboard: React.FC = () => {
         {/* ── LEFT COLUMN: ECharts Dwell Pressure + Awaiting Action Queue ── */}
         <div className="lg:col-span-8 space-y-6">
 
-          {/* Apache ECharts: Stop Turnaround Delay Distribution */}
-          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between border-b border-border-default pb-3">
-              <div>
-                <h2 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-                  <BarChart3 size={15} className="text-[#ED642B]" />
-                  Corridor Stop Dwell vs Target
-                </h2>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  Target duration vs excess delay in minutes across primary transit stops
-                </p>
-              </div>
-              <Link to="/locations" className="text-xs font-bold text-[#ED642B] hover:underline flex items-center gap-1">
-                <span>View stops</span> <ArrowRight size={12} />
-              </Link>
-            </div>
+          {/* Apache ECharts: Stop Turnaround Delay Distribution (Supabase Studio Chart Pattern) */}
+          <Chart>
+            <ChartCard>
+              <ChartHeader>
+                <ChartTitle tooltip="Target duration vs excess delay in minutes across primary transit stops">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 size={14} className="text-[#ED642B]" />
+                    <span>Corridor Stop Dwell vs Target</span>
+                  </div>
+                </ChartTitle>
+                <Link to="/locations" className="text-xs font-medium text-[#ED642B] hover:underline flex items-center gap-1">
+                  <span>View stops</span> <ArrowRight size={12} />
+                </Link>
+              </ChartHeader>
 
-            {/* Render Apache EChart */}
-            <div className="h-60 w-full">
-              <ReactECharts
-                option={stopDelayChartOption}
-                style={{ height: '100%', width: '100%' }}
-                opts={{ renderer: 'svg' }}
-              />
-            </div>
-          </div>
+              <ChartContent>
+                <div className="h-60 w-full">
+                  <ReactECharts
+                    option={stopDelayChartOption}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'svg' }}
+                  />
+                </div>
+              </ChartContent>
+            </ChartCard>
+          </Chart>
 
           {/* Awaiting Dispatch Action Queue (live dwell events) */}
-          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
+          <div className="rounded-xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h2 className="text-sm font-extrabold text-text-primary">Awaiting dispatch action</h2>
+                <h2 className="text-sm font-semibold text-text-primary">Awaiting dispatch action</h2>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {urgentDwells.length > 0
                     ? `${urgentDwells.length} truck${urgentDwells.length > 1 ? 's' : ''} with active excess dwell at stops.`
@@ -461,11 +692,11 @@ export const Dashboard: React.FC = () => {
                 <button
                   onClick={() => analysisMutation.mutate()}
                   disabled={analysisMutation.isPending}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+                  className="px-3.5 py-1.5 rounded-lg bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 self-start sm:self-auto"
                 >
                   {analysisMutation.isPending ? 'Scanning...' : 'Refresh Scan'}
                 </button>
-                <Link to="/insights" className="px-3.5 py-1.5 rounded-xl border border-border-default text-xs font-bold text-text-secondary hover:text-text-primary transition-colors self-start sm:self-auto">
+                <Link to="/insights" className="px-3.5 py-1.5 rounded-lg border border-border-default text-xs font-medium text-text-secondary hover:text-text-primary transition-colors self-start sm:self-auto">
                   All Alerts →
                 </Link>
               </div>
@@ -592,51 +823,135 @@ export const Dashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Apache ECharts: Fleet Activity Area Trend Chart */}
-          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
+          {/* Telemetry Activity Area Trend Chart (Supabase Studio Chart Pattern) */}
+          <Chart>
+            <ChartCard>
+              <ChartHeader>
+                <ChartTitle tooltip="Live fleet velocity and stop volume over time across corridors">
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp size={14} className="text-[#ED642B]" />
+                    <span>Telemetry Activity Trend</span>
+                  </div>
+                </ChartTitle>
+                <div className="flex items-center p-0.5 rounded-md bg-bg-surface-raised border border-border-default">
+                  {(['3M', '6M', '12M'] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setChartRange(r)}
+                      className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                        chartRange === r
+                          ? 'bg-[#250C77] text-white shadow-sm'
+                          : 'text-text-tertiary hover:text-text-primary'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </ChartHeader>
+
+              <ChartContent>
+                <div className="mb-2">
+                  <p className="font-numeric text-2xl font-semibold text-text-primary tracking-tight">
+                    {activeTrucks} Active Units
+                  </p>
+                  <p className="font-numeric text-[11px] font-medium text-status-good mt-0.5">
+                    Live telemetry stream synchronized
+                  </p>
+                </div>
+
+                <div className="h-40 w-full pt-1">
+                  <ReactECharts
+                    option={trendChartOption}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'svg' }}
+                  />
+                </div>
+              </ChartContent>
+            </ChartCard>
+          </Chart>
+
+          {/* Interactive ROI Savings & Demurrage Recovery Calculator (Hackathon Winning Pitch Widget) */}
+          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-border-default pb-3">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                  <TrendingUp size={14} className="text-[#ED642B]" />
-                  Telemetry Activity Trend
+                  <DollarSign size={13} className="text-[#ED642B]" />
+                  ROI & Turnaround Savings Calculator
                 </h3>
-                <p className="text-[11px] text-text-secondary mt-0.5">Live fleet velocity and stop volume over time.</p>
+                <p className="text-[11px] text-text-secondary mt-0.5">Projected capital recaptured by eliminating excess stop dwell.</p>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-status-good/15 text-status-good border border-status-good/30">
+                {roiMultiplier}x Value Multiplier
+              </span>
+            </div>
+
+            {/* Slider Controls */}
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="flex justify-between text-[11px] text-text-secondary mb-1">
+                  <span>Fleet Size: <strong className="text-text-primary">{roiTrucks} Trucks</strong></span>
+                  <span>Max 150</span>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="150"
+                  value={roiTrucks}
+                  onChange={(e) => setRoiTrucks(Number(e.target.value))}
+                  className="w-full accent-[#250C77] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[11px] text-text-secondary mb-1">
+                  <span>Dwell Saved / Stop: <strong className="text-text-primary">{roiDelaySaved} Minutes</strong></span>
+                  <span>Target 60m</span>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="90"
+                  step="5"
+                  value={roiDelaySaved}
+                  onChange={(e) => setRoiDelaySaved(Number(e.target.value))}
+                  className="w-full accent-[#ED642B] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[11px] text-text-secondary mb-1">
+                  <span>Operating Rate: <strong className="text-text-primary">{formatCurrency(roiHourlyRate)}/hr</strong></span>
+                  <span>KES 8k/h</span>
+                </div>
+                <input
+                  type="range"
+                  min="1500"
+                  max="8000"
+                  step="500"
+                  value={roiHourlyRate}
+                  onChange={(e) => setRoiHourlyRate(Number(e.target.value))}
+                  className="w-full accent-[#250C77] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer"
+                />
               </div>
             </div>
 
-            <div>
-              <p className="font-numeric text-2xl font-extrabold text-text-primary tracking-tight">
-                {activeTrucks} Active Units
-              </p>
-              <p className="font-numeric text-xs font-bold text-status-good mt-0.5">
-                Live telemetry stream synchronized
-              </p>
-            </div>
-
-            {/* Apache EChart render */}
-            <div className="h-44 w-full pt-1">
-              <ReactECharts
-                option={trendChartOption}
-                style={{ height: '100%', width: '100%' }}
-                opts={{ renderer: 'svg' }}
-              />
-            </div>
-
-            {/* Timeframe selector (3M | 6M | 12M) */}
-            <div className="flex items-center justify-center gap-1 pt-1 border-t border-border-default">
-              {(['3M', '6M', '12M'] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setChartRange(r)}
-                  className={`px-4 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                    chartRange === r
-                      ? 'bg-[#250C77] text-white'
-                      : 'text-text-tertiary hover:text-text-primary'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+            {/* Financial & Environmental Yield */}
+            <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-border-default">
+              <div className="p-2.5 rounded-xl bg-bg-surface-raised border border-border-default">
+                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Monthly Recaptured</span>
+                <span className="font-numeric text-sm font-bold text-status-good block mt-0.5">
+                  {formatCurrency(monthlySavings)}
+                </span>
+                <span className="text-[9.5px] text-text-tertiary">{formatCurrency(annualSavings)} / yr</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-bg-surface-raised border border-border-default">
+                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">CO₂ Emissions Averted</span>
+                <span className="font-numeric text-sm font-bold text-text-primary block mt-0.5">
+                  {co2ReductionTonnes} Tonnes
+                </span>
+                <span className="text-[9.5px] text-text-tertiary">{fuelSavedLiters.toLocaleString()} L idling diesel</span>
+              </div>
             </div>
           </div>
 

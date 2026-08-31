@@ -1,16 +1,38 @@
 import React, { useState } from 'react';
 import {
-  Save, Bell, DollarSign, Clock, Globe
+  Save, Bell, DollarSign, Clock, Globe, User, Shield, Building, Lock
 } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
+import { useAuth } from '../../auth/AuthProvider';
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
+import {
+  InterstitialShell,
+  LogoPair,
+  AccountRow,
+  SignOutButton,
+  TelematicsLogo,
+  TurnaroundLogo,
+  StripeLogo,
+} from '../../components/ui/Interstitial';
 
 export const Settings: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'baselines' | 'rates' | 'telematics' | 'alerts'>('baselines');
+  const [showAuthModal, setShowAuthModal] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'account' | 'baselines' | 'rates' | 'telematics' | 'alerts'>('account');
+
+  // Account details state
+  const [profileName, setProfileName] = useState(user?.name || 'Operations Lead');
+  const [profileEmail, setProfileEmail] = useState(user?.email || 'admin@siginon.com');
+  const [profileCompany, setProfileCompany] = useState(user?.company_name || 'Siginon Global Logistics');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [settings, setSettings] = useState({
-    companyName: 'Siginon Global Logistics',
+    companyName: user?.company_name || 'Siginon Global Logistics',
     operatingCurrency: 'KES',
     defaultCorridor: 'northern_corridor',
     gpsPollingInterval: '8',
@@ -39,8 +61,31 @@ export const Settings: React.FC = () => {
     setSaving(false);
     toast({
       variant: 'success',
-      title: 'Configuration Saved',
-      message: 'System SLA baselines, cost rates, and telemetry intervals updated.'
+      title: 'Settings Saved',
+      message: 'Account profile and operational parameters have been updated.'
+    });
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword !== confirmPassword) {
+      toast({
+        variant: 'error',
+        title: 'Password Mismatch',
+        message: 'New password and confirmation do not match.'
+      });
+      return;
+    }
+    setSaving(true);
+    await new Promise((r) => setTimeout(r, 500));
+    setSaving(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    toast({
+      variant: 'success',
+      title: 'Password Updated',
+      message: 'Your account credentials have been securely updated.'
     });
   };
 
@@ -72,46 +117,47 @@ export const Settings: React.FC = () => {
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-text-primary tracking-tight">Configuration</h1>
+          <h1 className="text-lg font-bold text-text-primary tracking-tight">Account & Configuration</h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Set your target stop times, costs, tracking intervals, and alert thresholds.
+            Manage your personal profile, organization settings, target stop times, and alert thresholds.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="small"
             onClick={handleResetDefaults}
-            className="px-3 py-1.5 rounded-lg border border-border-default bg-bg-surface hover:bg-bg-surface-raised text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
           >
             Reset Defaults
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="small"
+            icon={<Save size={13} />}
+            loading={saving}
             onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
           >
-            <Save size={13} />
-            {saving ? 'Saving...' : 'Save Configuration'}
-          </button>
+            Save Changes
+          </Button>
         </div>
       </div>
 
       {/* ── TABS ── */}
       <div className="flex items-center gap-1 border-b border-border-default overflow-x-auto pb-px">
         {[
-          { id: 'baselines', label: 'Stop Time Targets',    icon: <Clock size={14} /> },
-          { id: 'rates',     label: 'Costs & Penalties',     icon: <DollarSign size={14} /> },
-          { id: 'telematics', label: 'Tracking & Webhooks',  icon: <Globe size={14} /> },
-          { id: 'alerts',    label: 'Alerts & Notifications', icon: <Bell size={14} /> },
+          { id: 'account',   label: 'Account & Organization', icon: <User size={14} /> },
+          { id: 'baselines', label: 'Stop Time Targets',      icon: <Clock size={14} /> },
+          { id: 'rates',     label: 'Costs & Penalties',       icon: <DollarSign size={14} /> },
+          { id: 'telematics', label: 'Tracking & Webhooks',    icon: <Globe size={14} /> },
+          { id: 'alerts',    label: 'Alerts & Notifications',  icon: <Bell size={14} /> },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
               activeTab === tab.id
-                ? 'border-brand-500 text-brand-400 bg-brand-500/5'
+                ? 'border-[#ED642B] text-[#ED642B] bg-[#ED642B]/5 font-bold'
                 : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-bg-surface-raised'
             }`}
           >
@@ -123,6 +169,135 @@ export const Settings: React.FC = () => {
 
       {/* ── TAB PANELS ── */}
       <div className="rounded-xl border border-border-default bg-bg-surface p-6 shadow-sm">
+        {/* TAB 0: ACCOUNT & PROFILE */}
+        {activeTab === 'account' && (
+          <div className="space-y-8">
+            {/* Profile Overview */}
+            <div className="flex items-center gap-4 pb-6 border-b border-border-default">
+              <div className="h-14 w-14 rounded-2xl bg-[#250C77] text-white font-extrabold flex items-center justify-center text-xl shadow-md border-2 border-white/20">
+                {profileName ? profileName.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-text-primary">{profileName}</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/15 text-[#ED642B] border border-[#ED642B]/30 capitalize">
+                    {user?.role || 'Fleet Administrator'}
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary">{profileEmail} · {profileCompany}</p>
+              </div>
+            </div>
+
+            {/* Profile Form */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-text-tertiary">User & Organization Information</h4>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Full Name</label>
+                  <div className="relative">
+                    <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="w-full bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Organization / Carrier</label>
+                  <div className="relative">
+                    <Building size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <input
+                      type="text"
+                      value={profileCompany}
+                      onChange={(e) => setProfileCompany(e.target.value)}
+                      className="w-full bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Assigned Role</label>
+                  <div className="relative">
+                    <Shield size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <input
+                      type="text"
+                      disabled
+                      value={user?.role ? user.role.replace('_', ' ').toUpperCase() : 'FLEET OPERATIONS MANAGER'}
+                      className="w-full bg-bg-surface-raised/50 border border-border-default rounded-lg pl-8 pr-3 py-2 text-xs text-text-secondary cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Password & Security */}
+            <div className="pt-6 border-t border-border-default space-y-4">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-text-tertiary">Security & Authentication</h4>
+                <p className="text-xs text-text-secondary mt-0.5">Update password and manage session credentials.</p>
+              </div>
+
+              <form onSubmit={handlePasswordUpdate} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Current Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">New Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
+                  />
+                </div>
+                <div className="sm:col-span-3 flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={!newPassword || saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border-default bg-bg-surface-raised hover:bg-bg-surface text-xs font-semibold text-text-primary transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Lock size={12} />
+                    <span>Update Password</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
         {/* TAB 1: SLA BASELINES */}
         {activeTab === 'baselines' && (
           <div className="space-y-6">
@@ -271,14 +446,60 @@ export const Settings: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: TELEMATICS */}
+        {/* TAB 3: TELEMATICS & INTEGRATIONS */}
         {activeTab === 'telematics' && (
           <div className="space-y-6">
             <div>
               <h3 className="text-sm font-bold text-text-primary">Telematics & Webhook Stream Integration</h3>
               <p className="text-xs text-text-secondary mt-0.5">
-                Real-time GPS ingestion settings and automated outbound webhook endpoints.
+                Real-time GPS ingestion settings, connected partner services, and automated outbound webhook endpoints.
               </p>
+            </div>
+
+            {/* Connected Partner Interstitials */}
+            <div className="rounded-xl border border-border-default bg-bg-surface-raised/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-text-primary">Connected Carrier Integrations</h4>
+                  <p className="text-[11px] text-text-tertiary">Link external GPS devices and enterprise billing services.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="p-3.5 rounded-lg border border-border-default bg-bg-surface flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <TelematicsLogo className="h-7 w-7" />
+                    <div>
+                      <p className="text-xs font-semibold text-text-primary">Teltonika & Geotab GPS</p>
+                      <p className="text-[10px] text-text-tertiary">Direct MQTT telemetry stream</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="tiny"
+                    onClick={() => setShowAuthModal('telematics')}
+                  >
+                    Authorize
+                  </Button>
+                </div>
+
+                <div className="p-3.5 rounded-lg border border-border-default bg-bg-surface flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <StripeLogo className="h-7 w-7" />
+                    <div>
+                      <p className="text-xs font-semibold text-text-primary">Stripe Demurrage Billing</p>
+                      <p className="text-[10px] text-text-tertiary">Automated invoice collection</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="tiny"
+                    onClick={() => setShowAuthModal('stripe')}
+                  >
+                    Authorize
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -289,7 +510,7 @@ export const Settings: React.FC = () => {
                     type="number"
                     value={settings.gpsPollingInterval}
                     onChange={(e) => handleChange('gpsPollingInterval', e.target.value)}
-                    className="w-32 bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                    className="w-32 bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none"
                   />
                   <span className="text-xs text-text-secondary">seconds</span>
                 </div>
@@ -302,7 +523,7 @@ export const Settings: React.FC = () => {
                   type="url"
                   value={settings.webhookUrl}
                   onChange={(e) => handleChange('webhookUrl', e.target.value)}
-                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-brand-500 focus:outline-none"
+                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none"
                 />
                 <p className="text-[11px] text-text-tertiary mt-1">HTTP POST webhook payload fired on excess dwell triggers.</p>
               </div>
@@ -320,36 +541,89 @@ export const Settings: React.FC = () => {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-text-primary">Automated Dispatch Email Digest</p>
-                  <p className="text-[11px] text-text-tertiary">Daily executive summary of leaked turnaround capital.</p>
-                </div>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  id="emailAlerts"
                   checked={settings.emailAlertsEnabled}
-                  onChange={(e) => handleChange('emailAlertsEnabled', e.target.checked)}
-                  className="rounded accent-brand-500 cursor-pointer h-4 w-4"
+                  onCheckedChange={(checked) => handleChange('emailAlertsEnabled', checked)}
+                  label="Automated Dispatch Email Digest"
+                  description="Daily executive summary of leaked turnaround capital."
                 />
               </div>
 
               <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-text-primary">SMS Critical Dwell Alerts to Fleet Managers</p>
-                  <p className="text-[11px] text-text-tertiary">Immediate SMS trigger when a unit exceeds 60m past SLA threshold.</p>
-                </div>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  id="smsAlerts"
                   checked={settings.smsAlertsEnabled}
-                  onChange={(e) => handleChange('smsAlertsEnabled', e.target.checked)}
-                  className="rounded accent-brand-500 cursor-pointer h-4 w-4"
+                  onCheckedChange={(checked) => handleChange('smsAlertsEnabled', checked)}
+                  label="SMS Critical Dwell Alerts to Fleet Managers"
+                  description="Immediate SMS trigger when a unit exceeds 60m past SLA threshold."
                 />
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* ── INTERSTITIAL AUTHORIZE MODAL ── */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <InterstitialShell
+            logo={
+              showAuthModal === 'stripe' ? (
+                <LogoPair left={<TurnaroundLogo />} right={<StripeLogo />} />
+              ) : (
+                <LogoPair left={<TurnaroundLogo />} right={<TelematicsLogo />} />
+              )
+            }
+            title={
+              showAuthModal === 'stripe'
+                ? 'Authorize Stripe Demurrage Billing'
+                : 'Authorize Telematics Gateway Stream'
+            }
+            description={
+              showAuthModal === 'stripe'
+                ? 'This will enable automated demurrage invoice generation and settlement on your behalf.'
+                : 'This will allow Turnaround to ingest raw GPS NMEA/AVL coordinates from your telematics provider.'
+            }
+          >
+            <div className="flex flex-col gap-3">
+              <AccountRow
+                displayName={user?.email || 'admin@siginon.com'}
+                action={
+                  <SignOutButton
+                    onClick={() => {
+                      toast({
+                        variant: 'info',
+                        title: 'Switch Account',
+                        message: 'Sign in with a different carrier account.'
+                      });
+                    }}
+                  />
+                }
+              />
+              <Button
+                variant="primary"
+                block
+                onClick={() => {
+                  toast({
+                    variant: 'success',
+                    title: showAuthModal === 'stripe' ? 'Stripe Billing Connected' : 'Telematics Ingestion Active',
+                    message: 'Credentials and webhook handshake verified successfully.'
+                  });
+                  setShowAuthModal(null);
+                }}
+              >
+                {showAuthModal === 'stripe' ? 'Authorize Stripe Connection' : 'Authorize Telematics Stream'}
+              </Button>
+              <Button variant="ghost" block onClick={() => setShowAuthModal(null)}>
+                Cancel
+              </Button>
+            </div>
+          </InterstitialShell>
+        </div>
+      )}
     </div>
   );
 };

@@ -31,17 +31,17 @@ const CARDS: Flashcard[] = [
     tagColor: '#EF4444',
     image: '/port-terminal.jpg',
     location: 'Kilindini Port · Gate 14',
-    vehicle: 'KBZ 482T · Scania G460',
+    vehicle: 'Heavy Haulier · Scania G460',
     problem: {
       title: 'Discharge crane delay hold',
-      dwellTime: '4h 15m (Exp: 1h 30m)',
-      excessCost: 'KES 18,250',
-      impact: 'Detention penalty risk on 40ft container',
+      dwellTime: 'Excess dwell vs baseline',
+      excessCost: 'Detention penalty accruing',
+      impact: 'Container gate exit at risk of penalty',
     },
     solution: {
-      action: 'Dispatcher reroute to Bay 09',
-      timeRecovered: '2h 45m cut',
-      costSaved: 'KES 18,250',
+      action: 'Dispatcher reroute to alternative bay',
+      timeRecovered: 'Dwell cut to SLA baseline',
+      costSaved: 'Penalty avoided',
       outcome: 'Container gate exit logged with 0 penalty',
     },
   },
@@ -51,17 +51,17 @@ const CARDS: Flashcard[] = [
     tagColor: '#F59E0B',
     image: '/border-clearance.jpg',
     location: 'Malaba OSBP · Weighbridge',
-    vehicle: 'KCA 210P · Actros 3340',
+    vehicle: 'Transit Lorry · Actros 3340',
     problem: {
       title: 'Axle inspection queue backlog',
-      dwellTime: '5h 30m (Exp: 2h 00m)',
-      excessCost: 'KES 26,400',
-      impact: 'Driver duty hours exceeded on transit',
+      dwellTime: 'Excess dwell vs baseline',
+      excessCost: 'Driver duty hours exceeded',
+      impact: 'Transit hours exceeded on border crossing',
     },
     solution: {
       action: 'Digital green-lane pre-clearance',
-      timeRecovered: '3h 20m cut',
-      costSaved: 'KES 26,400',
+      timeRecovered: 'Dwell cut to SLA baseline',
+      costSaved: 'Clearance cost avoided',
       outcome: 'Cleared weighbridge on priority fast-track lane',
     },
   },
@@ -71,17 +71,17 @@ const CARDS: Flashcard[] = [
     tagColor: '#3B82F6',
     image: '/hero-fleet.jpg',
     location: 'Nairobi ICD · Embakasi',
-    vehicle: 'KDD 531M · Volvo FH16',
+    vehicle: 'Distribution Lorry · Volvo FH16',
     problem: {
       title: 'Forklift offload bay backlog',
-      dwellTime: '3h 40m (Exp: 1h 15m)',
-      excessCost: 'KES 14,800',
+      dwellTime: 'Excess dwell vs baseline',
+      excessCost: 'Idle driver salary burn',
       impact: 'Missed scheduled retail delivery window',
     },
     solution: {
       action: 'Pre-allocated bay slot schedule',
-      timeRecovered: '2h 25m cut',
-      costSaved: 'KES 14,800',
+      timeRecovered: 'Dwell cut to SLA baseline',
+      costSaved: 'Idle cost recovered',
       outcome: 'Same-day return trip cleared on Athi River corridor',
     },
   },
@@ -91,17 +91,17 @@ const CARDS: Flashcard[] = [
     tagColor: '#8B5CF6',
     image: '/warehouse-docks.jpg',
     location: 'Athi River Logistics Park',
-    vehicle: 'KDB 914Y · Mercedes Arocs',
+    vehicle: 'Logistics Lorry · Mercedes Arocs',
     problem: {
       title: 'Weekend receiving congestion',
-      dwellTime: '6h 10m (Exp: 2h 30m)',
-      excessCost: 'KES 31,500',
-      impact: 'Idle haulier out of service for Monday dispatch',
+      dwellTime: 'Excess dwell vs baseline',
+      excessCost: 'Overtime idle cost accruing',
+      impact: 'Truck out of service for next dispatch',
     },
     solution: {
       action: 'Dynamic geofence SLA alert trigger',
-      timeRecovered: '3h 40m cut',
-      costSaved: 'KES 31,500',
+      timeRecovered: 'Dwell cut to SLA baseline',
+      costSaved: 'Overtime cost avoided',
       outcome: 'Priority dock receiving completed on schedule',
     },
   },
@@ -131,7 +131,7 @@ export const OperationalFlashcards: React.FC = () => {
         
         {/* Section Header (Clean, direct, without tutorial guidelines) */}
         <div className="max-w-2xl space-y-3 mb-16">
-          <span className="text-xs font-mono font-bold text-[#4F7CFF] tracking-wider uppercase">
+          <span className="text-xs font-mono font-bold text-[#ED642B] tracking-wider uppercase">
             Operational Intelligence
           </span>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
@@ -160,7 +160,7 @@ export const OperationalFlashcards: React.FC = () => {
                   }`}
                 >
                   {/* ── FRONT OF CARD: BOTTLENECK INCIDENT ── */}
-                  <div className="absolute inset-0 h-full w-full rounded-2xl border border-white/15 bg-[#12141C] overflow-hidden flex flex-col justify-between [backface-visibility:hidden] shadow-2xl hover:border-[#4F7CFF]/50 transition-colors">
+                  <div className="absolute inset-0 h-full w-full rounded-2xl border border-white/15 bg-[#140938]/90 overflow-hidden flex flex-col justify-between [backface-visibility:hidden] shadow-2xl hover:border-[#ED642B]/50 transition-colors">
                     
                     {/* Top 45% Real Photograph Container */}
                     <div className="relative h-[45%] w-full overflow-hidden shrink-0">
@@ -190,7 +190,7 @@ export const OperationalFlashcards: React.FC = () => {
 
                       {/* Location text on image bottom */}
                       <div className="absolute bottom-2 left-3 right-3 flex items-center gap-1 text-xs font-semibold text-white/90">
-                        <MapPin size={12} className="text-[#4F7CFF] shrink-0" />
+                        <MapPin size={12} className="text-[#ED642B] shrink-0" />
                         <span className="truncate">{card.location}</span>
                       </div>
                     </div>

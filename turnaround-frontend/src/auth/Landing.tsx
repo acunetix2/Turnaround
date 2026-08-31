@@ -9,18 +9,13 @@ import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBack
 import { OperationalFlashcards } from '../components/landing/OperationalFlashcards';
 import { BrandLogo } from '../components/common/BrandLogo';
 
-const STATS = [
-  { value: '2h 14m', label: 'Average excess dwell cut per trip' },
-  { value: 'KES 84K', label: 'Weekly cost recovered per 20 trucks' },
-  { value: '4×',      label: 'Faster turnaround at congested terminals' },
-  { value: '99.4%',   label: 'Geofence entry/exit detection accuracy' },
-];
+
 
 const FEATURES = [
   {
     icon: MapPin,
-    color: '#4F7CFF',
-    bg: 'rgba(79,124,255,0.16)',
+    color: '#ED642B',
+    bg: 'rgba(237,100,43,0.16)',
     title: 'Live Fleet Tracking & Telemetry',
     desc: 'Real-time vehicle GPS positions with automatic geofence detection. Instant alerts the moment a truck exceeds expected dwell.',
   },
@@ -61,20 +56,7 @@ const FEATURES = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    quote: 'We cut turnaround delays at our Mombasa container depot by over two hours per truck. Having real cost figures in KES changed how our dispatchers prioritise bays.',
-    author: 'James Mwangi',
-    role: 'Head of Fleet Operations',
-    company: 'East Africa Haulage Ltd',
-  },
-  {
-    quote: 'Turnaround showed us that 45% of our monthly idle loss occurred at just two regional border crossings. We renegotiated arrival slots and recovered our margins.',
-    author: 'Amina Osei',
-    role: 'Logistics Director',
-    company: 'Pan-African Freight Carriers',
-  },
-];
+
 
 export const Landing: React.FC = () => {
   const heroRef = useRef<HTMLDivElement>(null);
@@ -103,11 +85,11 @@ export const Landing: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-[#07080A] text-[#F4F5F7] overflow-x-hidden selection:bg-[#4F7CFF]/30">
+    <div className="relative min-h-screen bg-[#0A051B] text-[#F4F5F7] overflow-x-hidden selection:bg-[#ED642B]/30">
 
       {/* ── FLEXPORT-STYLE SYSTEM MEGA-NAVBAR ── */}
       <header
-        className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.10] bg-[#07080A]/95 backdrop-blur-2xl transition-all"
+        className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-[#0A051B]/95 backdrop-blur-2xl transition-all"
         onMouseLeave={handleMouseLeave}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -125,11 +107,11 @@ export const Landing: React.FC = () => {
               <button
                 onClick={() => setActiveMenu(activeMenu === 'platform' ? null : 'platform')}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
-                  activeMenu === 'platform' ? 'text-[#4F7CFF] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
+                  activeMenu === 'platform' ? 'text-[#ED642B] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 Platform & Fleet OS
-                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'platform' ? 'rotate-180 text-[#4F7CFF]' : 'text-[#6B7280]'}`} />
+                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'platform' ? 'rotate-180 text-[#ED642B]' : 'text-[#6B7280]'}`} />
               </button>
             </div>
 
@@ -138,11 +120,11 @@ export const Landing: React.FC = () => {
               <button
                 onClick={() => setActiveMenu(activeMenu === 'corridors' ? null : 'corridors')}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
-                  activeMenu === 'corridors' ? 'text-[#4F7CFF] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
+                  activeMenu === 'corridors' ? 'text-[#ED642B] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 Freight Corridors
-                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'corridors' ? 'rotate-180 text-[#4F7CFF]' : 'text-[#6B7280]'}`} />
+                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'corridors' ? 'rotate-180 text-[#ED642B]' : 'text-[#6B7280]'}`} />
               </button>
             </div>
 
@@ -151,11 +133,11 @@ export const Landing: React.FC = () => {
               <button
                 onClick={() => setActiveMenu(activeMenu === 'cost-engine' ? null : 'cost-engine')}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
-                  activeMenu === 'cost-engine' ? 'text-[#4F7CFF] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
+                  activeMenu === 'cost-engine' ? 'text-[#ED642B] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 Cost & Loss Engine
-                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'cost-engine' ? 'rotate-180 text-[#4F7CFF]' : 'text-[#6B7280]'}`} />
+                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'cost-engine' ? 'rotate-180 text-[#ED642B]' : 'text-[#6B7280]'}`} />
               </button>
             </div>
 
@@ -164,11 +146,11 @@ export const Landing: React.FC = () => {
               <button
                 onClick={() => setActiveMenu(activeMenu === 'integrations' ? null : 'integrations')}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
-                  activeMenu === 'integrations' ? 'text-[#4F7CFF] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
+                  activeMenu === 'integrations' ? 'text-[#ED642B] bg-white/[0.06]' : 'text-[#D1D5DB] hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 Telematics & Hardware
-                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'integrations' ? 'rotate-180 text-[#4F7CFF]' : 'text-[#6B7280]'}`} />
+                <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'integrations' ? 'rotate-180 text-[#ED642B]' : 'text-[#6B7280]'}`} />
               </button>
             </div>
 
@@ -181,7 +163,7 @@ export const Landing: React.FC = () => {
             </Link>
             <Link
               to="/signup"
-              className="flex items-center gap-1.5 rounded-xl bg-[#4F7CFF] px-4 py-2 text-xs font-bold text-white hover:bg-[#6E92FF] shadow-lg shadow-[#4F7CFF]/25 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl bg-[#ED642B] px-4 py-2 text-xs font-bold text-white hover:bg-[#D4521D] shadow-lg shadow-[#ED642B]/25 transition-all cursor-pointer"
             >
               Register fleet <ArrowRight size={13} />
             </Link>
@@ -191,7 +173,7 @@ export const Landing: React.FC = () => {
         {/* ── MEGA-MENU DROPDOWN DRAWER (FLEXPORT STYLE) ── */}
         {activeMenu && (
           <div
-            className="border-t border-white/[0.08] bg-[#0C0E14] shadow-2xl transition-all duration-200 ease-out"
+            className="border-t border-white/[0.08] bg-[#140938]/95 shadow-2xl transition-all duration-200 ease-out"
             onMouseEnter={() => handleMouseEnter(activeMenu)}
             onMouseLeave={handleMouseLeave}
           >
@@ -202,12 +184,12 @@ export const Landing: React.FC = () => {
                 <div className="grid grid-cols-12 gap-8">
                   <div className="col-span-8 grid grid-cols-2 gap-6">
                     <div className="space-y-4">
-                      <h4 className="text-[11px] font-bold text-[#6E92FF] uppercase font-mono tracking-wider">Core telemetry & live ops</h4>
+                      <h4 className="text-[11px] font-bold text-[#ED642B] uppercase font-mono tracking-wider">Core telemetry & live ops</h4>
                       <div className="space-y-3">
                         <Link to="/login" className="block p-3 rounded-xl hover:bg-white/[0.04] transition-colors group">
                           <div className="flex items-center gap-2">
-                            <MapPin size={16} className="text-[#4F7CFF]" />
-                            <span className="text-sm font-semibold text-white group-hover:text-[#4F7CFF] transition-colors">Live fleet radar</span>
+                            <MapPin size={16} className="text-[#ED642B]" />
+                            <span className="text-sm font-semibold text-white group-hover:text-[#ED642B] transition-colors">Live fleet radar</span>
                           </div>
                           <p className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">
                             Continuous real-time GPS tracking with dark-matter cartography and dynamic speed telemetry.
@@ -264,7 +246,7 @@ export const Landing: React.FC = () => {
                       <p className="text-xs text-[#9CA3AF] leading-relaxed">
                         Configure terminal turnaround thresholds per depot or distribution facility.
                       </p>
-                      <Link to="/login" className="inline-flex items-center gap-1 text-xs font-bold text-[#4F7CFF] hover:underline pt-1">
+                      <Link to="/login" className="inline-flex items-center gap-1 text-xs font-bold text-[#ED642B] hover:underline pt-1">
                         Explore platform features &rarr;
                       </Link>
                     </div>
@@ -283,7 +265,7 @@ export const Landing: React.FC = () => {
                         <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-mono">680 km</span>
                       </div>
                       <p className="text-xs text-[#9CA3AF]">Mombasa Port → Voi → Nairobi ICD → Eldoret → Malaba.</p>
-                      <span className="text-[11px] font-mono text-amber-300 font-semibold block pt-1">Avg Dwell: 1h 45m</span>
+                      <span className="text-[11px] font-mono text-amber-300 font-semibold block pt-1">High border dwell potential</span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
@@ -292,7 +274,7 @@ export const Landing: React.FC = () => {
                         <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded font-mono">Gate 14/18</span>
                       </div>
                       <p className="text-xs text-[#9CA3AF]">Container crane offloading, berth interchange & rail interchange.</p>
-                      <span className="text-[11px] font-mono text-red-400 font-semibold block pt-1">Demurrage risk: High</span>
+                      <span className="text-[11px] font-mono text-red-400 font-semibold block pt-1">Demurrage risk: Monitor closely</span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
@@ -301,7 +283,7 @@ export const Landing: React.FC = () => {
                         <span className="text-[9px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded font-mono">Weighbridge</span>
                       </div>
                       <p className="text-xs text-[#9CA3AF]">Customs document verification & axle load inspection station.</p>
-                      <span className="text-[11px] font-mono text-emerald-400 font-semibold block pt-1">-3.2h saved with radar</span>
+                      <span className="text-[11px] font-mono text-emerald-400 font-semibold block pt-1">Border delay reduction tracked</span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
@@ -310,7 +292,7 @@ export const Landing: React.FC = () => {
                         <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-mono">Embakasi</span>
                       </div>
                       <p className="text-xs text-[#9CA3AF]">Inland container distribution and customs clearance yard.</p>
-                      <span className="text-[11px] font-mono text-white font-semibold block pt-1">Throughput: 850 trucks/day</span>
+                      <span className="text-[11px] font-mono text-white font-semibold block pt-1">High-volume inland hub</span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
@@ -319,7 +301,7 @@ export const Landing: React.FC = () => {
                         <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded font-mono">Cross-border</span>
                       </div>
                       <p className="text-xs text-[#9CA3AF]">Kenya - Tanzania bilateral trade highway corridor.</p>
-                      <span className="text-[11px] font-mono text-amber-300 font-semibold block pt-1">Avg Clearance: 2h 10m</span>
+                      <span className="text-[11px] font-mono text-amber-300 font-semibold block pt-1">Clearance time monitored</span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
@@ -328,7 +310,7 @@ export const Landing: React.FC = () => {
                         <span className="text-[9px] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded font-mono">Western hub</span>
                       </div>
                       <p className="text-xs text-[#9CA3AF]">Bulk commodities and regional cross-border transit artery.</p>
-                      <span className="text-[11px] font-mono text-emerald-400 font-semibold block pt-1">Telemetry active</span>
+                      <span className="text-[11px] font-mono text-emerald-400 font-semibold block pt-1">Cross-border telemetry ready</span>
                     </div>
 
                   </div>
@@ -347,7 +329,7 @@ export const Landing: React.FC = () => {
                       <p className="text-xs text-[#9CA3AF] leading-relaxed">
                         Track container offloading and gate passage times to avoid container demurrage penalties.
                       </p>
-                      <Link to="/login" className="inline-flex items-center gap-1 text-xs font-bold text-[#4F7CFF] hover:underline pt-1">
+                      <Link to="/login" className="inline-flex items-center gap-1 text-xs font-bold text-[#ED642B] hover:underline pt-1">
                         View live corridor telemetry &rarr;
                       </Link>
                     </div>
@@ -400,9 +382,9 @@ export const Landing: React.FC = () => {
                     <div className="p-4 space-y-2">
                       <h5 className="text-xs font-bold text-white uppercase font-mono">Recover lost margin</h5>
                       <p className="text-xs text-[#9CA3AF] leading-relaxed">
-                        Fleet operators save an average of KES 84,000 weekly per 20 commercial hauliers.
+                        Fleet operators using Turnaround recover idle hours and reduce demurrage exposure across their haulier network.
                       </p>
-                      <Link to="/signup" className="inline-flex items-center gap-1 text-xs font-bold text-[#4F7CFF] hover:underline pt-1">
+                      <Link to="/signup" className="inline-flex items-center gap-1 text-xs font-bold text-[#ED642B] hover:underline pt-1">
                         Calculate your fleet savings &rarr;
                       </Link>
                     </div>
@@ -499,7 +481,7 @@ export const Landing: React.FC = () => {
               <div className="pt-2 flex flex-wrap gap-4 items-center">
                 <Link
                   to="/signup"
-                  className="flex items-center gap-2 rounded-xl bg-[#4F7CFF] px-6 py-3.5 text-sm font-semibold text-white shadow-xl shadow-[#4F7CFF]/35 hover:bg-[#6E92FF] hover:shadow-[#4F7CFF]/50 transition-all cursor-pointer"
+                  className="flex items-center gap-2 rounded-xl bg-[#ED642B] px-6 py-3.5 text-sm font-bold text-white shadow-xl shadow-[#ED642B]/35 hover:bg-[#D4521D] hover:shadow-[#ED642B]/50 transition-all cursor-pointer"
                 >
                   Register your fleet <ArrowRight size={16} />
                 </Link>
@@ -518,49 +500,25 @@ export const Landing: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Live Teaser Card */}
+            {/* Right — capabilities highlight grid */}
             <div className="lg:col-span-5">
-              <div className="rounded-2xl border border-white/20 bg-[#121317]/90 backdrop-blur-2xl p-6 shadow-2xl space-y-5">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping" />
-                    <span className="font-['IBM_Plex_Mono'] text-xs font-bold text-red-400">Active delay alert</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/10">Geofence 08</span>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-mono font-bold text-white bg-white/5 px-2.5 py-1 rounded border border-white/10">KBZ 482T · Scania G460</span>
-                    <span className="text-xs text-amber-400 font-medium">In transit · Mombasa depot</span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 bg-black/50 rounded-xl p-3 border border-white/10 text-center">
-                    <div>
-                      <span className="text-[10px] text-white/50 block">Dwell</span>
-                      <span className="font-['IBM_Plex_Mono'] text-sm font-bold text-white">4h 15m</span>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { icon: MapPin, label: 'Live GPS tracking', sub: 'Real-time vehicle positions' },
+                  { icon: Clock, label: 'Dwell monitoring', sub: 'Entry/exit time measurement' },
+                  { icon: TrendingDown, label: 'Cost tracking', sub: 'Idle time cost quantification' },
+                  { icon: Shield, label: 'Role-based access', sub: 'Fleet managers & dispatchers' },
+                ].map(({ icon: Icon, label, sub }) => (
+                  <div key={label} className="rounded-2xl border border-white/15 bg-[#140938]/80 backdrop-blur-md p-5 space-y-3 hover:border-[#ED642B]/40 transition-all">
+                    <div className="h-10 w-10 rounded-xl bg-[#ED642B]/15 border border-[#ED642B]/25 flex items-center justify-center">
+                      <Icon size={18} className="text-[#ED642B]" />
                     </div>
                     <div>
-                      <span className="text-[10px] text-white/50 block">Expected</span>
-                      <span className="font-['IBM_Plex_Mono'] text-sm font-bold text-white/70">1h 30m</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-red-400 block font-semibold">Excess cost</span>
-                      <span className="font-['IBM_Plex_Mono'] text-sm font-bold text-red-400">KES 18,250</span>
+                      <h3 className="text-sm font-bold text-white">{label}</h3>
+                      <p className="text-xs text-white/60 mt-0.5">{sub}</p>
                     </div>
                   </div>
-
-                  <p className="text-xs text-white/70 leading-relaxed">
-                    Bottleneck at Bay 04: Loading clearance delayed due to document verification hold. Recommended reroute to Bay 09.
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs">
-                  <span className="text-white/50 font-mono">Speed 0 km/h · Port inbound</span>
-                  <Link to="/login" className="text-[#6E92FF] font-semibold hover:underline flex items-center gap-1">
-                    View live map <ArrowRight size={12} />
-                  </Link>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -568,19 +526,7 @@ export const Landing: React.FC = () => {
         </div>
       </section>
 
-      {/* ── STATS BAR ── */}
-      <section className="relative border-y border-white/[0.08] bg-[#0E1014]/90 backdrop-blur-md z-20">
-        <div className="mx-auto max-w-7xl px-6 py-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map(({ value, label }) => (
-              <div key={label} className="text-center sm:text-left border-l border-white/10 pl-6 first:border-l-0 first:pl-0">
-                <div className="font-['IBM_Plex_Mono'] text-3xl lg:text-4xl font-bold text-[#4F7CFF]">{value}</div>
-                <div className="mt-1 text-xs text-[#9CA3AF] leading-relaxed">{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
       {/* ── PHOTO SHOWCASE CORRIDOR SECTION ── */}
       <section id="corridors" className="relative py-28 overflow-hidden z-10">
@@ -596,7 +542,7 @@ export const Landing: React.FC = () => {
 
         <div className="relative z-10 mx-auto max-w-7xl px-6">
           <div className="max-w-2xl mb-16">
-            <span className="text-xs font-mono font-bold text-[#4F7CFF] tracking-wider uppercase">Freight corridors</span>
+            <span className="text-xs font-mono font-bold text-[#ED642B] tracking-wider uppercase">Freight corridors</span>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mt-2">
               Continuous visibility from inland depots to deepwater ports.
             </h2>
@@ -611,7 +557,7 @@ export const Landing: React.FC = () => {
                 corridor: 'Northern Corridor',
                 route: 'Mombasa → Nairobi → Malaba → Kampala',
                 highlight: 'High border dwell risk & customs delay',
-                metric: '-3.2h average reduction',
+                metric: 'Border delay reduction tracked',
               },
               {
                 corridor: 'Great North Highway',
@@ -623,15 +569,15 @@ export const Landing: React.FC = () => {
                 corridor: 'Coastal Inland Logistics',
                 route: 'Kilindini Port → Mariakani Weighbridge → Athi River',
                 highlight: 'Demurrage & container gate congestion',
-                metric: 'KES 140K/mo savings per truck',
+                metric: 'Demurrage exposure monitored',
               },
             ].map((c) => (
               <div
                 key={c.corridor}
-                className="rounded-2xl border border-white/15 bg-black/75 backdrop-blur-md p-6 space-y-4 hover:border-[#4F7CFF]/60 hover:bg-black/85 transition-all"
+                className="rounded-2xl border border-white/15 bg-[#140938]/75 backdrop-blur-md p-6 space-y-4 hover:border-[#ED642B]/60 hover:bg-[#140938]/90 transition-all"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-['IBM_Plex_Mono'] text-xs font-bold text-[#6E92FF] uppercase">{c.corridor}</span>
+                  <span className="font-numeric text-xs font-bold text-[#ED642B] uppercase">{c.corridor}</span>
                   <span className="text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-semibold">Active</span>
                 </div>
                 <div>
@@ -665,7 +611,7 @@ export const Landing: React.FC = () => {
 
         <div className="relative z-10 mx-auto max-w-7xl px-6">
           <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
-            <span className="text-xs font-mono font-bold text-[#4F7CFF] tracking-wider uppercase">Built for dispatchers & fleet directors</span>
+            <span className="text-xs font-mono font-bold text-[#ED642B] tracking-wider uppercase">Built for dispatchers & fleet directors</span>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
               Every tool required to eliminate invisible terminal delays.
             </h2>
@@ -706,7 +652,7 @@ export const Landing: React.FC = () => {
 
         <div className="relative z-10 mx-auto max-w-7xl px-6">
           <div className="text-center max-w-2xl mx-auto mb-20 space-y-3">
-            <span className="text-xs font-mono font-bold text-[#4F7CFF] tracking-wider uppercase">Operational workflow</span>
+            <span className="text-xs font-mono font-bold text-[#ED642B] tracking-wider uppercase">Operational workflow</span>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
               From GPS beacon to cost recovery in 3 steps
             </h2>
@@ -751,43 +697,7 @@ export const Landing: React.FC = () => {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS: Border Weighbridge Corridor Backdrop (Clear, Crisp Image) ── */}
-      <section id="testimonials" className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
-        {/* Clear Border & Weighbridge Photography */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <img
-            src="/border-clearance.jpg"
-            alt="Border customs clearance and commercial lorries"
-            className="h-full w-full object-cover brightness-[0.82] contrast-[1.10] animate-cinematic-dolly"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/60 to-[#07080A]/90" />
-          <div className="absolute inset-0 cinematic-vignette opacity-70" />
-        </div>
 
-        <div className="relative z-10 mx-auto max-w-7xl px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
-            <span className="text-xs font-mono font-bold text-[#4F7CFF] tracking-wider uppercase">Field verified</span>
-            <h2 className="text-3xl font-bold tracking-tight text-white">Proven with commercial hauliers</h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {TESTIMONIALS.map(({ quote, author, role, company }) => (
-              <div key={author} className="rounded-2xl border border-white/15 bg-black/75 backdrop-blur-md p-8 space-y-6">
-                <p className="text-base text-white/90 leading-relaxed font-normal">"{quote}"</p>
-                <div className="flex items-center gap-4 pt-4 border-t border-white/10">
-                  <div className="h-11 w-11 rounded-xl bg-[#4F7CFF]/20 border border-[#4F7CFF]/30 flex items-center justify-center font-bold text-white font-mono">
-                    {author[0]}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{author}</h4>
-                    <p className="text-xs text-white/65">{role} · {company}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── FINAL CTA: Clear Dusk Fleet Backdrop ── */}
       <section className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
@@ -813,7 +723,7 @@ export const Landing: React.FC = () => {
           <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
               to="/signup"
-              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-[#4F7CFF] px-8 py-4 text-base font-semibold text-white shadow-2xl shadow-[#4F7CFF]/30 hover:bg-[#6E92FF] transition-all cursor-pointer"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-[#ED642B] px-8 py-4 text-base font-bold text-white shadow-2xl shadow-[#ED642B]/30 hover:bg-[#D4521D] transition-all cursor-pointer"
             >
               Register fleet account <ArrowRight size={17} />
             </Link>
@@ -874,7 +784,7 @@ export const Landing: React.FC = () => {
                 <li><Link to="/login" className="hover:text-white transition-colors">Dispatcher console</Link></li>
                 <li><Link to="/forgot-password" className="hover:text-white transition-colors">Password recovery</Link></li>
                 <li><a href="mailto:support@turnaround.io" className="hover:text-white transition-colors">Technical support</a></li>
-                <li><a href="#testimonials" className="hover:text-white transition-colors">Operator case studies</a></li>
+                <li><Link to="/login" className="hover:text-white transition-colors">Operator dashboard</Link></li>
               </ul>
             </div>
 

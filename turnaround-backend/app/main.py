@@ -20,11 +20,26 @@ from app.routers import (
 
 # ── Structured Logging ──────────────────────────────────────────────────────
 logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.DEBUG),
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("turnaround")
+
+# Silence noisy third-party libraries unless they produce errors
+for lib in ("asyncpg", "sqlalchemy.engine", "httpcore", "httpx", "urllib3", "watchfiles"):
+    logging.getLogger(lib).setLevel(logging.WARNING)
+
+# Endpoints that are polled frequently or trivial — silenced from routine INFO logging
+QUIET_ROUTES = {
+    "/health",
+    "/api/v1/health",
+    "/api/v1/gps/live",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/favicon.ico",
+}
 
 
 # ── Lifespan ────────────────────────────────────────────────────────────────
@@ -61,26 +76,35 @@ app = FastAPI(
 # ── Request / Access Logging Middleware ────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    if not settings.LOG_REQUESTS:
+        return await call_next(request)
+
     start_time = time.time()
     path = request.url.path
     method = request.method
-    query = request.url.query
-    
-    # Log incoming request
-    logger.info(f"--> {method} {path}{'?' + query if query else ''}")
-    
+    is_quiet = settings.QUIET_POLLING_LOGS and path in QUIET_ROUTES
+
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000
         status_code = response.status_code
-        
-        # Color/severity indicator based on status
-        level = logger.info if status_code < 400 else (logger.warning if status_code < 500 else logger.error)
-        level(f"<-- {method} {path} | Status: {status_code} | Duration: {process_time:.2f}ms")
+
+        # For quiet polling routes, only log on errors (>= 400) or slow responses (> 2000ms)
+        if is_quiet and status_code < 400 and process_time < 2000:
+            return response
+
+        # Format single clean line
+        if status_code < 400:
+            logger.info(f"{method} {path} -> {status_code} ({process_time:.1f}ms)")
+        elif status_code < 500:
+            logger.warning(f"{method} {path} -> {status_code} ({process_time:.1f}ms)")
+        else:
+            logger.error(f"{method} {path} -> {status_code} ({process_time:.1f}ms)")
+
         return response
     except Exception as e:
         process_time = (time.time() - start_time) * 1000
-        logger.error(f"<-- {method} {path} | ERROR: {str(e)} | Duration: {process_time:.2f}ms")
+        logger.error(f"{method} {path} -> ERROR: {str(e)} ({process_time:.1f}ms)")
         raise e
 
 

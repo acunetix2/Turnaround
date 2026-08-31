@@ -7,6 +7,16 @@ export function useVehicles() {
   return useQuery({
     queryKey: queryKeys.vehicles.all(),
     queryFn: apiClient.getVehicles,
+    select: (data: Vehicle[]) => {
+      if (!Array.isArray(data)) return [];
+      const seen = new Set<string>();
+      return data.filter((vh) => {
+        const key = vh.registration_number ? vh.registration_number.trim().toUpperCase() : vh.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    },
     staleTime: 20_000,
   });
 }

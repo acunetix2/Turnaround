@@ -1,270 +1,333 @@
-/**
- * Select — custom styled dropdown replacing all native <select> elements.
- *
- * Features:
- *  - Dark glassmorphism panel matching design system
- *  - Smooth scale/fade animation (CSS transition)
- *  - Click-outside to close
- *  - Keyboard nav: ArrowUp / ArrowDown / Enter / Escape / Tab
- *  - Optional icons and descriptions per option
- *  - Accessible: role="combobox", aria-expanded, aria-activedescendant
- */
-import React, { useRef, useState, useEffect, useCallback, useId } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import React, { createContext, useContext, useState, useRef, useEffect, useId, useCallback } from 'react'
+import { ChevronDown, Check } from 'lucide-react'
 
+// ── CONTEXT ──
+interface SelectContextType {
+  value?: string
+  onValueChange?: (val: string) => void
+  isOpen: boolean
+  setIsOpen: (open: boolean) => void
+  toggle: () => void
+  close: () => void
+  selectedLabel: string | null
+  setSelectedLabel: (label: string | null) => void
+  disabled?: boolean
+}
+
+const SelectContext = createContext<SelectContextType>({
+  isOpen: false,
+  setIsOpen: () => {},
+  toggle: () => {},
+  close: () => {},
+  selectedLabel: null,
+  setSelectedLabel: () => {},
+})
+
+// ── COMPOUND OR COMPACT SELECT ──
 export interface SelectOption {
-  value: string;
-  label: string;
-  /** Small secondary text shown below the label */
-  description?: string;
-  /** Lucide icon or any React node placed before the label */
-  icon?: React.ReactNode;
-  disabled?: boolean;
+  value: string
+  label: string
+  description?: string
+  icon?: React.ReactNode
+  disabled?: boolean
 }
 
 export interface SelectProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: SelectOption[];
-  placeholder?: string;
-  label?: string;
-  id?: string;
-  disabled?: boolean;
-  className?: string;
-  /** Renders options as a grid (2-col) instead of a list */
-  grid?: boolean;
+  value?: string
+  defaultValue?: string
+  onValueChange?: (value: string) => void
+  onChange?: (value: string) => void
+  disabled?: boolean
+  children?: React.ReactNode
+  className?: string
+  // Backward compatibility with props-based API
+  options?: SelectOption[]
+  placeholder?: string
+  label?: string
+  id?: string
+  grid?: boolean
 }
 
 export const Select: React.FC<SelectProps> = ({
-  value,
+  value: controlledValue,
+  defaultValue,
+  onValueChange,
   onChange,
+  disabled = false,
+  children,
+  className = '',
   options,
-  placeholder = 'Select…',
+  placeholder = 'Select...',
   label,
   id: externalId,
-  disabled = false,
-  className = '',
-  grid = false,
 }) => {
-  const autoId = useId();
-  const id = externalId ?? autoId;
-  const [open, setOpen] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const autoId = useId()
+  const id = externalId ?? autoId
+  const [internalValue, setInternalValue] = useState<string | undefined>(defaultValue)
+  const [isOpen, setIsOpen] = useState(false)
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  const selected = options.find(o => o.value === value);
+  const isControlled = controlledValue !== undefined
+  const currentValue = isControlled ? controlledValue : internalValue
 
-  // Close on outside click
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+  const handleValueChange = useCallback(
+    (newVal: string) => {
+      if (!isControlled) {
+        setInternalValue(newVal)
       }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+      onValueChange?.(newVal)
+      onChange?.(newVal)
+      setIsOpen(false)
+    },
+    [isControlled, onValueChange, onChange]
+  )
 
-  // Scroll focused item into view
+  const toggle = () => {
+    if (!disabled) setIsOpen((prev) => !prev)
+  }
+
+  const close = () => setIsOpen(false)
+
+  // Click outside to close
   useEffect(() => {
-    if (!open || focusedIndex < 0) return;
-    const el = listRef.current?.children[focusedIndex] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: 'nearest' });
-  }, [focusedIndex, open]);
-
-  const selectOption = useCallback((opt: SelectOption) => {
-    if (opt.disabled) return;
-    onChange(opt.value);
-    setOpen(false);
-    setFocusedIndex(-1);
-  }, [onChange]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (disabled) return;
-    const enabledIndexes = options
-      .map((o, i) => (!o.disabled ? i : -1))
-      .filter(i => i >= 0);
-
-    switch (e.key) {
-      case 'Enter':
-      case ' ':
-        e.preventDefault();
-        if (!open) {
-          setOpen(true);
-          setFocusedIndex(enabledIndexes[0] ?? 0);
-        } else if (focusedIndex >= 0) {
-          selectOption(options[focusedIndex]);
-        }
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        if (!open) { setOpen(true); setFocusedIndex(enabledIndexes[0] ?? 0); break; }
-        setFocusedIndex(prev => {
-          const idx = enabledIndexes.indexOf(prev);
-          return enabledIndexes[Math.min(idx + 1, enabledIndexes.length - 1)] ?? prev;
-        });
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setFocusedIndex(prev => {
-          const idx = enabledIndexes.indexOf(prev);
-          return enabledIndexes[Math.max(idx - 1, 0)] ?? prev;
-        });
-        break;
-      case 'Escape':
-      case 'Tab':
-        setOpen(false);
-        setFocusedIndex(-1);
-        break;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        close()
+      }
     }
-  };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  // Backward compatibility: If options prop is provided, render compact compound structure automatically
+  if (options) {
+    const selectedOpt = options.find((o) => o.value === currentValue)
+    return (
+      <Select
+        value={currentValue}
+        onValueChange={handleValueChange}
+        disabled={disabled}
+        className={className}
+      >
+        {label && (
+          <label htmlFor={id} className="block text-xs font-medium text-text-secondary mb-1">
+            {label}
+          </label>
+        )}
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue placeholder={placeholder}>
+            {selectedOpt ? (
+              <span className="flex items-center gap-2">
+                {selectedOpt.icon}
+                <span>{selectedOpt.label}</span>
+              </span>
+            ) : undefined}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+              <div className="flex items-center gap-2">
+                {opt.icon}
+                <div>
+                  <p>{opt.label}</p>
+                  {opt.description && (
+                    <p className="text-[10px] text-text-tertiary">{opt.description}</p>
+                  )}
+                </div>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
-      {label && (
-        <label
-          htmlFor={id}
-          className="block text-xs font-semibold text-[#9CA3AF] mb-1.5"
-        >
-          {label}
-        </label>
-      )}
+    <SelectContext.Provider
+      value={{
+        value: currentValue,
+        onValueChange: handleValueChange,
+        isOpen,
+        setIsOpen,
+        toggle,
+        close,
+        selectedLabel,
+        setSelectedLabel,
+        disabled,
+      }}
+    >
+      <div ref={containerRef} className={`relative inline-block ${className}`}>
+        {children}
+      </div>
+    </SelectContext.Provider>
+  )
+}
 
-      {/* Trigger button */}
+// ── TRIGGER ──
+export interface SelectTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children?: React.ReactNode
+  className?: string
+}
+
+export const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
+  ({ children, className = '', id, ...props }, ref) => {
+    const { isOpen, toggle, disabled } = useContext(SelectContext)
+
+    return (
       <button
-        id={id}
+        ref={ref}
         type="button"
+        id={id}
         disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={`${id}-list`}
-        aria-activedescendant={focusedIndex >= 0 ? `${id}-opt-${focusedIndex}` : undefined}
-        onClick={() => {
-          if (!disabled) {
-            setOpen(v => !v);
-            setFocusedIndex(open ? -1 : (options.findIndex(o => o.value === value)));
-          }
-        }}
-        onKeyDown={handleKeyDown}
-        className={[
-          'flex w-full items-center justify-between gap-2',
-          'rounded-xl border px-4 py-3 text-sm transition-all outline-none',
-          'bg-white/[0.04] text-left',
-          disabled
-            ? 'cursor-not-allowed border-white/[0.06] text-[#4B5563]'
-            : open
-              ? 'border-[#4F7CFF]/60 bg-white/[0.06] text-[#F4F5F7]'
-              : 'border-white/[0.10] text-[#F4F5F7] hover:border-white/[0.18] hover:bg-white/[0.06]',
-          'focus-visible:border-[#4F7CFF]/60 focus-visible:ring-2 focus-visible:ring-[#4F7CFF]/20',
-        ].join(' ')}
+        onClick={toggle}
+        aria-expanded={isOpen}
+        className={`flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-border-default bg-bg-surface-raised/80 px-3 py-2 text-xs font-medium text-text-primary shadow-xs transition-all hover:bg-bg-surface-raised hover:border-text-tertiary focus:outline-none focus:ring-2 focus:ring-[#ED642B]/40 focus:ring-offset-1 focus:ring-offset-bg-surface disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer ${className}`}
+        {...props}
       >
-        <span className="flex items-center gap-2 min-w-0">
-          {selected?.icon && (
-            <span className="shrink-0 text-[#9CA3AF]">{selected.icon}</span>
-          )}
-          <span className={['truncate', !selected ? 'text-[#4B5563]' : ''].join(' ')}>
-            {selected?.label ?? placeholder}
-          </span>
-        </span>
+        <div className="flex items-center gap-2 truncate flex-1 text-left">{children}</div>
         <ChevronDown
-          size={15}
-          className={[
-            'shrink-0 text-[#6B7280] transition-transform duration-200',
-            open ? 'rotate-180' : '',
-          ].join(' ')}
+          size={14}
+          className={`shrink-0 text-text-tertiary transition-transform duration-150 ${
+            isOpen ? 'rotate-180 text-text-primary' : ''
+          }`}
         />
       </button>
+    )
+  }
+)
+SelectTrigger.displayName = 'SelectTrigger'
 
-      {/* Dropdown panel */}
-      <div
-        className={[
-          'absolute left-0 right-0 z-50 mt-1.5',
-          'rounded-xl border border-white/[0.12] bg-[#1A1C21]',
-          'shadow-2xl shadow-black/60 backdrop-blur-xl',
-          'overflow-hidden',
-          'transition-all duration-150 origin-top',
-          open
-            ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
-            : 'opacity-0 scale-y-95 -translate-y-1 pointer-events-none',
-        ].join(' ')}
-        style={{ minWidth: '100%' }}
-      >
-        <ul
-          ref={listRef}
-          id={`${id}-list`}
-          role="listbox"
-          aria-label={label ?? placeholder}
-          className={[
-            'py-1.5 max-h-64 overflow-y-auto',
-            grid ? 'grid grid-cols-2 gap-1 p-2' : '',
-          ].join(' ')}
-        >
-          {options.map((opt, i) => {
-            const isSelected = opt.value === value;
-            const isFocused = i === focusedIndex;
+// ── VALUE ──
+export interface SelectValueProps {
+  placeholder?: string
+  children?: React.ReactNode
+  className?: string
+}
 
-            return (
-              <li
-                key={opt.value}
-                id={`${id}-opt-${i}`}
-                role="option"
-                aria-selected={isSelected}
-                aria-disabled={opt.disabled}
-                onMouseEnter={() => !opt.disabled && setFocusedIndex(i)}
-                onMouseLeave={() => setFocusedIndex(-1)}
-                onClick={() => selectOption(opt)}
-                className={[
-                  'flex items-center gap-3 cursor-pointer select-none transition-colors duration-100',
-                  grid ? 'flex-col items-start rounded-xl p-3 border' : 'px-3 py-2.5 rounded-lg mx-1',
-                  opt.disabled ? 'cursor-not-allowed opacity-40' : '',
-                  isFocused && !opt.disabled
-                    ? 'bg-white/[0.07]'
-                    : '',
-                  isSelected && grid
-                    ? 'border-[#4F7CFF]/40 bg-[#4F7CFF]/10 text-[#F4F5F7]'
-                    : grid
-                      ? 'border-white/[0.07] bg-white/[0.03] text-[#9CA3AF]'
-                      : '',
-                ].join(' ')}
-              >
-                {/* Icon */}
-                {opt.icon && (
-                  <span className={['shrink-0', isSelected ? 'text-[#4F7CFF]' : 'text-[#6B7280]'].join(' ')}>
-                    {opt.icon}
-                  </span>
-                )}
+export const SelectValue: React.FC<SelectValueProps> = ({
+  placeholder = 'Select an option...',
+  children,
+  className = '',
+}) => {
+  const { value, selectedLabel } = useContext(SelectContext)
 
-                {/* Label + description */}
-                <span className="flex-1 min-w-0">
-                  <span className={[
-                    'block text-sm font-medium truncate',
-                    isSelected ? 'text-[#F4F5F7]' : 'text-[#D1D5DB]',
-                  ].join(' ')}>
-                    {opt.label}
-                  </span>
-                  {opt.description && (
-                    <span className="block text-[11px] text-[#6B7280] mt-0.5 leading-tight">
-                      {opt.description}
-                    </span>
-                  )}
-                </span>
+  if (children) {
+    return <span className={`truncate text-xs ${className}`}>{children}</span>
+  }
 
-                {/* Check mark — list mode only */}
-                {!grid && (
-                  <Check
-                    size={14}
-                    className={[
-                      'shrink-0 transition-opacity',
-                      isSelected ? 'text-[#4F7CFF] opacity-100' : 'opacity-0',
-                    ].join(' ')}
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+  const display = selectedLabel || value
+
+  if (!display) {
+    return <span className={`truncate text-text-tertiary text-xs ${className}`}>{placeholder}</span>
+  }
+
+  return <span className={`truncate text-text-primary text-xs ${className}`}>{display}</span>
+}
+
+// ── CONTENT ──
+export interface SelectContentProps {
+  children: React.ReactNode
+  align?: 'left' | 'right' | 'center'
+  className?: string
+}
+
+export const SelectContent: React.FC<SelectContentProps> = ({
+  children,
+  align = 'left',
+  className = '',
+}) => {
+  const { isOpen } = useContext(SelectContext)
+
+  if (!isOpen) return null
+
+  const alignStyles = {
+    left: 'left-0',
+    right: 'right-0',
+    center: 'left-1/2 -translate-x-1/2',
+  }
+
+  return (
+    <div
+      className={`absolute z-50 mt-1 min-w-[140px] max-h-60 w-full overflow-y-auto rounded-lg border border-border-default bg-bg-surface p-1 shadow-lg animate-in fade-in zoom-in-95 duration-100 ${alignStyles[align]} ${className}`}
+    >
+      {children}
     </div>
-  );
-};
+  )
+}
+
+// ── GROUP ──
+export const SelectGroup: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className = '',
+}) => {
+  return <div className={`py-0.5 ${className}`}>{children}</div>
+}
+
+// ── LABEL ──
+export const SelectLabel: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className = '',
+}) => {
+  return (
+    <div className={`px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-text-tertiary ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+// ── ITEM ──
+export interface SelectItemProps extends React.HTMLAttributes<HTMLDivElement> {
+  value: string
+  children: React.ReactNode
+  disabled?: boolean
+  className?: string
+}
+
+export const SelectItem = React.forwardRef<HTMLDivElement, SelectItemProps>(
+  ({ value, children, disabled = false, className = '', ...props }, ref) => {
+    const { value: selectedValue, onValueChange, setSelectedLabel } = useContext(SelectContext)
+    const isSelected = selectedValue === value
+
+    useEffect(() => {
+      if (isSelected && typeof children === 'string') {
+        setSelectedLabel(children)
+      }
+    }, [isSelected, children, setSelectedLabel])
+
+    const handleClick = () => {
+      if (disabled) return
+      if (typeof children === 'string') {
+        setSelectedLabel(children)
+      }
+      onValueChange?.(value)
+    }
+
+    return (
+      <div
+        ref={ref}
+        onClick={handleClick}
+        className={`relative flex w-full select-none items-center justify-between rounded-md px-2.5 py-1.5 text-xs text-text-secondary transition-colors ${
+          disabled
+            ? 'pointer-events-none opacity-40 cursor-not-allowed'
+            : 'cursor-pointer hover:bg-bg-surface-raised hover:text-text-primary'
+        } ${isSelected ? 'bg-bg-surface-raised font-medium text-text-primary' : ''} ${className}`}
+        {...props}
+      >
+        <div className="flex items-center gap-2 truncate flex-1">{children}</div>
+        {isSelected && (
+          <Check size={12} strokeWidth={2.5} className="shrink-0 text-[#ED642B] ml-2" />
+        )}
+      </div>
+    )
+  }
+)
+SelectItem.displayName = 'SelectItem'
+
+// ── SEPARATOR ──
+export const SelectSeparator: React.FC<{ className?: string }> = ({ className = '' }) => {
+  return <div className={`my-1 h-px bg-border-default ${className}`} />
+}

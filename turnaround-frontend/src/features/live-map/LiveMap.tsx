@@ -16,47 +16,53 @@ import {
   Compass, MapPin, Route, ArrowRight
 } from 'lucide-react';
 
-// Free high-performance map styles (zero API keys needed)
+// CARTO API Key for vector / raster basemap styles
+const CARTO_KEY = import.meta.env.VITE_CARTO_API_KEY || '';
+
 const MAP_STYLES = [
   {
     id: 'voyager',
     name: 'FedEx Logistics (Light)',
-    style: {
-      version: 8,
-      sources: {
-        'carto-voyager': {
-          type: 'raster',
-          tiles: [
-            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-          ],
-          tileSize: 256,
-          attribution: '© OpenStreetMap © CARTO',
+    style: CARTO_KEY
+      ? `https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json?key=${CARTO_KEY}`
+      : {
+          version: 8,
+          sources: {
+            'carto-voyager': {
+              type: 'raster',
+              tiles: [
+                'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+              ],
+              tileSize: 256,
+              attribution: '© OpenStreetMap © CARTO',
+            },
+          },
+          layers: [{ id: 'carto-voyager-layer', type: 'raster', source: 'carto-voyager', minzoom: 0, maxzoom: 19 }],
         },
-      },
-      layers: [{ id: 'carto-voyager-layer', type: 'raster', source: 'carto-voyager', minzoom: 0, maxzoom: 19 }],
-    },
   },
   {
     id: 'dark',
     name: 'Night Corridor (Dark)',
-    style: {
-      version: 8,
-      sources: {
-        'carto-dark': {
-          type: 'raster',
-          tiles: [
-            'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-            'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-            'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-          ],
-          tileSize: 256,
-          attribution: '© OpenStreetMap © CARTO',
+    style: CARTO_KEY
+      ? `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json?key=${CARTO_KEY}`
+      : {
+          version: 8,
+          sources: {
+            'carto-dark': {
+              type: 'raster',
+              tiles: [
+                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+              ],
+              tileSize: 256,
+              attribution: '© OpenStreetMap © CARTO',
+            },
+          },
+          layers: [{ id: 'carto-dark-layer', type: 'raster', source: 'carto-dark', minzoom: 0, maxzoom: 19 }],
         },
-      },
-      layers: [{ id: 'carto-dark-layer', type: 'raster', source: 'carto-dark', minzoom: 0, maxzoom: 19 }],
-    },
   },
   {
     id: 'osm',
@@ -79,6 +85,7 @@ const MAP_STYLES = [
     },
   },
 ];
+
 
 // East Africa Major Commercial Logistics Corridors GeoJSON
 const CORRIDOR_ROUTES_GEOJSON: GeoJSON.FeatureCollection = {
@@ -140,8 +147,8 @@ export const LiveMap: React.FC = () => {
   const vehicleMarkersRef = useRef<Record<string, maplibregl.Marker>>({});
   const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
 
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  // Theme available for future use
+  useTheme();
 
   // State
   const [selectedStyleId, setSelectedStyleId] = useState<string>('osm');
@@ -176,6 +183,13 @@ export const LiveMap: React.FC = () => {
       pitch: 20,
       bearing: 0,
       attributionControl: false,
+      transformRequest: (url: string) => {
+        if (CARTO_KEY && url.includes('cartocdn.com') && !url.includes('key=')) {
+          const sep = url.includes('?') ? '&' : '?';
+          return { url: `${url}${sep}key=${CARTO_KEY}` };
+        }
+        return { url };
+      },
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: true }), 'bottom-right');
@@ -424,7 +438,7 @@ export const LiveMap: React.FC = () => {
   const activeVehicleDwell = activeVehicle && dwells ? dwells.find((d) => d.vehicle_id === activeVehicle.id && !d.departure_time) : null;
 
   return (
-    <div className="relative h-[calc(100vh-80px)] w-full overflow-hidden rounded-2xl border border-border-default bg-bg-surface shadow-sm flex">
+    <div className="relative h-screen w-full overflow-hidden bg-bg-surface flex">
 
       {/* ── MAP CONTAINER (Direct MapLibre GL canvas) ── */}
       <div className="relative flex-1 h-full w-full min-h-[550px]">

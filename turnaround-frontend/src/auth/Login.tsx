@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
-import { Eye, EyeOff, ArrowRight, ShieldCheck, Zap, TrendingDown, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, ShieldCheck, TrendingDown, Lock, Mail, Clock } from 'lucide-react';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { BrandLogo } from '../components/common/BrandLogo';
 
@@ -32,23 +32,22 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A0B0D]">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0A051B] text-[#F4F5F7]">
 
       {/* ── LEFT PANEL: Hero photography + animated moving fleet ── */}
       <div className="relative hidden lg:flex lg:w-[55%] flex-col overflow-hidden">
         <img
           src="/hero-fleet.jpg"
           alt="Turnaround fleet logistics distribution center at dusk"
-          className="absolute inset-0 h-full w-full object-cover brightness-[0.84] contrast-[1.10] animate-cinematic-crane"
+          className="absolute inset-0 h-full w-full object-cover brightness-[0.80] contrast-[1.15] animate-cinematic-crane"
         />
         {/* Gradients & Cinematic Vignette */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0A0B0D]/90 via-[#0A0B0D]/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B0D]/85 via-transparent to-[#0A0B0D]/20" />
-        <div className="absolute inset-0 cinematic-vignette opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0A051B]/95 via-[#180B4A]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0A051B]/90 via-transparent to-[#0A051B]/30" />
 
-        {/* Subtle Anamorphic Optical Flare Sweep */}
+        {/* Subtle Anamorphic Optical Flare Sweep in Express Orange */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="w-[45%] h-full bg-gradient-to-r from-transparent via-[#4F7CFF]/10 to-transparent animate-anamorphic-flare blur-xl" />
+          <div className="w-[45%] h-full bg-gradient-to-r from-transparent via-[#ED642B]/10 to-transparent animate-anamorphic-flare blur-xl" />
         </div>
 
         {/* Live animated fleet background */}
@@ -64,43 +63,43 @@ export const Login: React.FC = () => {
           {/* Headline */}
           <div className="space-y-6">
             <div>
-              <h1 className="text-4xl font-bold text-white leading-tight tracking-tight">
+              <h1 className="text-4xl font-extrabold text-white leading-tight tracking-tight">
                 Stop losing margins<br />
-                <span className="text-[#4F7CFF]">at every loading dock.</span>
+                <span className="text-[#ED642B]">at every loading dock.</span>
               </h1>
-              <p className="mt-4 text-base text-white/70 max-w-md leading-relaxed">
+              <p className="mt-4 text-base text-white/75 max-w-md leading-relaxed">
                 Real-time fleet operational intelligence that turns dwell and turnaround bottlenecks into cost-saving decisions.
               </p>
             </div>
 
-            {/* Floating metric cards with clean sentence case */}
+            {/* Floating metric cards */}
             <div className="grid grid-cols-2 gap-3 max-w-sm">
               {[
-                { icon: TrendingDown, label: 'Average excess dwell cut', value: '2h 14m', color: '#22C55E' },
-                { icon: Zap,          label: 'Bottleneck response',      value: '4× faster', color: '#4F7CFF' },
-                { icon: ShieldCheck,  label: 'Geofence accuracy',        value: '99.4%',  color: '#F5A524' },
-                { icon: TrendingDown, label: 'Weekly cost recovered',    value: 'KES 84K', color: '#F0464C' },
+                { icon: TrendingDown, label: 'Average excess dwell cut', value: '2h 14m', color: '#10B981' },
+                { icon: Clock,        label: 'Bottleneck response',      value: '4× faster', color: '#ED642B' },
+                { icon: ShieldCheck,  label: 'Geofence accuracy',        value: '99.4%',   color: '#ED642B' },
+                { icon: TrendingDown, label: 'Weekly cost recovered',    value: 'KES 84K',  color: '#10B981' },
               ].map(({ icon: Icon, label, value, color }) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-white/10 bg-black/50 backdrop-blur-md p-4"
+                  className="rounded-xl border border-white/15 bg-[#180B4A]/60 backdrop-blur-md p-4 shadow-lg"
                 >
-                  <Icon size={14} style={{ color }} className="mb-2" />
-                  <div className="font-['IBM_Plex_Mono'] text-lg font-bold text-white">{value}</div>
-                  <div className="mt-0.5 text-xs text-white/60 leading-tight">{label}</div>
+                  <Icon size={15} style={{ color }} className="mb-2" />
+                  <div className="font-numeric text-lg font-extrabold text-white">{value}</div>
+                  <div className="mt-0.5 text-xs text-white/70 leading-tight">{label}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-white/50">
             Trusted by commercial fleet operators across East Africa
           </p>
         </div>
       </div>
 
       {/* ── RIGHT PANEL: Sign in form ── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto bg-[#0E0724]/90">
         {/* Mobile logo */}
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
           <BrandLogo size={34} showText={true} />
@@ -108,15 +107,15 @@ export const Login: React.FC = () => {
 
         <div className="w-full max-w-[400px]">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-[#F4F5F7] tracking-tight">Sign in to your account</h2>
-            <p className="mt-1.5 text-sm text-[#9CA3AF]">
+            <h2 className="text-2xl font-extrabold text-white tracking-tight">Sign in to your account</h2>
+            <p className="mt-1.5 text-sm text-text-secondary">
               Enter your credentials to access your fleet operations dashboard
             </p>
           </div>
 
           {/* Error */}
           {error && (
-            <div className="mb-5 rounded-xl border border-[#F0464C]/25 bg-[#F0464C]/10 px-4 py-3 text-xs text-[#F0464C]">
+            <div className="mb-5 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-xs text-[#EF4444]">
               {error}
             </div>
           )}
@@ -124,7 +123,7 @@ export const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <div>
-              <label className="block text-xs font-medium text-[#9CA3AF] mb-1.5">
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
                 Work email address
               </label>
               <div className="relative">
@@ -134,19 +133,19 @@ export const Login: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="operations@siginon.com"
-                  className="w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-3 pl-10 text-sm text-[#F4F5F7] placeholder:text-[#4B5563] focus:border-[#4F7CFF]/60 focus:bg-white/[0.06] focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
                 />
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
               </div>
             </div>
 
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-[#9CA3AF]">Password</label>
+                <label className="text-xs font-semibold text-text-secondary">Password</label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs font-medium text-[#4F7CFF] hover:text-[#6E92FF] hover:underline transition-colors cursor-pointer"
+                  className="text-xs font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors cursor-pointer"
                 >
                   Forgot password?
                 </Link>
@@ -158,13 +157,13 @@ export const Login: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-3 pl-10 pr-11 text-sm text-[#F4F5F7] placeholder:text-[#4B5563] focus:border-[#4F7CFF]/60 focus:bg-white/[0.06] focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 pr-11 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
                 />
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#9CA3AF] transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-white transition-colors cursor-pointer"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -172,11 +171,11 @@ export const Login: React.FC = () => {
               </div>
             </div>
 
-            {/* Submit */}
+            {/* Submit in FedEx Express Orange */}
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#4F7CFF] py-3 text-sm font-semibold text-white shadow-lg shadow-[#4F7CFF]/25 hover:bg-[#6E92FF] focus:outline-none focus:ring-2 focus:ring-[#4F7CFF]/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 focus:outline-none focus:ring-2 focus:ring-[#ED642B]/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
             >
               {submitting ? (
                 <>
@@ -195,9 +194,9 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-[#6B7280]">
+          <p className="mt-8 text-center text-sm text-text-tertiary">
             Don't have an account yet?{' '}
-            <Link to="/signup" className="font-semibold text-[#4F7CFF] hover:text-[#6E92FF] hover:underline transition-colors">
+            <Link to="/signup" className="font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors">
               Register now
             </Link>
           </p>

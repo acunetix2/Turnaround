@@ -82,142 +82,159 @@ export const Signup: React.FC = () => {
     }
   };
 
-  const inputCls = 'w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-3 text-sm text-[#F4F5F7] placeholder:text-[#4B5563] focus:border-[#4F7CFF]/60 focus:bg-white/[0.06] focus:outline-none transition-colors';
-  const labelCls = 'block text-xs font-medium text-[#9CA3AF] mb-1.5';
+  const inputCls = 'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors';
+  const labelCls = 'block text-xs font-semibold text-text-secondary mb-1.5';
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A0B0D]">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0A051B] text-[#F4F5F7]">
 
       {/* ── LEFT: info panel with photography and animated background ── */}
       <div className="relative hidden lg:flex lg:w-[45%] flex-col overflow-hidden">
         <img
           src="/hero-fleet.jpg"
           alt="Fleet logistics distribution centre"
-          className="absolute inset-0 h-full w-full object-cover object-center brightness-[0.84] contrast-[1.10] animate-cinematic-crane"
+          className="absolute inset-0 h-full w-full object-cover object-center brightness-[0.80] contrast-[1.15] animate-cinematic-crane"
         />
         {/* Gradients & Cinematic Vignette */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0A0B0D]/90 via-[#0A0B0D]/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B0D]/85 via-transparent to-[#0A0B0D]/20" />
-        <div className="absolute inset-0 cinematic-vignette opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0A051B]/95 via-[#180B4A]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0A051B]/90 via-transparent to-[#0A051B]/30" />
 
-        {/* Subtle Anamorphic Optical Flare Sweep */}
+        {/* Subtle Anamorphic Optical Flare Sweep in Express Orange */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="w-[45%] h-full bg-gradient-to-r from-transparent via-[#4F7CFF]/10 to-transparent animate-anamorphic-flare blur-xl" />
+          <div className="w-[45%] h-full bg-gradient-to-r from-transparent via-[#ED642B]/10 to-transparent animate-anamorphic-flare blur-xl" />
         </div>
 
         {/* Live animated fleet background */}
         <AnimatedFleetBackground />
 
+        {/* Content over image */}
         <div className="relative z-10 flex h-full flex-col justify-between p-12">
+          {/* Brand Logo */}
           <Link to="/" className="group w-fit">
             <BrandLogo size={38} showText={true} textSize="text-lg" />
           </Link>
 
-          <div className="space-y-8">
+          {/* Value Prop */}
+          <div className="space-y-6">
             <div>
-              <h1 className="text-3xl font-bold text-white leading-snug">
-                Fleet intelligence<br />
-                <span className="text-[#4F7CFF]">built for East Africa.</span>
+              <h1 className="text-3xl font-extrabold text-white leading-tight tracking-tight">
+                Turnaround intelligence<br />
+                <span className="text-[#ED642B]">built for East Africa.</span>
               </h1>
-              <p className="mt-4 text-sm text-white/65 leading-relaxed max-w-xs">
-                Register your organisation to start turning dwell tracking into measurable cost savings.
+              <p className="mt-3 text-sm text-white/75 leading-relaxed">
+                Connect GPS signals, monitor terminal geofences, and eliminate idle fleet demurrage.
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {PERKS.map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex items-start gap-3">
-                  <div className="shrink-0 mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-[#4F7CFF]/15 border border-[#4F7CFF]/20">
-                    <Icon size={13} className="text-[#6E92FF]" />
+                <div key={title} className="flex items-start gap-3 rounded-xl border border-white/15 bg-[#180B4A]/60 backdrop-blur-md p-3.5 shadow-md">
+                  <div className="shrink-0 mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-[#ED642B]/20 border border-[#ED642B]/30">
+                    <Icon size={14} className="text-[#ED642B]" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white/90">{title}</p>
-                    <p className="text-xs text-white/50 mt-0.5 leading-relaxed">{desc}</p>
+                    <div className="text-xs font-bold text-white">{title}</div>
+                    <div className="text-[11px] text-white/65 mt-0.5 leading-snug">{desc}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-xs text-white/30">© 2026 Turnaround Logistics Systems</p>
+          <p className="text-xs text-white/50">
+            No credit card required · Instant account activation
+          </p>
         </div>
       </div>
 
-      {/* ── RIGHT: registration form ── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto">
+      {/* ── RIGHT: Form panel ── */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 overflow-y-auto bg-[#0E0724]/90">
         {/* Mobile logo */}
-        <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
+        <Link to="/" className="flex lg:hidden items-center gap-2 mb-6">
           <BrandLogo size={34} showText={true} />
         </Link>
 
         <div className="w-full max-w-[440px]">
 
           {done ? (
-            /* Success state */
-            <div className="text-center space-y-5">
-              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-[#22C55E]/15 border border-[#22C55E]/25">
-                <CheckCircle size={28} className="text-[#22C55E]" />
+            /* Success confirmation state */
+            <div className="rounded-2xl border border-status-good/30 bg-status-good/10 p-8 text-center space-y-4">
+              <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-status-good/20 text-status-good">
+                <CheckCircle size={28} />
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-[#F4F5F7]">Registration successful</h2>
-                <p className="mt-2 text-sm text-[#9CA3AF]">
-                  Your fleet account is ready. Sign in to configure your vehicles and geofences.
-                </p>
-              </div>
+              <h2 className="text-xl font-extrabold text-white">Account Created Successfully</h2>
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Welcome to Turnaround. Your organisation profile has been created with demo vehicles and corridor locations ready to explore.
+              </p>
               <button
-                onClick={() => navigate('/login')}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#4F7CFF] py-3 text-sm font-semibold text-white shadow-lg shadow-[#4F7CFF]/25 hover:bg-[#6E92FF] transition-all cursor-pointer"
+                onClick={() => navigate('/dashboard')}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 transition-all cursor-pointer"
               >
-                Sign in to your dashboard <ArrowRight size={15} />
+                Go to Dashboard
+                <ArrowRight size={15} />
               </button>
             </div>
           ) : (
             <>
               {/* Step indicator */}
-              <div className="flex items-center gap-2 mb-8">
-                {[1, 2].map(s => (
+              <div className="flex items-center gap-2 mb-6">
+                {[1, 2].map((s) => (
                   <React.Fragment key={s}>
-                    <div className={[
-                      'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-all',
-                      step >= s
-                        ? 'bg-[#4F7CFF] text-white'
-                        : 'bg-white/[0.07] text-[#6B7280]',
-                    ].join(' ')}>
-                      {step > s ? <CheckCircle size={14} /> : s}
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className={[
+                          'flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-all',
+                          step === s
+                            ? 'bg-[#ED642B] text-white'
+                            : step > s
+                            ? 'bg-status-good text-white'
+                            : 'bg-white/10 text-text-tertiary',
+                        ].join(' ')}
+                      >
+                        {step > s ? '✓' : s}
+                      </div>
+                      <span className="text-xs font-medium text-text-secondary">
+                        {s === 1 ? 'Organisation' : 'Credentials'}
+                      </span>
                     </div>
                     {s < 2 && (
-                      <div className={['h-px flex-1 transition-all', step > s ? 'bg-[#4F7CFF]' : 'bg-white/[0.08]'].join(' ')} />
+                      <div className={['h-px flex-1 transition-all', step > s ? 'bg-[#ED642B]' : 'bg-white/10'].join(' ')} />
                     )}
                   </React.Fragment>
                 ))}
               </div>
 
-              <div className="mb-7">
-                <h2 className="text-2xl font-bold text-[#F4F5F7]">
-                  {step === 1 ? 'Register your company' : 'Set your password'}
+              <div className="mb-6">
+                <h2 className="text-2xl font-extrabold text-white tracking-tight">
+                  {step === 1 ? 'Tell us about your fleet' : 'Set your account password'}
                 </h2>
-                <p className="mt-1.5 text-sm text-[#9CA3AF]">
-                  {step === 1 ? 'Create an organisation profile for your operations team.' : 'Choose secure credentials for your account.'}
+                <p className="mt-1 text-xs text-text-secondary">
+                  {step === 1
+                    ? 'We will tailor your metrics and corridor baselines to your operation.'
+                    : `Account email: ${form.email}`
+                  }
                 </p>
               </div>
 
+              {/* Error banner */}
               {error && (
-                <div className="mb-5 rounded-xl border border-[#F0464C]/25 bg-[#F0464C]/10 px-4 py-3 text-xs text-[#F0464C]">
+                <div className="mb-5 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-xs text-[#EF4444]">
                   {error}
                 </div>
               )}
 
-              {step === 1 ? (
-                <form onSubmit={handleStep1} className="space-y-4">
+              {/* ── STEP 1: Personal & Fleet Info ── */}
+              {step === 1 && (
+                <form onSubmit={handleStep1} className="space-y-3.5">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelCls}>First name</label>
                       <input
                         type="text"
                         required
-                        placeholder="James"
                         value={form.firstName}
                         onChange={set('firstName')}
+                        placeholder="James"
                         className={inputCls}
                       />
                     </div>
@@ -226,124 +243,136 @@ export const Signup: React.FC = () => {
                       <input
                         type="text"
                         required
-                        placeholder="Mwangi"
                         value={form.lastName}
                         onChange={set('lastName')}
+                        placeholder="Mwangi"
                         className={inputCls}
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className={labelCls}>Work email</label>
+                    <label className={labelCls}>Work email address</label>
                     <input
                       type="email"
                       required
-                      placeholder="j.mwangi@siginon.com"
                       value={form.email}
                       onChange={set('email')}
+                      placeholder="james.mwangi@haulage.co.ke"
                       className={inputCls}
                     />
                   </div>
+
                   <div>
-                    <label className={labelCls}>Company name</label>
+                    <label className={labelCls}>Company or Organisation name</label>
                     <input
                       type="text"
                       required
-                      placeholder="Siginon Global Logistics Ltd"
                       value={form.company}
                       onChange={set('company')}
+                      placeholder="East Africa Haulage Ltd"
                       className={inputCls}
                     />
                   </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
+                      <label className={labelCls}>Fleet size</label>
                       <Select
-                        label="Fleet size"
                         value={form.fleetSize}
-                        onChange={(val) => setForm(prev => ({ ...prev, fleetSize: val }))}
+                        onChange={v => setForm(p => ({ ...p, fleetSize: v }))}
                         options={FLEET_SIZE_OPTIONS}
                       />
                     </div>
                     <div>
+                      <label className={labelCls}>Your primary role</label>
                       <Select
-                        label="Your role"
                         value={form.role}
-                        onChange={(val) => setForm(prev => ({ ...prev, role: val }))}
+                        onChange={v => setForm(p => ({ ...p, role: v }))}
                         options={ROLE_OPTIONS}
                       />
                     </div>
                   </div>
-                  <button type="submit" className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#4F7CFF] py-3 text-sm font-semibold text-white shadow-lg shadow-[#4F7CFF]/25 hover:bg-[#6E92FF] transition-all cursor-pointer">
-                    Continue <ArrowRight size={15} />
+
+                  <button
+                    type="submit"
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 transition-all cursor-pointer"
+                  >
+                    Continue
+                    <ArrowRight size={15} />
                   </button>
                 </form>
-              ) : (
+              )}
+
+              {/* ── STEP 2: Password & Submit ── */}
+              {step === 2 && (
                 <form onSubmit={handleStep2} className="space-y-4">
                   <div>
-                    <label className={labelCls}>Password</label>
+                    <label className={labelCls}>Create a secure password</label>
                     <input
                       type="password"
                       required
-                      minLength={8}
-                      placeholder="At least 8 characters"
                       value={form.password}
                       onChange={set('password')}
+                      placeholder="At least 8 characters"
                       className={inputCls}
                     />
+                    {/* Strength indicator */}
+                    <div className="mt-2 flex gap-1">
+                      {[8, 12, 16].map((n) => (
+                        <div
+                          key={n}
+                          className={[
+                            'h-1 flex-1 rounded-full transition-all',
+                            form.password.length >= n ? 'bg-[#ED642B]' : 'bg-white/10',
+                          ].join(' ')}
+                        />
+                      ))}
+                    </div>
                   </div>
+
                   <div>
                     <label className={labelCls}>Confirm password</label>
                     <input
                       type="password"
                       required
-                      placeholder="Repeat your password"
                       value={form.confirmPassword}
                       onChange={set('confirmPassword')}
+                      placeholder="Repeat your password"
                       className={inputCls}
                     />
                   </div>
 
-                  {/* Password strength */}
-                  {form.password && (
-                    <div className="space-y-1">
-                      <div className="flex gap-1">
-                        {[8, 12, 16].map(n => (
-                          <div key={n} className={['h-1 flex-1 rounded-full transition-all', form.password.length >= n ? 'bg-[#4F7CFF]' : 'bg-white/[0.08]'].join(' ')} />
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-[#6B7280]">
-                        {form.password.length < 8 ? 'Too short' : form.password.length < 12 ? 'Acceptable' : form.password.length < 16 ? 'Strong' : 'Very strong'}
-                      </p>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-[#6B7280] leading-relaxed">
-                    By registering you agree to our{' '}
-                    <a href="#" className="text-[#4F7CFF] hover:text-[#6E92FF]">Terms of Service</a>
-                    {' '}and{' '}
-                    <a href="#" className="text-[#4F7CFF] hover:text-[#6E92FF]">Privacy Policy</a>.
+                  <p className="text-[11px] text-text-tertiary">
+                    By registering, you agree to Turnaround's{' '}
+                    <a href="#" className="text-[#ED642B] hover:underline">Terms of Service</a> and{' '}
+                    <a href="#" className="text-[#ED642B] hover:underline">Privacy Policy</a>.
                   </p>
 
-                  <div className="flex gap-3 pt-1">
-                    <button type="button" onClick={() => setStep(1)} className="flex-1 rounded-xl border border-white/[0.10] py-3 text-sm font-semibold text-[#9CA3AF] hover:border-white/[0.18] hover:text-[#F4F5F7] transition-all cursor-pointer">
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors cursor-pointer"
+                    >
                       Back
                     </button>
-                    <button type="submit" disabled={submitting} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#4F7CFF] py-3 text-sm font-semibold text-white shadow-lg shadow-[#4F7CFF]/25 hover:bg-[#6E92FF] disabled:opacity-50 transition-all cursor-pointer">
-                      {submitting ? (
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
-                        </svg>
-                      ) : <>Register account <ArrowRight size={15} /></>}
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 disabled:opacity-50 transition-all cursor-pointer"
+                    >
+                      {submitting ? 'Creating account…' : 'Complete Registration'}
+                      <ArrowRight size={15} />
                     </button>
                   </div>
                 </form>
               )}
 
-              <p className="mt-6 text-center text-sm text-[#6B7280]">
-                Already registered?{' '}
-                <Link to="/login" className="font-semibold text-[#4F7CFF] hover:text-[#6E92FF] hover:underline transition-colors">
-                  Sign in
+              <p className="mt-6 text-center text-xs text-text-tertiary">
+                Already have an account?{' '}
+                <Link to="/login" className="font-bold text-[#ED642B] hover:underline transition-colors">
+                  Sign in instead
                 </Link>
               </p>
             </>

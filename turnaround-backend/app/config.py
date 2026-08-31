@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     PORT: int = 8000
     HOST: str = "0.0.0.0"
     LOG_LEVEL: str = "INFO"
+    LOG_REQUESTS: bool = True
+    QUIET_POLLING_LOGS: bool = True
 
     # CORS
     CORS_ORIGINS: List[str] = [
@@ -43,7 +45,7 @@ class Settings(BaseSettings):
 
     # AI / LLM Engine (Groq)
     GROQ_API_KEY: Optional[str] = None
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
     # Engine Configuration
     DEFAULT_EXPECTED_DWELL_MINUTES: float = 120.0
