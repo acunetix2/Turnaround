@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from app.db.models.trip import Trip
     from app.db.models.gps_event import GPSEvent
     from app.db.models.dwell_event import DwellEvent
+    from app.db.models.demurrage_claim import DemurrageClaim
+    from app.db.models.gate_pass import GatePass
 
 
 class VehicleStatus(str, enum.Enum):
@@ -87,3 +89,5 @@ class Vehicle(Base):
     trips: Mapped[List["Trip"]] = relationship("Trip", back_populates="vehicle", cascade="all, delete-orphan")
     gps_events: Mapped[List["GPSEvent"]] = relationship("GPSEvent", back_populates="vehicle", cascade="all, delete-orphan")
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="vehicle", cascade="all, delete-orphan")
+    demurrage_claims: Mapped[List["DemurrageClaim"]] = relationship("DemurrageClaim", back_populates="vehicle")
+    gate_passes: Mapped[List["GatePass"]] = relationship("GatePass", back_populates="vehicle")

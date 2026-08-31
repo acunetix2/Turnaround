@@ -15,6 +15,10 @@ class TripBase(BaseModel):
     actual_departure: Optional[datetime] = None
     actual_arrival: Optional[datetime] = None
     status: TripStatus = Field(TripStatus.PLANNED, description="Current trip status")
+    corridor_name: Optional[str] = Field(None, description="Trade corridor name e.g. Northern Corridor")
+    customs_seal_number: Optional[str] = Field(None, description="KRA/customs seal number")
+    container_number: Optional[str] = Field(None, description="ISO container number")
+    cargo_description: Optional[str] = Field(None, description="Free-text cargo description")
 
 
 class TripCreate(TripBase):
@@ -30,6 +34,10 @@ class TripUpdate(BaseModel):
     actual_departure: Optional[datetime] = None
     actual_arrival: Optional[datetime] = None
     status: Optional[TripStatus] = None
+    corridor_name: Optional[str] = None
+    customs_seal_number: Optional[str] = None
+    container_number: Optional[str] = None
+    cargo_description: Optional[str] = None
 
 
 class TripResponse(TripBase):

@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.db.models.trip import Trip
     from app.db.models.dwell_event import DwellEvent
     from app.db.models.insight import Insight
+    from app.db.models.demurrage_claim import DemurrageClaim
 
 
 class LocationType(str, enum.Enum):
@@ -47,3 +48,4 @@ class Location(Base):
     destination_trips: Mapped[List["Trip"]] = relationship("Trip", foreign_keys="Trip.destination_id", back_populates="destination")
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="location")
     insights: Mapped[List["Insight"]] = relationship("Insight", back_populates="location")
+    demurrage_claims: Mapped[List["DemurrageClaim"]] = relationship("DemurrageClaim", back_populates="location")

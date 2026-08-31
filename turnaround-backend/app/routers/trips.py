@@ -86,3 +86,53 @@ async def create_trip(
     await db.commit()
     await db.refresh(trip)
     return trip
+
+
+@router.patch("/{trip_id}", response_model=TripResponse, summary="Update a trip")
+async def update_trip(
+    trip_id: str,
+    payload: TripUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(WRITE_ROLES),
+):
+    q = (
+        select(Trip)
+        .join(Vehicle, Trip.vehicle_id == Vehicle.id)
+        .where(Trip.id == trip_id, Vehicle.company_id == company_id)
+        .options(selectinload(Trip.origin), selectinload(Trip.destination))
+    )
+    result = await db.execute(q)
+    trip = result.scalar_one_or_none()
+    if not trip:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Trip not found"}})
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(trip, key, value)
+
+    await db.commit()
+    await db.refresh(trip)
+    return trip
+
+
+@router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a trip")
+async def delete_trip(
+    trip_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(WRITE_ROLES),
+):
+    q = (
+        select(Trip)
+        .join(Vehicle, Trip.vehicle_id == Vehicle.id)
+        .where(Trip.id == trip_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    trip = result.scalar_one_or_none()
+    if not trip:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Trip not found"}})
+
+    await db.delete(trip)
+    await db.commit()
+

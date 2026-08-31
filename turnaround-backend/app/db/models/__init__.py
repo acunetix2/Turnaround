@@ -11,8 +11,11 @@ from app.db.models.trip import Trip
 from app.db.models.gps_event import GPSEvent
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.insight import Insight
+from app.db.models.demurrage_claim import DemurrageClaim
+from app.db.models.gate_pass import GatePass
 
 __all__ = [
     "Company", "User", "Vehicle", "Location",
     "Trip", "GPSEvent", "DwellEvent", "Insight",
+    "DemurrageClaim", "GatePass",
 ]

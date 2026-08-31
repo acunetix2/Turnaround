@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.db.models.vehicle import Vehicle
     from app.db.models.location import Location
     from app.db.models.dwell_event import DwellEvent
+    from app.db.models.gate_pass import GatePass
 
 
 class TripStatus(str, enum.Enum):
@@ -36,6 +37,11 @@ class Trip(Base):
         default=TripStatus.PLANNED,
         nullable=False
     )
+    # Corridor / cargo metadata
+    corridor_name: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    customs_seal_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    container_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    cargo_description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationships
@@ -43,3 +49,4 @@ class Trip(Base):
     origin: Mapped["Location"] = relationship("Location", foreign_keys=[origin_id], back_populates="origin_trips")
     destination: Mapped["Location"] = relationship("Location", foreign_keys=[destination_id], back_populates="destination_trips")
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="trip")
+    gate_passes: Mapped[List["GatePass"]] = relationship("GatePass", back_populates="trip")

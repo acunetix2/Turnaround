@@ -65,7 +65,7 @@ export const Demurrage: React.FC = () => {
   const [selectedClaimForNotice, setSelectedClaimForNotice] = useState<DemurrageClaim | null>(null);
 
   // Queries
-  const { data: claimsData, isLoading: loadingClaims } = useQuery({
+  const { data: claimsData, isLoading: loadingClaims, isError: claimsError } = useQuery({
     queryKey: ['demurrageClaims'],
     queryFn: () => apiClient.getDemurrageClaims(),
     refetchInterval: 20000,
@@ -116,9 +116,44 @@ export const Demurrage: React.FC = () => {
   const totalDisputedCount = claims.filter(c => c.status === 'disputed').length;
   const totalInvoicedCount = claims.filter(c => c.status === 'invoiced').length;
   const totalFlaggedCount = claims.filter(c => c.status === 'flagged').length;
+  const totalSettledCount = claims.filter(c => c.status === 'settled').length;
   const recoveryRate = totalClaimedKES > 0
     ? ((totalSettledKES / totalClaimedKES) * 100).toFixed(1)
     : '0.0';
+
+  // Derive real sparkline data from claims sorted by date (up to 8 buckets)
+  const claimedSparkline = useMemo(() => {
+    if (claims.length === 0) return [{ value: 0 }];
+    const sorted = [...claims].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const buckets = sorted.slice(-8).map(c => ({ value: c.claimed_amount_kes }));
+    return buckets.length > 0 ? buckets : [{ value: 0 }];
+  }, [claims]);
+
+  const settledSparkline = useMemo(() => {
+    if (claims.length === 0) return [{ value: 0 }];
+    const sorted = [...claims]
+      .filter(c => c.status === 'settled')
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const buckets = sorted.slice(-8).map(c => ({ value: c.settled_amount_kes || 0 }));
+    return buckets.length > 0 ? buckets : [{ value: 0 }, { value: 0 }];
+  }, [claims]);
+
+  const invoicedSparkline = useMemo(() => {
+    const perStatus = ['flagged', 'invoiced', 'disputed', 'settled', 'written_off'].map(
+      (s) => ({ value: claims.filter(c => c.status === s).length })
+    );
+    return perStatus;
+  }, [claims]);
+
+  const disputedSparkline = useMemo(() => {
+    if (claims.length === 0) return [{ value: 0 }];
+    const sorted = [...claims]
+      .filter(c => c.status === 'disputed')
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return sorted.length > 0
+      ? sorted.slice(-6).map((_, i, arr) => ({ value: i === arr.length - 1 ? totalDisputedCount : i }))
+      : [{ value: 0 }, { value: 0 }];
+  }, [claims, totalDisputedCount]);
 
   const getStatusBadge = (status: ClaimStatus) => {
     switch (status) {
@@ -175,6 +210,12 @@ export const Demurrage: React.FC = () => {
       </div>
 
       {/* ── KPI METRICS STRIP ── */}
+      {claimsError ? (
+        <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-xs text-red-400">
+          <AlertTriangle size={14} />
+          <span>Could not load demurrage claims from the server. Check backend connectivity.</span>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard isLoading={loadingClaims}>
           <MetricCardHeader href="/demurrage">
@@ -186,7 +227,7 @@ export const Demurrage: React.FC = () => {
             <MetricCardValue className="text-[#ED642B]">{formatCurrency(totalClaimedKES)}</MetricCardValue>
             <MetricCardDifferential variant="negative">{claims.length} Claims Total</MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 25000 }, { value: 45000 }, { value: 68000 }, { value: totalClaimedKES }]} color="#ED642B" />
+          <MetricCardSparkline data={claimedSparkline} color="#ED642B" />
         </MetricCard>
 
         <MetricCard isLoading={loadingClaims}>
@@ -199,7 +240,7 @@ export const Demurrage: React.FC = () => {
             <MetricCardValue className="text-status-good">{formatCurrency(totalSettledKES)}</MetricCardValue>
             <MetricCardDifferential variant="positive">{recoveryRate}% Recovery Rate</MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 0 }, { value: 5000 }, { value: 10500 }, { value: totalSettledKES }]} color="#10B981" />
+          <MetricCardSparkline data={settledSparkline} color="#10B981" />
         </MetricCard>
 
         <MetricCard isLoading={loadingClaims}>
@@ -210,9 +251,9 @@ export const Demurrage: React.FC = () => {
           </MetricCardHeader>
           <MetricCardContent>
             <MetricCardValue>{totalInvoicedCount + totalFlaggedCount}</MetricCardValue>
-            <MetricCardDifferential variant="positive">{totalInvoicedCount} Invoiced</MetricCardDifferential>
+            <MetricCardDifferential variant="positive">{totalInvoicedCount} Invoiced · {totalSettledCount} Settled</MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 1 }, { value: 3 }, { value: 2 }, { value: totalInvoicedCount + totalFlaggedCount }]} color="#250C77" />
+          <MetricCardSparkline data={invoicedSparkline} color="#250C77" />
         </MetricCard>
 
         <MetricCard isLoading={loadingClaims}>
@@ -226,12 +267,13 @@ export const Demurrage: React.FC = () => {
               {totalDisputedCount}
             </MetricCardValue>
             <MetricCardDifferential variant={totalDisputedCount > 0 ? 'negative' : 'positive'}>
-              {totalDisputedCount > 0 ? 'Action Required' : '0 Disputes'}
+              {totalDisputedCount > 0 ? 'Action Required' : 'No Active Disputes'}
             </MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 0 }, { value: 1 }, { value: totalDisputedCount }]} color="#EF4444" />
+          <MetricCardSparkline data={disputedSparkline} color="#EF4444" />
         </MetricCard>
       </div>
+      )}
 
       {/* ── FILTER & SEARCH BAR ── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-default">

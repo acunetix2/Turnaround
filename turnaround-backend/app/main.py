@@ -11,11 +11,13 @@ from app.db.session import engine
 from app.db.base import Base
 # Import all models so SQLAlchemy registers them against Base metadata
 from app.db.models import (  # noqa: F401
-    Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight
+    Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight,
+    DemurrageClaim, GatePass
 )
 from app.routers import (
     health, vehicles, locations, trips,
-    gps_events, dwell_events, analytics, insights, predictions, ai
+    gps_events, dwell_events, analytics, insights, predictions, ai,
+    demurrage, gate_passes
 )
 
 # ── Structured Logging ──────────────────────────────────────────────────────
@@ -141,6 +143,8 @@ app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(predictions.router, prefix=API_PREFIX)
 app.include_router(ai.router, prefix=API_PREFIX)
+app.include_router(demurrage.router, prefix=API_PREFIX)
+app.include_router(gate_passes.router, prefix=API_PREFIX)
 
 
 @app.get("/", tags=["Root"], summary="API root redirect")
