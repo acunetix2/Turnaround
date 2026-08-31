@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import QRCode from 'react-qr-code';
-import { ArrowLeft, Printer, Share2, ShieldCheck } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { ArrowLeft, Image, Share2, ShieldCheck, Download } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import type { GatePassData } from '../../lib/api/types';
@@ -53,10 +54,11 @@ function fmtShort(d: string) {
 /* ─────────────────────────────────────────────────────────────── */
 
 export const GatePassPage: React.FC = () => {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const { toast } = useToast();
-  const cardRef   = useRef<HTMLDivElement>(null);
+  const navigate     = useNavigate();
+  const location     = useLocation();
+  const { toast }    = useToast();
+  const cardRef      = useRef<HTMLDivElement>(null);
+  const [capturing, setCapturing] = useState(false);
 
   // Pass data is carried via router state (navigate('/gate-pass', { state: { pass } }))
   const pass: GatePassData | null = (location.state as any)?.pass ?? null;
@@ -87,58 +89,81 @@ export const GatePassPage: React.FC = () => {
     `STATUS:${pass.status.toUpperCase()}`,
   ].filter(Boolean).join(' | ');
 
-  /* Print — inject a temporary <style> that hides everything except the card */
-  const handlePrint = () => {
+  /** Capture the card as a PNG and trigger download */
+  const captureImage = async (): Promise<HTMLCanvasElement | null> => {
     const card = cardRef.current;
-    if (!card) return;
-
-    const html = card.outerHTML;
-    const win  = window.open('', '_blank', 'width=600,height=900');
-    if (!win) {
-      toast({ variant: 'error', title: 'Popup blocked', message: 'Allow popups for this site to print.' });
-      return;
+    if (!card) return null;
+    setCapturing(true);
+    try {
+      const canvas = await html2canvas(card, {
+        scale: 3,           // 3× for crisp high-res output
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        removeContainer: true,
+      });
+      return canvas;
+    } catch (err) {
+      console.error('html2canvas error', err);
+      toast({ variant: 'error', title: 'Capture failed', message: 'Could not render the gate pass image.' });
+      return null;
+    } finally {
+      setCapturing(false);
     }
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8"/>
-          <title>Gate Pass ${pass.pass_number}</title>
-          <link rel="stylesheet" href="${window.location.origin}/index.css"/>
-          <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { background: #fff; display: flex; align-items: flex-start; justify-content: center; padding: 24px; font-family: 'Geist','Inter',sans-serif; }
-            .gp-card { width: 420px; border-radius: 16px; overflow: hidden; border: 1px solid #e5e7eb; }
-            @page { margin: 0.5cm; size: A5 portrait; }
-            @media print { body { padding: 0; } .gp-card { width: 100%; border: none; } }
-          </style>
-        </head>
-        <body>${html}</body>
-      </html>
-    `);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 400);
-    toast({ variant: 'success', title: 'Printing', message: pass.pass_number });
   };
 
+  /** Download as PNG */
+  const handleDownloadImage = async () => {
+    const canvas = await captureImage();
+    if (!canvas) return;
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `gate-pass-${pass.pass_number}.png`;
+    a.click();
+    toast({ variant: 'success', title: 'Saved', message: `gate-pass-${pass.pass_number}.png` });
+  };
+
+  /** Share or copy the image */
   const handleShare = async () => {
+    // Try image share first (mobile)
+    if (navigator.share && navigator.canShare) {
+      const canvas = await captureImage();
+      if (canvas) {
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          const file = new File([blob], `gate-pass-${pass.pass_number}.png`, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file], title: `Gate Pass ${pass.pass_number}` });
+              return;
+            } catch { /* fall through */ }
+          }
+          // Fallback: share text
+          shareText();
+        }, 'image/png');
+        return;
+      }
+    }
+    shareText();
+  };
+
+  const shareText = async () => {
     const text =
       `GATE PASS — ${pass.pass_number}\n` +
       `Vehicle : ${pass.vehicle_reg}\n` +
       `Driver  : ${pass.driver_name}${pass.driver_phone ? ' · ' + pass.driver_phone : ''}\n` +
       `Terminal: ${pass.terminal_name}${pass.terminal_gate ? ' · Gate ' + pass.terminal_gate : ''}\n` +
       `Valid   : ${fmtFull(pass.time_window_start)} → ${fmtFull(pass.time_window_end)}\n` +
-      `Status  : ${sc.label}`;
+      `Status  : ${(STATUS_CFG[(pass.status as PassStatus)] ?? STATUS_CFG.pre_approved).label}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: `Gate Pass ${pass.pass_number}`, text });
       } else {
         await navigator.clipboard.writeText(text);
-        toast({ variant: 'success', title: 'Copied to clipboard', message: 'Paste to share the pass details' });
+        toast({ variant: 'success', title: 'Copied', message: 'Pass details copied to clipboard' });
       }
     } catch {
-      toast({ variant: 'info', title: 'Share', message: 'Use Print → Save as PDF to share' });
+      toast({ variant: 'info', title: 'Share', message: 'Download the image and share it directly.' });
     }
   };
 
@@ -154,11 +179,11 @@ export const GatePassPage: React.FC = () => {
           <ArrowLeft size={14} /> Back to Trips
         </button>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="small" icon={<Share2 size={13} />} onClick={handleShare}>
+          <Button variant="outline" size="small" icon={<Share2 size={13} />} onClick={handleShare} loading={capturing}>
             Share
           </Button>
-          <Button variant="primary" size="small" icon={<Printer size={13} />} onClick={handlePrint}>
-            Print / Save PDF
+          <Button variant="primary" size="small" icon={<Download size={13} />} onClick={handleDownloadImage} loading={capturing}>
+            Save as Image
           </Button>
         </div>
       </div>
