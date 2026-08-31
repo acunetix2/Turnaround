@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     LOG_REQUESTS: bool = True
     QUIET_POLLING_LOGS: bool = True
 
+    # Database Connection Settings
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 3600
+    DB_CONNECT_TIMEOUT: int = 30
+    DB_COMMAND_TIMEOUT: int = 30
+
     # CORS
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",

@@ -1,20 +1,41 @@
-import React, { useState } from 'react';
-import { QRCodeDisplay } from '../../components/common/QRCodeDisplay';
-import {
-  Ticket, CheckCircle2, ShieldCheck, Printer, Download,
-  Share2, X, Clock, MapPin, Lock, QrCode
-} from 'lucide-react';
+import React from 'react';
+import QRCode from 'react-qr-code';
+import { X, Printer, Share2, ShieldCheck } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem
-} from '../../components/ui/Select';
 import type { GatePassData } from '../../lib/api/types';
 export type { GatePassData };
+
+/* ── Declared outside the component so React never treats it as a
+      "component created during render"                             ── */
+const PassField = ({
+  label,
+  value,
+  mono = false,
+  wide = false,
+}: {
+  label: string;
+  value?: string | null;
+  mono?: boolean;
+  wide?: boolean;
+}) => (
+  <div className={`flex flex-col gap-0.5 ${wide ? 'col-span-2' : ''}`}>
+    <span className="text-[9px] uppercase tracking-widest font-semibold text-gray-400">
+      {label}
+    </span>
+    <span
+      className={[
+        'text-sm font-semibold leading-tight',
+        mono ? 'font-mono' : '',
+        !value ? 'text-gray-300 italic' : 'text-gray-900',
+      ].join(' ')}
+    >
+      {value || '—'}
+    </span>
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────────────── */
 
 interface GatePassModalProps {
   pass: GatePassData;
@@ -23,229 +44,255 @@ interface GatePassModalProps {
 
 export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) => {
   const { toast } = useToast();
-  const [clearedStatus, setClearedStatus] = useState(pass.status);
-  const [selectedGate, setSelectedGate] = useState(pass.terminal_gate || 'Express Fast-Track Lane 02');
-  const [isScanning, setIsScanning] = useState(false);
 
-  const qrPayload = JSON.stringify({
-    pass: pass.pass_number,
-    reg: pass.vehicle_reg,
-    driver: pass.driver_name,
-    seal: pass.customs_seal_number,
-    cont: pass.container_number,
-    term: pass.terminal_name,
-    exp: pass.time_window_end,
-    sig: pass.digital_signature || 'TURNAROUND-SEC-PASS-9988'
-  });
+  /* Date helpers */
+  const fmtFull = (d: string) =>
+    new Date(d).toLocaleString('en-KE', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    });
 
-  const handleSimulateGateScan = () => {
-    setIsScanning(true);
-    setTimeout(() => {
-      setIsScanning(false);
-      setClearedStatus('cleared');
-      toast({
-        variant: 'success',
-        title: 'Terminal Gate-In Verified',
-        message: `Asset ${pass.vehicle_reg} scanned at ${pass.terminal_name}. Express gate barrier raised.`
-      });
-    }, 1200);
+  const fmtShort = (d: string) =>
+    new Date(d).toLocaleString('en-KE', {
+      day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+
+  /* QR value – everything a gatehouse officer needs to verify */
+  const qrValue = [
+    `PASS:${pass.pass_number}`,
+    `VEH:${pass.vehicle_reg}`,
+    `DRV:${pass.driver_name}`,
+    `TERM:${pass.terminal_name}`,
+    pass.terminal_gate        ? `GATE:${pass.terminal_gate}`         : '',
+    pass.container_number     ? `CONT:${pass.container_number}`      : '',
+    pass.customs_seal_number  ? `SEAL:${pass.customs_seal_number}`   : '',
+    `FROM:${fmtFull(pass.time_window_start)}`,
+    `TO:${fmtFull(pass.time_window_end)}`,
+    `STATUS:${pass.status.toUpperCase()}`,
+  ].filter(Boolean).join(' | ');
+
+  /* Status badge config */
+  type PassStatus = 'cleared' | 'inspected' | 'expired' | 'pre_approved';
+  const SC: Record<PassStatus, { label: string; bar: string; badge: string; text: string }> = {
+    cleared:      { label: 'CLEARED',      bar: 'from-emerald-600 to-emerald-500', badge: 'bg-emerald-50 border-emerald-300 text-emerald-700', text: 'text-emerald-700' },
+    inspected:    { label: 'INSPECTED',    bar: 'from-blue-600 to-blue-500',       badge: 'bg-blue-50 border-blue-300 text-blue-700',           text: 'text-blue-700'    },
+    expired:      { label: 'EXPIRED',      bar: 'from-red-600 to-red-500',         badge: 'bg-red-50 border-red-300 text-red-700',              text: 'text-red-600'     },
+    pre_approved: { label: 'PRE-APPROVED', bar: 'from-amber-500 to-amber-400',     badge: 'bg-amber-50 border-amber-300 text-amber-700',        text: 'text-amber-700'   },
   };
+  const sc = SC[(pass.status as PassStatus)] ?? SC.pre_approved;
 
+  /* Handlers */
   const handlePrint = () => {
     window.print();
+    toast({ variant: 'success', title: 'Printing', message: pass.pass_number });
   };
 
-  const handleDownload = () => {
-    toast({
-      variant: 'success',
-      title: 'Pass Exported',
-      message: `Digital pass ${pass.pass_number} saved for offline driver presentation.`
-    });
-  };
-
-  const handleShare = () => {
-    navigator.clipboard?.writeText(
-      `Turnaround Express Gate Pass: ${pass.pass_number} for ${pass.vehicle_reg} at ${pass.terminal_name}. Valid until ${new Date(pass.time_window_end).toLocaleTimeString()}`
-    );
-    toast({
-      variant: 'success',
-      title: 'Pass Link Copied',
-      message: 'Dispatch instructions and pass link copied to clipboard for WhatsApp/SMS.'
-    });
+  const handleShare = async () => {
+    const text =
+      `GATE PASS — ${pass.pass_number}\n` +
+      `Vehicle : ${pass.vehicle_reg}\n` +
+      `Driver  : ${pass.driver_name}${pass.driver_phone ? ' · ' + pass.driver_phone : ''}\n` +
+      `Terminal: ${pass.terminal_name}${pass.terminal_gate ? ' · Gate ' + pass.terminal_gate : ''}\n` +
+      `Valid   : ${fmtFull(pass.time_window_start)} → ${fmtFull(pass.time_window_end)}\n` +
+      `Status  : ${sc.label}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `Gate Pass ${pass.pass_number}`, text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        toast({ variant: 'success', title: 'Copied', message: 'Pass details copied to clipboard' });
+      }
+    } catch {
+      toast({ variant: 'info', title: 'Share', message: 'Use Print → Save as PDF to share' });
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-bg-surface border border-border-default rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
-        {/* Modal Header */}
-        <div className="p-4 px-6 border-b border-border-default flex items-center justify-between bg-bg-surface-raised/50">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-[#250C77] text-white flex items-center justify-center shadow">
-              <Ticket size={16} className="text-[#ED642B]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-text-primary">Digital Express Terminal Gate Pass</h3>
-              <p className="text-[10.5px] text-text-tertiary">Cryptographically verified contactless entry permit</p>
-            </div>
-          </div>
+    <>
+      {/* Print media — only the card is shown */}
+      <style>{`
+        @media print {
+          body > *:not(#gp-root) { display: none !important; }
+          #gp-root {
+            position: fixed; inset: 0; background: #fff;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .no-print { display: none !important; }
+          #gp-card { box-shadow: none !important; }
+        }
+      `}</style>
+
+      <div
+        id="gp-root"
+        className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      >
+        {/* ── Toolbar (hidden on print) ── */}
+        <div className="no-print absolute top-4 right-4 flex items-center gap-2 z-10">
+          <Button variant="outline" size="small" icon={<Share2 size={13} />} onClick={handleShare}>
+            Share
+          </Button>
+          <Button variant="primary" size="small" icon={<Printer size={13} />} onClick={handlePrint}>
+            Print / PDF
+          </Button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
+            aria-label="Close"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
           >
-            <X size={16} />
+            <X size={16} className="text-white" />
           </button>
         </div>
 
-        {/* ── PASS TICKET BODY ── */}
-        <div className="p-6 space-y-5">
-          {/* Main Visual Boarding Pass Container */}
-          <div className="relative rounded-2xl border-2 border-[#250C77]/30 bg-gradient-to-b from-bg-surface-raised/80 to-bg-surface p-5 shadow-lg overflow-hidden">
-            {/* Top Pass Ribbon */}
-            <div className="flex items-center justify-between border-b border-border-default pb-3">
-              <div>
-                <span className="text-[9.5px] font-extrabold uppercase tracking-widest text-[#ED642B] block">
-                  EAST AFRICAN CORRIDOR EXPRESS PASS
-                </span>
-                <span className="font-mono text-sm font-extrabold text-text-primary">
-                  {pass.pass_number}
-                </span>
-              </div>
+        {/* ═══════════════ DIGITAL GATE PASS CARD ═══════════════ */}
+        <div
+          id="gp-card"
+          className="bg-white w-full max-w-[400px] rounded-2xl shadow-2xl overflow-hidden select-text"
+          style={{ fontFamily: "'Geist','Inter',sans-serif" }}
+        >
+          {/* Gradient top bar */}
+          <div className={`h-2 w-full bg-gradient-to-r ${sc.bar}`} />
 
-              <div>
-                {clearedStatus === 'cleared' ? (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-status-good/15 text-status-good border border-status-good/40">
-                    <CheckCircle2 size={12} /> EXPRESS CLEARED
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#ED642B]/15 text-[#ED642B] border border-[#ED642B]/40">
-                    <Clock size={12} /> PRE-APPROVED ENTRY
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* QR Code & Primary Info Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-4 items-center">
-              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white/90 border border-border-default shadow-sm">
-                <QRCodeDisplay
-                  value={qrPayload}
-                  size={140}
-                  fgColor="#250C77"
-                  bgColor="#FFFFFF"
-                />
-                <span className="text-[9px] font-mono font-bold text-gray-500 mt-1.5 uppercase">
-                  Scan at Gate Terminal
-                </span>
-              </div>
-
-              <div className="sm:col-span-2 space-y-2.5 text-xs">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-text-tertiary block">Designated Facility</span>
-                  <p className="font-extrabold text-text-primary text-sm flex items-center gap-1.5 mb-1.5">
-                    <MapPin size={13} className="text-[#ED642B]" /> {pass.terminal_name}
-                  </p>
-                  <div className="w-full">
-                    <Select
-                      value={selectedGate}
-                      onValueChange={(val) => setSelectedGate(val)}
-                    >
-                      <SelectTrigger className="w-full h-8 text-[11px] font-semibold bg-bg-surface border-border-default">
-                        <SelectValue placeholder="Select Clearance Lane" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Express Fast-Track Lane 01">Express Fast-Track Lane 01</SelectItem>
-                        <SelectItem value="Express Fast-Track Lane 02">Express Fast-Track Lane 02</SelectItem>
-                        <SelectItem value="Customs High-Speed Scanner Bay 03">Customs Scanner Bay 03</SelectItem>
-                        <SelectItem value="Reefer & Cold-Chain Priority Bay">Reefer Priority Bay</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border-default/60">
-                  <div>
-                    <span className="text-[9.5px] uppercase font-bold text-text-tertiary block">Vehicle Unit</span>
-                    <span className="font-mono font-bold text-text-primary text-xs">{pass.vehicle_reg}</span>
-                    <span className="text-[9.5px] text-text-tertiary block">{pass.vehicle_type || 'Commercial Truck'}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[9.5px] uppercase font-bold text-text-tertiary block">Driver In Charge</span>
-                    <span className="font-bold text-text-primary text-xs">{pass.driver_name}</span>
-                    <span className="text-[9.5px] font-mono text-text-tertiary block">{pass.driver_phone || 'N/A'}</span>
-                  </div>
-                </div>
-
-                {pass.customs_seal_number && (
-                  <div className="p-2 rounded-lg bg-[#250C77]/5 border border-[#250C77]/20 flex items-center justify-between text-[10.5px]">
-                    <span className="font-bold text-[#250C77] flex items-center gap-1">
-                      <Lock size={11} /> Customs Seal:
-                    </span>
-                    <span className="font-mono font-extrabold text-text-primary">{pass.customs_seal_number}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Time Slot Banner */}
-            <div className="p-3 rounded-xl bg-bg-surface border border-border-default text-xs flex items-center justify-between">
-              <div>
-                <span className="text-[9.5px] font-bold uppercase text-text-tertiary block">Authorized Clearance Window</span>
-                <span className="font-numeric font-bold text-text-primary">
-                  {new Date(pass.time_window_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(pass.time_window_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[9.5px] font-bold uppercase text-text-tertiary block">Target Turnaround</span>
-                <span className="font-numeric font-extrabold text-status-good">45 Min SLA</span>
-              </div>
-            </div>
-
-            {/* Verification Hash Footer */}
-            <div className="mt-3 pt-2.5 border-t border-dashed border-border-default flex items-center justify-between text-[9.5px] text-text-tertiary font-mono">
-              <span>Carrier: {pass.carrier_name || 'Siginon Global Logistics'}</span>
-              <span className="flex items-center gap-1 text-status-good font-bold">
-                <ShieldCheck size={11} /> Tamper-Proof Cryptographic ID
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Simulation Scanner Button */}
-          <div className="p-3.5 rounded-xl bg-[#250C77]/5 border border-[#250C77]/20 flex items-center justify-between">
+          {/* ── Card header ── */}
+          <div
+            className="px-6 pt-5 pb-4 flex items-start justify-between"
+            style={{ background: 'linear-gradient(135deg,#250C77 0%,#1a0a5a 100%)' }}
+          >
             <div>
-              <p className="text-xs font-bold text-text-primary">Simulate Terminal Barrier Scanner</p>
-              <p className="text-[10.5px] text-text-tertiary">Test gate OCR & QR scanner integration in real time.</p>
+              <p className="text-[10px] font-bold tracking-[0.2em] text-orange-400 uppercase mb-1">
+                Turnaround Africa
+              </p>
+              <h1 className="text-[22px] font-black text-white tracking-tight leading-none">
+                GATE PASS
+              </h1>
+              <p className="font-mono text-[11px] text-orange-300 font-semibold mt-1.5 tracking-wider">
+                {pass.pass_number}
+              </p>
             </div>
-            <Button
-              variant="primary"
-              size="small"
-              loading={isScanning}
-              icon={<QrCode size={13} />}
-              onClick={handleSimulateGateScan}
+            <span
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full border ${sc.badge} mt-1`}
             >
-              {clearedStatus === 'cleared' ? 'Re-scan Pass' : 'Scan at Gate'}
-            </Button>
+              <ShieldCheck size={11} />
+              {sc.label}
+            </span>
           </div>
-        </div>
 
-        {/* Modal Footer Actions */}
-        <div className="p-4 px-6 border-t border-border-default bg-bg-surface-raised/50 flex items-center justify-between gap-2">
-          <Button variant="ghost" size="small" onClick={onClose}>
-            Close
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="small" icon={<Share2 size={13} />} onClick={handleShare}>
-              Share Link
-            </Button>
-            <Button variant="outline" size="small" icon={<Printer size={13} />} onClick={handlePrint}>
-              Print Pass
-            </Button>
-            <Button variant="primary" size="small" icon={<Download size={13} />} onClick={handleDownload}>
-              Download Pass
-            </Button>
+          {/* ── Body ── */}
+          <div className="px-6 py-5 space-y-4">
+
+            {/* QR  +  vehicle / driver */}
+            <div className="flex gap-5">
+
+              {/* QR code — generated entirely in the browser, no backend needed */}
+              <div className="shrink-0 flex flex-col items-center gap-1.5">
+                <div className="w-[96px] h-[96px] p-2 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center">
+                  <QRCode
+                    value={qrValue}
+                    size={76}
+                    bgColor="#ffffff"
+                    fgColor="#250C77"
+                    level="M"
+                  />
+                </div>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 text-center">
+                  Scan at Gate
+                </p>
+              </div>
+
+              {/* Key fields */}
+              <div className="flex-1 min-w-0 space-y-3">
+                <PassField label="Vehicle Reg." value={pass.vehicle_reg} mono />
+                <PassField label="Vehicle Type"  value={pass.vehicle_type || 'Commercial Truck'} />
+                <PassField label="Driver"        value={pass.driver_name} />
+                {pass.driver_phone && (
+                  <PassField label="Contact" value={pass.driver_phone} mono />
+                )}
+              </div>
+            </div>
+
+            {/* Dashed divider */}
+            <div className="border-t border-dashed border-gray-200" />
+
+            {/* Details grid */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <PassField label="Terminal"        value={pass.terminal_name} />
+              <PassField label="Gate"            value={pass.terminal_gate} />
+              <PassField label="Carrier"         value={pass.carrier_name} />
+              <PassField label="Driver Licence"  value={pass.driver_license} mono />
+              {pass.container_number    && <PassField label="Container No." value={pass.container_number}    mono />}
+              {pass.customs_seal_number && <PassField label="Seal Number"   value={pass.customs_seal_number} mono />}
+              {pass.cargo_type          && <PassField label="Cargo Type"    value={pass.cargo_type} />}
+              {pass.cargo_weight_tonnes != null && (
+                <PassField label="Cargo Weight" value={`${pass.cargo_weight_tonnes} t`} />
+              )}
+            </div>
+
+            {/* Validity window */}
+            <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-purple-400 mb-1">
+                  Valid From
+                </p>
+                <p className="font-mono text-[11px] font-bold text-purple-900">
+                  {fmtShort(pass.time_window_start)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-purple-400 mb-1">
+                  Valid Until
+                </p>
+                <p className="font-mono text-[11px] font-bold text-purple-900">
+                  {fmtShort(pass.time_window_end)}
+                </p>
+              </div>
+            </div>
+
+            {/* Signature boxes — mirrors the physical Yusen-style layout */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border border-gray-200 rounded-xl p-3 min-h-[64px] flex flex-col justify-between">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 leading-tight">
+                  Authorising Signature &amp; Date
+                </p>
+                {pass.digital_signature ? (
+                  <p className="font-mono text-[9px] text-gray-500 break-all mt-1">
+                    {pass.digital_signature.slice(-16)}
+                  </p>
+                ) : (
+                  <p className="text-[9px] text-gray-300 italic mt-1">System generated</p>
+                )}
+                {pass.created_at && (
+                  <p className="text-[9px] text-gray-400 font-mono mt-1">
+                    {new Date(pass.created_at).toLocaleDateString('en-KE', {
+                      day: '2-digit', month: 'short', year: 'numeric',
+                    })}
+                  </p>
+                )}
+              </div>
+              <div className="border border-dashed border-gray-200 rounded-xl p-3 min-h-[64px] flex flex-col justify-between">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 leading-tight">
+                  Gatehouse Release<br />Stamp &amp; Signature
+                </p>
+                <p className="text-[9px] text-gray-300 italic mt-1">
+                  To be completed by security at departure
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Footer ── */}
+          <div
+            className="px-6 py-2.5 flex items-center justify-between"
+            style={{ background: 'linear-gradient(90deg,#0B0524 0%,#250C77 100%)' }}
+          >
+            <p className="text-[9px] text-purple-300">
+              Present with valid ID · turnaround.africa
+            </p>
+            <p className="font-mono text-[9px] text-orange-400 font-bold">
+              #{pass.pass_number}
+            </p>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };

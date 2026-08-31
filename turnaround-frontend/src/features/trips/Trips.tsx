@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api/client';
 import { formatDateTime } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
+import { queryKeys } from '../../lib/query-keys';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
@@ -67,35 +68,88 @@ export const Trips: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'journeys' | 'table'>('journeys');
   const [selectedPassData, setSelectedPassData] = useState<GatePassData | null>(null);
+  // Track which specific trip is generating a pass (null = none)
+  const [generatingPassForTrip, setGeneratingPassForTrip] = useState<string | null>(null);
 
-  const openGatePass = (trip: Trip) => {
-    const passNumber = `GP-${(trip.destination_name || 'TERM').substring(0, 3).toUpperCase()}-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const passObj: GatePassData = {
-      pass_number: passNumber,
-      vehicle_reg: trip.vehicle_reg || 'FLEET-UNIT',
-      vehicle_type: trip.vehicle_type || 'Commercial Semi-Trailer',
-      driver_name: trip.driver_name || 'Fleet Operator',
-      driver_phone: trip.driver_phone,
-      container_number: trip.container_number,
-      customs_seal_number: trip.customs_seal_number,
-      cargo_type: trip.cargo_type,
-      cargo_weight_tonnes: trip.cargo_weight_tonnes,
-      terminal_name: trip.destination_name || 'Inland Container Depot',
-      terminal_gate: 'Express Commercial Gate 02',
-      time_window_start: trip.planned_departure || new Date().toISOString(),
-      time_window_end: trip.planned_arrival || new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-      status: trip.status === 'completed' ? 'cleared' : 'pre_approved',
-      carrier_name: 'Siginon Global Logistics',
-      digital_signature: `SIG-EAC-${Math.random().toString(36).substr(2, 8).toUpperCase()}`
-    };
-    setSelectedPassData(passObj);
+  // Generate gate pass via backend API
+  const generateGatePass = async (trip: Trip) => {
+    if (!trip.vehicle_id || !trip.destination_id) {
+      toast({
+        variant: 'error',
+        title: 'Cannot Generate Pass',
+        message: 'Trip must have a vehicle and destination assigned.'
+      });
+      return;
+    }
+
+    setGeneratingPassForTrip(trip.id);
+
+    try {
+      // Resolve vehicle_reg: prefer trip join, fall back to vehicles cache
+      const vehicle = (vehiclesData?.items ?? vehiclesData ?? []).find(
+        (v: any) => v.id === trip.vehicle_id
+      );
+      const resolvedReg = trip.vehicle_reg || vehicle?.registration_number || '';
+
+      if (!resolvedReg) {
+        toast({ variant: 'error', title: 'Cannot Generate Pass', message: 'Vehicle registration number not found.' });
+        return;
+      }
+
+      // Call backend to create gate pass
+      const passData: any = {
+        vehicle_id: trip.vehicle_id,
+        trip_id: trip.id,
+        vehicle_reg: resolvedReg,
+        vehicle_type: trip.vehicle_type || vehicle?.vehicle_type,
+        driver_name: trip.driver_name || vehicle?.driver_name || 'Driver',
+        driver_phone: trip.driver_phone || vehicle?.driver_phone,
+        container_number: trip.container_number,
+        customs_seal_number: trip.customs_seal_number,
+        cargo_type: trip.cargo_type,
+        cargo_weight_tonnes: trip.cargo_weight_tonnes,
+        terminal_name: trip.destination_name || 'Terminal',
+        time_window_start: trip.planned_departure || new Date().toISOString(),
+        time_window_end: trip.planned_arrival || new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        status: 'pre_approved',
+        carrier_name: 'Siginon Global Logistics'
+      };
+
+      const createdPass = await apiClient.createGatePass(passData);
+      
+      // Invalidate gate passes cache
+      queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.all() });
+      if (trip.vehicle_id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byVehicle(trip.vehicle_id) });
+      }
+      if (trip.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byTrip(trip.id) });
+      }
+      
+      toast({
+        variant: 'success',
+        title: 'Gate Pass Generated',
+        message: `Pass ${createdPass.pass_number} created successfully.`
+      });
+      
+      setSelectedPassData(createdPass);
+    } catch (error: any) {
+      toast({
+        variant: 'error',
+        title: 'Failed to Generate Pass',
+        message: error?.message || 'Could not create gate pass. Please try again.'
+      });
+    } finally {
+      setGeneratingPassForTrip(null);
+    }
   };
 
   // Real backend queries with mock fallbacks
   const { data: tripsData, isLoading: loadingTrips } = useQuery({
-    queryKey: ['trips'],
+    queryKey: queryKeys.trips.all(),
     queryFn: () => apiClient.getTrips(),
-    refetchInterval: 20000,
+    staleTime: 30_000, // 30 seconds
+    refetchInterval: 60_000, // Refetch every minute
   });
 
   const { data: vehiclesData } = useQuery({
@@ -544,7 +598,8 @@ export const Trips: React.FC = () => {
                         variant="outline"
                         size="small"
                         icon={<Ticket size={12} className="text-[#ED642B]" />}
-                        onClick={() => openGatePass(trip)}
+                        onClick={() => generateGatePass(trip)}
+                        loading={generatingPassForTrip === trip.id}
                       >
                         Gate Pass
                       </Button>
@@ -632,7 +687,8 @@ export const Trips: React.FC = () => {
                           variant="ghost"
                           size="small"
                           icon={<Ticket size={12} className="text-[#ED642B]" />}
-                          onClick={() => openGatePass(t)}
+                          onClick={() => generateGatePass(t)}
+                          loading={generatingPassForTrip === t.id}
                         >
                           Pass
                         </Button>

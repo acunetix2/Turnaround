@@ -14,6 +14,7 @@ from app.db.models import (  # noqa: F401
     Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight,
     DemurrageClaim, GatePass
 )
+from app.middleware.database import DatabaseMiddleware, QueryTimeoutMiddleware
 from app.routers import (
     health, vehicles, locations, trips,
     gps_events, dwell_events, analytics, insights, predictions, ai,
@@ -118,6 +119,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Database Connection Middleware ──────────────────────────────────────────
+# Add database middleware for connection recovery and timeout handling
+app.add_middleware(DatabaseMiddleware, max_retries=2)
+app.add_middleware(QueryTimeoutMiddleware, timeout_seconds=30)
 
 
 # ── Global Exception Handler ────────────────────────────────────────────────

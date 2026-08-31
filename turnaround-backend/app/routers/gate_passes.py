@@ -2,6 +2,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 import uuid
 from datetime import datetime, timezone
 
@@ -38,6 +39,10 @@ async def list_gate_passes(
 ):
     base_q = (
         select(GatePass)
+        .options(
+            selectinload(GatePass.vehicle),
+            selectinload(GatePass.trip)
+        )
         .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
         .where(Vehicle.company_id == company_id)
     )
@@ -69,6 +74,10 @@ async def get_gate_pass(
 ):
     q = (
         select(GatePass)
+        .options(
+            selectinload(GatePass.vehicle),
+            selectinload(GatePass.trip)
+        )
         .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
         .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
     )
@@ -105,6 +114,79 @@ async def create_gate_pass(
     return gate_pass
 
 
+@router.get("/{pass_id}/qr-code", summary="Get gate pass QR code image")
+async def get_gate_pass_qr_code(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+):
+    """Generate QR code image for gate pass verification"""
+    import qrcode
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    q = (
+        select(GatePass)
+        .options(selectinload(GatePass.vehicle))
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    gate_pass = result.scalar_one_or_none()
+    if not gate_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    # Generate verification URL or data
+    qr_data = {
+        "pass_number": gate_pass.pass_number,
+        "vehicle_reg": gate_pass.vehicle_reg,
+        "terminal": gate_pass.terminal_name,
+        "valid_until": gate_pass.time_window_end.isoformat(),
+        "verify_url": f"https://turnaround.africa/verify/{gate_pass.pass_number}"
+    }
+    
+    # Create QR code
+    qr = qrcode.QRCode(version=1, box_size=10, border=2)
+    qr.add_data(str(qr_data))
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to bytes
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    
+    return StreamingResponse(buf, media_type="image/png")
+
+
+@router.get("/{pass_id}/download", summary="Download gate pass as PDF")
+async def download_gate_pass_pdf(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+):
+    """Generate and download gate pass as PDF document"""
+    # TODO: Implement PDF generation using reportlab or similar
+    # For now, return JSON
+    q = (
+        select(GatePass)
+        .options(
+            selectinload(GatePass.vehicle),
+            selectinload(GatePass.trip)
+        )
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    gate_pass = result.scalar_one_or_none()
+    if not gate_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    # Return the gate pass data (PDF generation to be implemented)
+    return gate_pass
+
+
 @router.patch("/{pass_id}", response_model=GatePassResponse, summary="Update gate pass status")
 async def update_gate_pass(
     pass_id: str,
@@ -115,6 +197,10 @@ async def update_gate_pass(
 ):
     q = (
         select(GatePass)
+        .options(
+            selectinload(GatePass.vehicle),
+            selectinload(GatePass.trip)
+        )
         .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
         .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
     )
