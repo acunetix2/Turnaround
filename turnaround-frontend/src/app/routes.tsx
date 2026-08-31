@@ -16,7 +16,9 @@ import { Analytics } from '../features/analytics/Analytics';
 import { Settings } from '../features/settings/Settings';
 import { AIAdvisor } from '../features/ai-advisor/AIAdvisor';
 import { Trips } from '../features/trips/Trips';
-import { Demurrage } from '../features/demurrage/Demurrage';
+import { DelayCharges } from '../features/demurrage/DelayCharges';
+import { GatePassPage } from '../features/gate-pass/GatePassPage';
+import { GatePassList } from '../features/gate-pass/GatePassList';
 import { RouteErrorBoundary } from '../components/common/RouteErrorBoundary';
 
 export const router = createBrowserRouter([
@@ -54,7 +56,9 @@ export const router = createBrowserRouter([
       { path: '/dashboard',     element: <Dashboard />,      errorElement: <RouteErrorBoundary /> },
       { path: '/map',           element: <LiveMap />,        errorElement: <RouteErrorBoundary /> },
       { path: '/trips',         element: <Trips />,          errorElement: <RouteErrorBoundary /> },
-      { path: '/demurrage',     element: <Demurrage />,      errorElement: <RouteErrorBoundary /> },
+      { path: '/gate-passes',   element: <GatePassList />,   errorElement: <RouteErrorBoundary /> },
+      { path: '/gate-pass',     element: <GatePassPage />,   errorElement: <RouteErrorBoundary /> },
+      { path: '/demurrage',     element: <DelayCharges />,   errorElement: <RouteErrorBoundary /> },
       { path: '/vehicles',      element: <Vehicles />,       errorElement: <RouteErrorBoundary /> },
       { path: '/vehicles/:id',  element: <VehicleDetail />,  errorElement: <RouteErrorBoundary /> },
       { path: '/locations',     element: <Locations />,      errorElement: <RouteErrorBoundary /> },

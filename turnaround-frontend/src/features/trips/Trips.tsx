@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../lib/api/client';
 import { formatDateTime } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
@@ -13,8 +13,7 @@ import {
   CheckCircle2, ShieldCheck, Container, Package,
   Navigation, X, Compass, Ticket
 } from 'lucide-react';
-import type { Trip, GatePassData } from '../../lib/api/types';
-import { GatePassModal } from '../gate-pass/GatePassModal';
+import type { Trip } from '../../lib/api/types';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import {
@@ -61,13 +60,13 @@ export const Trips: React.FC = () => {
   const queryClient = useQueryClient();
   const { role } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const canMutate = role === 'admin' || role === 'fleet_manager' || role === 'dispatcher';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'in_transit' | 'delayed' | 'planned' | 'completed'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'journeys' | 'table'>('journeys');
-  const [selectedPassData, setSelectedPassData] = useState<GatePassData | null>(null);
   // Track which specific trip is generating a pass (null = none)
   const [generatingPassForTrip, setGeneratingPassForTrip] = useState<string | null>(null);
 
@@ -132,7 +131,8 @@ export const Trips: React.FC = () => {
         message: `Pass ${createdPass.pass_number} created successfully.`
       });
       
-      setSelectedPassData(createdPass);
+      // Navigate to the gate pass page, carrying pass data via router state
+      navigate('/gate-pass', { state: { pass: createdPass } });
     } catch (error: any) {
       toast({
         variant: 'error',
@@ -888,14 +888,6 @@ export const Trips: React.FC = () => {
             </form>
           </div>
         </div>
-      )}
-
-      {/* ── DIGITAL QR GATE PASS MODAL ── */}
-      {selectedPassData && (
-        <GatePassModal
-          pass={selectedPassData}
-          onClose={() => setSelectedPassData(null)}
-        />
       )}
     </div>
   );

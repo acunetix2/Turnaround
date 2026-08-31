@@ -20,6 +20,7 @@ import {
   Plus,
   Route,
   DollarSign,
+  FileCheck,
 } from 'lucide-react'
 import { BrandLogo } from '../common/BrandLogo'
 import { RouteProgressBar } from '../common/Loader'
@@ -123,7 +124,8 @@ function SidebarNavContent() {
       badgeDanger: delayedCount > 0,
     },
     { name: 'Trips', path: '/trips', icon: Route },
-    { name: 'Demurrage', path: '/demurrage', icon: DollarSign },
+    { name: 'Gate Passes', path: '/gate-passes', icon: FileCheck },
+    { name: 'Delay Charges', path: '/demurrage', icon: DollarSign },
     {
       name: 'Assets',
       path: '/vehicles',
