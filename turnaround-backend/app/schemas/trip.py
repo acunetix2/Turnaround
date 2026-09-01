@@ -1,9 +1,22 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from app.db.models.trip import TripStatus
 from app.schemas.location import LocationResponse
-from app.schemas.vehicle import VehicleResponse
+
+
+class TripCheckpoint(BaseModel):
+    """Computed waypoint status derived from real DwellEvent records for this trip."""
+    location_id: str
+    location_name: str
+    location_type: str
+    status: str  # "completed" | "current" | "pending"
+    arrival_time: Optional[datetime] = None
+    departure_time: Optional[datetime] = None
+    actual_dwell_minutes: Optional[float] = None
+    expected_dwell_minutes: float
+    excess_dwell_minutes: Optional[float] = None
+    estimated_cost: Optional[float] = None
 
 
 class TripBase(BaseModel):
@@ -19,6 +32,8 @@ class TripBase(BaseModel):
     customs_seal_number: Optional[str] = Field(None, description="KRA/customs seal number")
     container_number: Optional[str] = Field(None, description="ISO container number")
     cargo_description: Optional[str] = Field(None, description="Free-text cargo description")
+    cargo_type: Optional[str] = Field(None, description="Cargo category e.g. General Merchandise")
+    cargo_weight_tonnes: Optional[float] = Field(None, description="Cargo weight in metric tonnes")
 
 
 class TripCreate(TripBase):
@@ -38,6 +53,8 @@ class TripUpdate(BaseModel):
     customs_seal_number: Optional[str] = None
     container_number: Optional[str] = None
     cargo_description: Optional[str] = None
+    cargo_type: Optional[str] = None
+    cargo_weight_tonnes: Optional[float] = None
 
 
 class TripResponse(TripBase):
@@ -45,5 +62,7 @@ class TripResponse(TripBase):
     created_at: datetime
     origin: Optional[LocationResponse] = None
     destination: Optional[LocationResponse] = None
+    # Computed from real DwellEvent records — empty list when no dwell data exists yet
+    checkpoints: List[TripCheckpoint] = []
 
     model_config = ConfigDict(from_attributes=True)

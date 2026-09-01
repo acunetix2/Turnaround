@@ -53,7 +53,7 @@ const vehicleSchema = zod.object({
   vehicle_type:         zod.string().min(2, 'Enter a vehicle classification'),
   capacity:             zod.number().positive('Must be > 0'),
   hourly_operating_cost: zod.number().positive('Must be positive'),
-  status:               zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'moving', 'stationary', 'delayed'] as const),
+  status: zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'delayed'] as const),
   // Driver
   driver_name:          zod.string().optional(),
   driver_phone:         zod.string().optional(),
@@ -78,20 +78,38 @@ type VehicleFormValues = zod.infer<typeof vehicleSchema>;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const normalizeFormStatus = (s?: string): 'moving' | 'stationary' | 'delayed' => {
-  if (!s) return 'stationary';
-  if (s === 'moving' || s === 'in_transit' || s === 'active') return 'moving';
-  if (s === 'delayed') return 'delayed';
-  return 'stationary';
+const normalizeFormStatus = (s?: string): 'active' | 'idle' | 'maintenance' | 'in_transit' | 'delayed' => {
+  if (!s) return 'active';
+  if (s === 'moving')     return 'in_transit';   // legacy shim
+  if (s === 'stationary') return 'active';        // legacy shim
+  if (['active', 'idle', 'maintenance', 'in_transit', 'delayed'].includes(s)) return s as any;
+  return 'active';
 };
 
-const statusLabel = (s: string) =>
-  s === 'moving' || s === 'in_transit' || s === 'active' ? 'In Transit' : s === 'delayed' ? 'Delayed' : 'Stationary';
+const statusLabel = (s: string) => {
+  switch (s) {
+    case 'in_transit':   return 'In Transit';
+    case 'active':       return 'Active';
+    case 'idle':         return 'Idle';
+    case 'maintenance':  return 'Maintenance';
+    case 'delayed':      return 'Delayed';
+    // legacy aliases kept for mock data
+    case 'moving':       return 'In Transit';
+    case 'stationary':   return 'Active';
+    default:             return s;
+  }
+};
 
-const statusColor = (s: string) =>
-  s === 'moving' || s === 'in_transit' || s === 'active' ? 'bg-status-good/15 text-status-good' :
-  s === 'delayed' ? 'bg-red-500/15 text-red-500' :
-                    'bg-bg-surface-raised text-text-tertiary';
+const statusColor = (s: string) => {
+  switch (s) {
+    case 'in_transit':
+    case 'moving':       return 'bg-status-good/15 text-status-good';
+    case 'delayed':      return 'bg-red-500/15 text-red-500';
+    case 'maintenance':  return 'bg-yellow-500/15 text-yellow-500';
+    case 'idle':         return 'bg-blue-500/15 text-blue-400';
+    default:             return 'bg-bg-surface-raised text-text-tertiary';
+  }
+};
 
 const maintenanceBadge = (m?: string) => {
   if (m === 'in_service')  return { label: 'In Service', cls: 'bg-yellow-500/15 text-yellow-500' };
@@ -226,7 +244,7 @@ export const Vehicles: React.FC = () => {
     formState: { errors, isSubmitting },
   } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
-    defaultValues: { status: 'stationary', capacity: 28, hourly_operating_cost: 7500, driver_status: 'on_duty', maintenance_status: 'good' },
+    defaultValues: { status: 'active', capacity: 28, hourly_operating_cost: 7500, driver_status: 'on_duty', maintenance_status: 'good' },
   });
 
   const handleOpenAdd = () => {
@@ -237,7 +255,7 @@ export const Vehicles: React.FC = () => {
       vehicle_type: '',
       capacity: 28,
       hourly_operating_cost: 3500,
-      status: 'stationary',
+      status: 'active',
       driver_name: '',
       driver_phone: '',
       driver_license: '',
@@ -358,7 +376,7 @@ export const Vehicles: React.FC = () => {
 
   // ── DERIVED COUNTS ──
   const totalFleet      = vehicles.length;
-  const activeCount     = vehicles.filter(v => v.status === 'moving').length;
+  const activeCount     = vehicles.filter(v => v.status === 'in_transit' || v.status === 'active').length;
   const delayedCount    = vehicles.filter(v => v.status === 'delayed').length;
 
   // Vehicle type breakdown
@@ -561,10 +579,12 @@ export const Vehicles: React.FC = () => {
         </div>
         <div className="w-full sm:w-40">
           <Select value={statusFilter} onChange={setStatusFilter} options={[
-            { value: 'all',        label: 'All Statuses' },
-            { value: 'moving',     label: 'In Transit' },
-            { value: 'stationary', label: 'Stationary' },
-            { value: 'delayed',    label: 'Delayed' },
+            { value: 'all',         label: 'All Statuses' },
+            { value: 'active',      label: 'Active' },
+            { value: 'in_transit',  label: 'In Transit' },
+            { value: 'idle',        label: 'Idle' },
+            { value: 'delayed',     label: 'Delayed' },
+            { value: 'maintenance', label: 'Maintenance' },
           ]} />
         </div>
         <div className="w-full sm:w-48">
@@ -1009,9 +1029,11 @@ export const Vehicles: React.FC = () => {
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Current Status *</label>
                       <select {...register('status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="moving">In Transit</option>
-                        <option value="stationary">Stationary</option>
+                        <option value="active">Active</option>
+                        <option value="in_transit">In Transit</option>
+                        <option value="idle">Idle</option>
                         <option value="delayed">Delayed</option>
+                        <option value="maintenance">Maintenance</option>
                       </select>
                     </div>
                     <div>

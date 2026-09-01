@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api/client';
+import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatMinutes, formatDateTime } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
 import {
@@ -568,12 +569,16 @@ export const Demurrage: React.FC = () => {
                   variant="primary"
                   size="small"
                   icon={<Download size={13} />}
-                  onClick={() => {
-                    toast({
-                      variant: 'success',
-                      title: 'Claim Downloaded',
-                      message: `Official notice ${selectedClaimForNotice.claim_number} generated for remittance.`
-                    });
+                  onClick={async () => {
+                    if (!selectedClaimForNotice.id) return;
+                    try {
+                      await apiClient.downloadDemurrageNoticePDF(
+                        selectedClaimForNotice.id,
+                        selectedClaimForNotice.claim_number
+                      );
+                    } catch (err: any) {
+                      toast({ variant: 'error', title: 'PDF Failed', message: err?.message || 'Could not generate PDF.' });
+                    }
                     setSelectedClaimForNotice(null);
                   }}
                 >

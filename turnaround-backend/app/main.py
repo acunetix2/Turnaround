@@ -1,3 +1,4 @@
+import asyncio
 import time
 import logging
 from contextlib import asynccontextmanager
@@ -20,6 +21,7 @@ from app.routers import (
     gps_events, dwell_events, analytics, insights, predictions, ai,
     demurrage, gate_passes
 )
+from app.tasks.expiry_sweep import start_expiry_sweep_loop
 
 # ── Structured Logging ──────────────────────────────────────────────────────
 logging.basicConfig(
@@ -50,13 +52,22 @@ QUIET_ROUTES = {
 async def lifespan(app: FastAPI):
     logger.info("Starting Turnaround API — connecting to Supabase PostgreSQL")
     try:
-        # Create all tables if they don't exist (Supabase already has them after migrations)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database schema verified & connected successfully")
     except Exception as e:
         logger.error(f"DB startup error: {str(e)}")
+
+    # Start background gate pass expiry sweep
+    sweep_task = asyncio.create_task(start_expiry_sweep_loop())
+
     yield
+
+    sweep_task.cancel()
+    try:
+        await sweep_task
+    except asyncio.CancelledError:
+        pass
     logger.info("Shutting down Turnaround API")
     await engine.dispose()
 

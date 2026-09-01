@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileCheck, Search, Printer, Eye, ShieldCheck,
-  Truck, Clock, Container, Plus
+  Truck, Clock, Container, Plus, Ban
 } from 'lucide-react';
 import { apiClient } from '../../lib/api/client';
 import { queryKeys } from '../../lib/query-keys';
 import { Button } from '../../components/ui/Button';
+import { useToast } from '../../components/ui/Toast';
+import { useAuth } from '../../auth/AuthProvider';
 import type { GatePassData } from '../../lib/api/types';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
@@ -18,6 +20,7 @@ const STATUS_CFG: Record<PassStatus, { label: string; cls: string; dot: string }
   cleared:      { label: 'Cleared',    cls: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', dot: 'bg-emerald-500' },
   inspected:    { label: 'Inspected',  cls: 'bg-blue-500/15 text-blue-600 border-blue-500/30',       dot: 'bg-blue-500'    },
   expired:      { label: 'Expired',    cls: 'bg-red-500/15 text-red-500 border-red-500/30',          dot: 'bg-red-500'     },
+  cancelled:    { label: 'Cancelled',  cls: 'bg-gray-500/15 text-gray-500 border-gray-500/30',       dot: 'bg-gray-400'    },
 };
 
 function fmtDate(d?: string) {
@@ -38,6 +41,11 @@ function fmtShort(d: string) {
 /* ─── component ───────────────────────────────────────────────── */
 export const GatePassList: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { role } = useAuth();
+  const canRevoke = role === 'admin' || role === 'fleet_manager';
+
   const [search, setSearch]       = useState('');
   const [statusFilter, setStatus] = useState<'all' | PassStatus>('all');
 
@@ -47,6 +55,23 @@ export const GatePassList: React.FC = () => {
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) => apiClient.revokeGatePass(id),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.all() });
+      toast({ variant: 'success', title: 'Pass Revoked', message: `${updated.pass_number} has been cancelled.` });
+    },
+    onError: (err: any) => {
+      toast({ variant: 'error', title: 'Revoke Failed', message: err?.message || 'Could not revoke gate pass.' });
+    },
+  });
+
+  const handleRevoke = (pass: GatePassData) => {
+    if (!pass.id) return;
+    if (!window.confirm(`Cancel gate pass ${pass.pass_number}? This cannot be undone.`)) return;
+    revokeMutation.mutate(pass.id);
+  };
 
   /* filter */
   const filtered = passes.filter((p) => {
@@ -123,7 +148,7 @@ export const GatePassList: React.FC = () => {
           />
         </div>
         <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
-          {(['all', 'pre_approved', 'cleared', 'inspected', 'expired'] as const).map((s) => (
+          {(['all', 'pre_approved', 'cleared', 'inspected', 'expired', 'cancelled'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatus(s)}
@@ -218,6 +243,17 @@ export const GatePassList: React.FC = () => {
                       >
                         Print
                       </Button>
+                      {canRevoke && pass.status === 'pre_approved' && (
+                        <Button
+                          variant="ghost"
+                          size="small"
+                          icon={<Ban size={12} className="text-red-500" />}
+                          onClick={() => handleRevoke(pass)}
+                          loading={revokeMutation.isPending && revokeMutation.variables === pass.id}
+                        >
+                          Revoke
+                        </Button>
+                      )}
                     </div>
                   </div>
 

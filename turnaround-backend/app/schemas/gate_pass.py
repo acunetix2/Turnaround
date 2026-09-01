@@ -7,7 +7,8 @@ from app.db.models.gate_pass import GatePassStatus
 class GatePassBase(BaseModel):
     vehicle_id: str = Field(..., description="Vehicle FK")
     trip_id: Optional[str] = Field(None, description="Linked trip FK")
-    issued_by: Optional[str] = Field(None, description="User FK of issuing officer")
+    # NOTE: issued_by is intentionally excluded from client input.
+    # It is populated server-side from the authenticated JWT user.
 
     vehicle_reg: str = Field(..., description="Vehicle registration (denormalised)")
     vehicle_type: Optional[str] = None
@@ -48,6 +49,8 @@ class GatePassUpdate(BaseModel):
 class GatePassResponse(GatePassBase):
     id: str
     pass_number: str
+    issued_by: Optional[str] = None           # user UUID
+    issued_by_name: Optional[str] = None      # resolved display name
     created_at: datetime
     updated_at: datetime
 

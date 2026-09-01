@@ -73,12 +73,13 @@ export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) =
   ].filter(Boolean).join(' | ');
 
   /* Status badge config */
-  type PassStatus = 'cleared' | 'inspected' | 'expired' | 'pre_approved';
+  type PassStatus = 'cleared' | 'inspected' | 'expired' | 'pre_approved' | 'cancelled';
   const SC: Record<PassStatus, { label: string; bar: string; badge: string; text: string }> = {
     cleared:      { label: 'CLEARED',      bar: 'from-emerald-600 to-emerald-500', badge: 'bg-emerald-50 border-emerald-300 text-emerald-700', text: 'text-emerald-700' },
     inspected:    { label: 'INSPECTED',    bar: 'from-blue-600 to-blue-500',       badge: 'bg-blue-50 border-blue-300 text-blue-700',           text: 'text-blue-700'    },
     expired:      { label: 'EXPIRED',      bar: 'from-red-600 to-red-500',         badge: 'bg-red-50 border-red-300 text-red-700',              text: 'text-red-600'     },
     pre_approved: { label: 'PRE-APPROVED', bar: 'from-amber-500 to-amber-400',     badge: 'bg-amber-50 border-amber-300 text-amber-700',        text: 'text-amber-700'   },
+    cancelled:    { label: 'CANCELLED',    bar: 'from-gray-500 to-gray-400',       badge: 'bg-gray-50 border-gray-300 text-gray-600',           text: 'text-gray-500'    },
   };
   const sc = SC[(pass.status as PassStatus)] ?? SC.pre_approved;
 

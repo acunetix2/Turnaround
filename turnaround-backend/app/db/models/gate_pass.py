@@ -17,6 +17,7 @@ class GatePassStatus(str, enum.Enum):
     CLEARED = "cleared"
     INSPECTED = "inspected"
     EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 
 class GatePass(Base):

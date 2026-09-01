@@ -14,7 +14,6 @@ import {
   Sparkles, Ticket
 } from 'lucide-react';
 import type { Vehicle } from '../../lib/api/types';
-import { GatePassModal } from '../gate-pass/GatePassModal';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
@@ -53,7 +52,7 @@ const updateSchema = zod.object({
   vehicle_type: zod.string().min(2, 'Enter a vehicle classification'),
   capacity: zod.number().positive('Must be > 0'),
   hourly_operating_cost: zod.number().positive('Must be positive'),
-  status: zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'moving', 'stationary', 'delayed'] as const),
+  status: zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'delayed'] as const),
   // Driver
   driver_name: zod.string().optional(),
   driver_phone: zod.string().optional(),
@@ -76,17 +75,24 @@ const updateSchema = zod.object({
 
 type UpdateFormValues = zod.infer<typeof updateSchema>;
 
-const normalizeFormStatus = (s?: string): 'moving' | 'stationary' | 'delayed' => {
-  if (!s) return 'stationary';
-  if (s === 'moving' || s === 'in_transit' || s === 'active') return 'moving';
-  if (s === 'delayed') return 'delayed';
-  return 'stationary';
+const normalizeFormStatus = (s?: string): 'active' | 'idle' | 'maintenance' | 'in_transit' | 'delayed' => {
+  if (!s) return 'active';
+  if (s === 'moving')     return 'in_transit';   // legacy shim
+  if (s === 'stationary') return 'active';        // legacy shim
+  if (['active', 'idle', 'maintenance', 'in_transit', 'delayed'].includes(s)) return s as any;
+  return 'active';
 };
 
-const statusColor = (s: string) =>
-  s === 'moving' || s === 'in_transit' || s === 'active' ? 'bg-status-good/15 text-status-good border-status-good/30'
-  : s === 'delayed' ? 'bg-red-500/15 text-red-500 border-red-500/30'
-  : 'bg-bg-surface-raised text-text-tertiary border-border-default';
+const statusColor = (s: string) => {
+  switch (s) {
+    case 'in_transit':
+    case 'moving':       return 'bg-status-good/15 text-status-good border-status-good/30';
+    case 'delayed':      return 'bg-red-500/15 text-red-500 border-red-500/30';
+    case 'maintenance':  return 'bg-yellow-500/15 text-yellow-500 border-yellow-500/30';
+    case 'idle':         return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+    default:             return 'bg-bg-surface-raised text-text-tertiary border-border-default';
+  }
+};
 
 const maintenanceBadge = (m?: string) => {
   if (m === 'in_service') return { label: 'In Service', cls: 'bg-yellow-500/15 text-yellow-500', icon: <Settings size={11} /> };
@@ -179,7 +185,6 @@ export const VehicleDetail: React.FC = () => {
   const [updateError, setUpdateError] = useState('');
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [showClaimModal, setShowClaimModal] = useState(false);
-  const [showGatePassModal, setShowGatePassModal] = useState(false);
 
   const { data: vehicle, isLoading: loadingVehicle, isError: vehicleError } = useQuery({
     queryKey: ['vehicle', id],
@@ -301,7 +306,7 @@ export const VehicleDetail: React.FC = () => {
   }));
 
   const isDelayed = vehicle.status === 'delayed';
-  const isMoving  = vehicle.status === 'moving';
+  const isMoving  = vehicle.status === 'in_transit';
 
   // Predictive Delay Risk (Simulated corridor ML confidence)
   const delayRiskProbability = isDelayed ? 94 : totalExcessMinutes > 30 ? 78 : isMoving ? 28 : 12;
@@ -318,9 +323,15 @@ export const VehicleDetail: React.FC = () => {
             variant="outline"
             size="small"
             icon={<Ticket size={13} className="text-[#ED642B]" />}
-            onClick={() => setShowGatePassModal(true)}
+            onClick={() => {
+              toast({
+                variant: 'info',
+                title: 'Create Trip First',
+                message: 'Gate passes are issued for specific trips. Please create a trip in the Trips section to generate a gate pass.'
+              });
+            }}
           >
-            Digital Gate Pass
+            Request Gate Pass
           </Button>
           {totalExcessMinutes > 0 && (
             <Button
@@ -396,9 +407,11 @@ export const VehicleDetail: React.FC = () => {
                 </FormField>
                 <FormField label="Fleet Status">
                   <select {...register('status')} className={inputCls}>
-                    <option value="stationary">Stationary</option>
-                    <option value="moving">In Transit</option>
+                    <option value="active">Active</option>
+                    <option value="in_transit">In Transit</option>
+                    <option value="idle">Idle</option>
                     <option value="delayed">Delayed</option>
+                    <option value="maintenance">Maintenance</option>
                   </select>
                 </FormField>
               </div>
@@ -986,32 +999,6 @@ export const VehicleDetail: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── DIGITAL QR GATE PASS MODAL ── */}
-      {showGatePassModal && (
-        <GatePassModal
-          pass={{
-            pass_number: `GP-NBO-${new Date().getFullYear()}-${vehicle.registration_number.replace(/\s+/g, '')}`,
-            vehicle_reg: vehicle.registration_number,
-            vehicle_type: vehicle.vehicle_type,
-            driver_name: vehicle.driver_name || 'Fleet Operator',
-            driver_phone: vehicle.driver_phone,
-            driver_license: vehicle.driver_license,
-            container_number: vehicle.container_number,
-            customs_seal_number: vehicle.container_number ? `KRA-SEAL-${vehicle.container_number.substring(4, 9)}` : 'KRA-SEAL-89211',
-            cargo_type: vehicle.cargo_type || 'General Cargo',
-            cargo_weight_tonnes: vehicle.capacity,
-            terminal_name: vehicle.current_location_name || 'Nairobi Inland Container Depot',
-            terminal_gate: 'Express Commercial Gate 02',
-            time_window_start: new Date().toISOString(),
-            time_window_end: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-            status: 'pre_approved',
-            carrier_name: 'Siginon Global Logistics',
-            digital_signature: `SIG-EAC-PASS-${vehicle.id.toUpperCase()}`
-          }}
-          onClose={() => setShowGatePassModal(false)}
-        />
       )}
     </div>
   );

@@ -171,3 +171,40 @@ async def update_claim(
     await db.commit()
     await db.refresh(claim)
     return claim
+
+
+@router.get("/claims/{claim_id}/download", summary="Download demurrage notice as PDF")
+async def download_demurrage_notice_pdf(
+    claim_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+):
+    """Generate and stream a formal demurrage & SLA breach notice as a PDF."""
+    from fastapi.responses import StreamingResponse
+    from io import BytesIO
+    from app.engines.pdf import render_demurrage_notice_pdf
+
+    q = (
+        select(DemurrageClaim)
+        .join(Vehicle, DemurrageClaim.vehicle_id == Vehicle.id)
+        .where(DemurrageClaim.id == claim_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    claim = result.scalar_one_or_none()
+    if not claim:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Claim not found"}},
+        )
+
+    try:
+        pdf_bytes = render_demurrage_notice_pdf(claim)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    filename = f"demurrage-notice-{claim.claim_number}.pdf"
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

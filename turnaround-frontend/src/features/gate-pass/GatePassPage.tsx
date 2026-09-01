@@ -2,9 +2,10 @@ import React, { useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
-import { ArrowLeft, Image, Share2, ShieldCheck, Download } from 'lucide-react';
+import { ArrowLeft, Image, Share2, ShieldCheck, Download, FileText } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
+import { apiClient } from '../../lib/api/client';
 import type { GatePassData } from '../../lib/api/types';
 
 /* ── Field cell — module-level to avoid "component created during render" ── */
@@ -29,13 +30,14 @@ const F = ({
 
 /* ─────────────────────────────────────────────────────────────── */
 
-type PassStatus = 'cleared' | 'inspected' | 'expired' | 'pre_approved';
+type PassStatus = 'cleared' | 'inspected' | 'expired' | 'pre_approved' | 'cancelled';
 
 const STATUS_CFG: Record<PassStatus, { label: string; topBar: string; badge: string }> = {
   cleared:      { label: 'CLEARED',      topBar: 'bg-emerald-500',  badge: 'bg-emerald-50 border-emerald-300 text-emerald-700' },
   inspected:    { label: 'INSPECTED',    topBar: 'bg-blue-500',     badge: 'bg-blue-50 border-blue-300 text-blue-700'          },
   expired:      { label: 'EXPIRED',      topBar: 'bg-red-500',      badge: 'bg-red-50 border-red-300 text-red-600'             },
   pre_approved: { label: 'PRE-APPROVED', topBar: 'bg-amber-400',    badge: 'bg-amber-50 border-amber-300 text-amber-700'       },
+  cancelled:    { label: 'CANCELLED',    topBar: 'bg-gray-400',     badge: 'bg-gray-50 border-gray-300 text-gray-600'          },
 };
 
 function fmtFull(d: string) {
@@ -59,6 +61,7 @@ export const GatePassPage: React.FC = () => {
   const { toast }    = useToast();
   const cardRef      = useRef<HTMLDivElement>(null);
   const [capturing, setCapturing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Pass data is carried via router state (navigate('/gate-pass', { state: { pass } }))
   const pass: GatePassData | null = (location.state as any)?.pass ?? null;
@@ -123,6 +126,23 @@ export const GatePassPage: React.FC = () => {
     toast({ variant: 'success', title: 'Saved', message: `gate-pass-${pass.pass_number}.png` });
   };
 
+  /** Download as PDF via backend */
+  const handleDownloadPDF = async () => {
+    if (!pass.id) {
+      toast({ variant: 'error', title: 'No Pass ID', message: 'Save the pass first before downloading PDF.' });
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      await apiClient.downloadGatePassPDF(pass.id, pass.pass_number);
+      toast({ variant: 'success', title: 'Downloaded', message: `gate-pass-${pass.pass_number}.pdf` });
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'PDF Failed', message: err?.message || 'Could not generate PDF.' });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   /** Share or copy the image */
   const handleShare = async () => {
     // Try image share first (mobile)
@@ -181,6 +201,9 @@ export const GatePassPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="small" icon={<Share2 size={13} />} onClick={handleShare} loading={capturing}>
             Share
+          </Button>
+          <Button variant="outline" size="small" icon={<FileText size={13} />} onClick={handleDownloadPDF} loading={downloadingPdf}>
+            PDF
           </Button>
           <Button variant="primary" size="small" icon={<Download size={13} />} onClick={handleDownloadImage} loading={capturing}>
             Save as Image

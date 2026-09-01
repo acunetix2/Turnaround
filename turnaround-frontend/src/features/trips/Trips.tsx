@@ -13,6 +13,7 @@ import {
   CheckCircle2, ShieldCheck, Container, Package,
   Navigation, X, Compass, Ticket
 } from 'lucide-react';
+import { GatePassCreateModal, type GatePassFormValues } from '../gate-pass/GatePassCreateModal';
 import type { Trip } from '../../lib/api/types';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
@@ -69,76 +70,46 @@ export const Trips: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'journeys' | 'table'>('journeys');
   // Track which specific trip is generating a pass (null = none)
   const [generatingPassForTrip, setGeneratingPassForTrip] = useState<string | null>(null);
+  // Gate pass create modal — holds the trip that was clicked
+  const [passModalTrip, setPassModalTrip] = useState<import('../../lib/api/types').Trip | null>(null);
 
-  // Generate gate pass via backend API
-  const generateGatePass = async (trip: Trip) => {
+  // Step 1 — clicking "Gate Pass" on a trip opens the confirmation modal
+  const handleGatePassClick = async (trip: Trip) => {
     if (!trip.vehicle_id || !trip.destination_id) {
-      toast({
-        variant: 'error',
-        title: 'Cannot Generate Pass',
-        message: 'Trip must have a vehicle and destination assigned.'
-      });
+      toast({ variant: 'error', title: 'Cannot Generate Pass', message: 'Trip must have a vehicle and destination assigned.' });
       return;
     }
+    // Fast duplicate check before showing modal
+    if (trip.id) {
+      setGeneratingPassForTrip(trip.id);
+      try {
+        const existingPass = await apiClient.getActiveGatePassForTrip(trip.id);
+        if (existingPass) {
+          toast({ variant: 'info', title: 'Using Existing Gate Pass', message: `Pass ${existingPass.pass_number} already issued for this trip.` });
+          navigate('/gate-pass', { state: { pass: existingPass } });
+          return;
+        }
+      } finally {
+        setGeneratingPassForTrip(null);
+      }
+    }
+    setPassModalTrip(trip);
+  };
 
-    setGeneratingPassForTrip(trip.id);
-
+  // Step 2 — modal confirmed: fire the API call with the user-edited values
+  const handleGatePassConfirm = async (values: GatePassFormValues) => {
+    if (!passModalTrip) return;
+    setGeneratingPassForTrip(passModalTrip.id);
     try {
-      // Resolve vehicle_reg: prefer trip join, fall back to vehicles cache
-      const vehicle = (vehiclesData?.items ?? vehiclesData ?? []).find(
-        (v: any) => v.id === trip.vehicle_id
-      );
-      const resolvedReg = trip.vehicle_reg || vehicle?.registration_number || '';
-
-      if (!resolvedReg) {
-        toast({ variant: 'error', title: 'Cannot Generate Pass', message: 'Vehicle registration number not found.' });
-        return;
-      }
-
-      // Call backend to create gate pass
-      const passData: any = {
-        vehicle_id: trip.vehicle_id,
-        trip_id: trip.id,
-        vehicle_reg: resolvedReg,
-        vehicle_type: trip.vehicle_type || vehicle?.vehicle_type,
-        driver_name: trip.driver_name || vehicle?.driver_name || 'Driver',
-        driver_phone: trip.driver_phone || vehicle?.driver_phone,
-        container_number: trip.container_number,
-        customs_seal_number: trip.customs_seal_number,
-        cargo_type: trip.cargo_type,
-        cargo_weight_tonnes: trip.cargo_weight_tonnes,
-        terminal_name: trip.destination_name || 'Terminal',
-        time_window_start: trip.planned_departure || new Date().toISOString(),
-        time_window_end: trip.planned_arrival || new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        status: 'pre_approved',
-        carrier_name: 'Siginon Global Logistics'
-      };
-
-      const createdPass = await apiClient.createGatePass(passData);
-      
-      // Invalidate gate passes cache
+      const createdPass = await apiClient.createGatePass(values);
       queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.all() });
-      if (trip.vehicle_id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byVehicle(trip.vehicle_id) });
-      }
-      if (trip.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byTrip(trip.id) });
-      }
-      
-      toast({
-        variant: 'success',
-        title: 'Gate Pass Generated',
-        message: `Pass ${createdPass.pass_number} created successfully.`
-      });
-      
-      // Navigate to the gate pass page, carrying pass data via router state
+      if (passModalTrip.vehicle_id) queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byVehicle(passModalTrip.vehicle_id) });
+      if (passModalTrip.id) queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byTrip(passModalTrip.id) });
+      toast({ variant: 'success', title: 'Gate Pass Issued', message: `Pass ${createdPass.pass_number} created successfully.` });
+      setPassModalTrip(null);
       navigate('/gate-pass', { state: { pass: createdPass } });
     } catch (error: any) {
-      toast({
-        variant: 'error',
-        title: 'Failed to Generate Pass',
-        message: error?.message || 'Could not create gate pass. Please try again.'
-      });
+      toast({ variant: 'error', title: 'Failed to Issue Pass', message: error?.message || 'Could not create gate pass. Please try again.' });
     } finally {
       setGeneratingPassForTrip(null);
     }
@@ -598,7 +569,7 @@ export const Trips: React.FC = () => {
                         variant="outline"
                         size="small"
                         icon={<Ticket size={12} className="text-[#ED642B]" />}
-                        onClick={() => generateGatePass(trip)}
+                        onClick={() => handleGatePassClick(trip)}
                         loading={generatingPassForTrip === trip.id}
                       >
                         Gate Pass
@@ -687,7 +658,7 @@ export const Trips: React.FC = () => {
                           variant="ghost"
                           size="small"
                           icon={<Ticket size={12} className="text-[#ED642B]" />}
-                          onClick={() => generateGatePass(t)}
+                          onClick={() => handleGatePassClick(t)}
                           loading={generatingPassForTrip === t.id}
                         >
                           Pass
@@ -889,6 +860,27 @@ export const Trips: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── GATE PASS CREATE MODAL ── */}
+      {passModalTrip && (() => {
+        const vehicle = (vehiclesData?.items ?? vehiclesData ?? []).find(
+          (v: any) => v.id === passModalTrip.vehicle_id
+        );
+        return (
+          <GatePassCreateModal
+            trip={passModalTrip}
+            vehicleReg={passModalTrip.vehicle_reg || vehicle?.registration_number || ''}
+            vehicleType={passModalTrip.vehicle_type || vehicle?.vehicle_type}
+            driverName={passModalTrip.driver_name || vehicle?.driver_name || 'Driver'}
+            driverPhone={passModalTrip.driver_phone || vehicle?.driver_phone}
+            driverLicense={vehicle?.driver_license}
+            companyName={undefined}
+            onConfirm={handleGatePassConfirm}
+            onClose={() => setPassModalTrip(null)}
+            isLoading={generatingPassForTrip === passModalTrip.id}
+          />
+        );
+      })()}
     </div>
   );
 };
