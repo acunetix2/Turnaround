@@ -14,10 +14,12 @@ if TYPE_CHECKING:
 
 
 class TripStatus(str, enum.Enum):
-    PLANNED = "planned"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
+    PLANNED    = "planned"
+    IN_TRANSIT = "in_transit"
+    DELAYED    = "delayed"
+    COMPLETED  = "completed"
+    CANCELLED  = "cancelled"
+    ARCHIVED   = "archived"
 
 
 class Trip(Base):

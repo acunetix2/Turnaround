@@ -26,6 +26,7 @@ class CopilotQueryResponse(BaseModel):
     answer: str
     model: str
     status: str
+    chart_data: Optional[Dict[str, Any]] = None
 
 
 class CorridorAnalysisResponse(BaseModel):

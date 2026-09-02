@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../../lib/api/client';
+import { apiClient, extractErrorMessage } from '../../lib/api/client';
 import { formatCurrency } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
 import { Link } from 'react-router-dom';
@@ -53,7 +53,7 @@ const vehicleSchema = zod.object({
   vehicle_type:         zod.string().min(2, 'Enter a vehicle classification'),
   capacity:             zod.number().positive('Must be > 0'),
   hourly_operating_cost: zod.number().positive('Must be positive'),
-  status:               zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'moving', 'stationary', 'delayed'] as const),
+  status:               zod.enum(['active', 'idle', 'maintenance', 'in_transit', 'delayed'] as const),
   // Driver
   driver_name:          zod.string().optional(),
   driver_phone:         zod.string().optional(),
@@ -226,7 +226,7 @@ export const Vehicles: React.FC = () => {
     formState: { errors, isSubmitting },
   } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
-    defaultValues: { status: 'stationary', capacity: 28, hourly_operating_cost: 7500, driver_status: 'on_duty', maintenance_status: 'good' },
+    defaultValues: { status: 'idle', capacity: 28, hourly_operating_cost: 7500, driver_status: 'on_duty', maintenance_status: 'good' },
   });
 
   const handleOpenAdd = () => {
@@ -322,6 +322,41 @@ export const Vehicles: React.FC = () => {
     }
 
     const payload = { ...data, image_url: imageDataUrl } as any;
+    // Map frontend display statuses to backend VehicleStatus enum values
+    const statusMap: Record<string, string> = {
+      moving:      'in_transit',
+      stationary:  'idle',
+      delayed:     'delayed',
+      active:      'active',
+      idle:        'idle',
+      maintenance: 'maintenance',
+      in_transit:  'in_transit',
+    };
+    if (payload.status && statusMap[payload.status]) {
+      payload.status = statusMap[payload.status];
+    }
+    // Strip undefined/null/empty-string/NaN fields so PATCH only sends changed values
+    Object.keys(payload).forEach(k => {
+      const v = payload[k];
+      if (v === undefined || v === null || v === '') {
+        delete payload[k];
+        return;
+      }
+      // Remove NaN numbers (empty number inputs)
+      if (typeof v === 'number' && isNaN(v)) {
+        delete payload[k];
+        return;
+      }
+      // Remove zero-value numbers that are optional (odometer, fuel)
+      if ((k === 'odometer_km' || k === 'fuel_level') && v === 0) {
+        delete payload[k];
+      }
+    });
+    // Ensure required numbers are proper
+    if (payload.capacity !== undefined) payload.capacity = Number(payload.capacity);
+    if (payload.hourly_operating_cost !== undefined) payload.hourly_operating_cost = Number(payload.hourly_operating_cost);
+    if (payload.fuel_level !== undefined) payload.fuel_level = parseInt(String(payload.fuel_level));
+    if (payload.odometer_km !== undefined) payload.odometer_km = parseInt(String(payload.odometer_km));
     if (editingVehicle) updateMutation.mutate({ id: editingVehicle.id, data: payload });
     else createMutation.mutate(payload as any);
   };
@@ -547,6 +582,34 @@ export const Vehicles: React.FC = () => {
         </div>
       )}
 
+      {/* ── ASSET CATEGORY TABS ── */}
+      <div className="flex items-center gap-1 overflow-x-auto">
+        {([
+          { id: 'all',        label: 'All Assets',   icon: '🚛', count: vehicles.length },
+          { id: 'truck',      label: 'Trucks',       icon: '🚚', count: vehicles.filter(v => /truck|tractor|semi/i.test(v.vehicle_type || '')).length },
+          { id: 'container',  label: 'Containers',   icon: '📦', count: vehicles.filter(v => v.container_number).length },
+          { id: 'trailer',    label: 'Trailers',     icon: '🚌', count: vehicles.filter(v => /trailer|chassis/i.test(v.vehicle_type || '')).length },
+          { id: 'tanker',     label: 'Tankers',      icon: '⛽', count: vehicles.filter(v => /tanker|fuel/i.test(v.vehicle_type || '')).length },
+          { id: 'unloaded',   label: 'No Load',      icon: '🔲', count: vehicles.filter(v => !v.container_number && !v.cargo_type).length },
+        ]).map(cat => {
+          if (cat.id !== 'all' && cat.count === 0) return null;
+          const isActive = typeFilter === cat.id;
+          return (
+            <button key={cat.id}
+              onClick={() => setTypeFilter(cat.id === 'all' ? 'all' : cat.id === 'container' ? 'all' : cat.id)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shrink-0 ${
+                isActive
+                  ? 'bg-[#250C77] text-white border-[#250C77] shadow-sm'
+                  : 'bg-bg-surface border-border-default text-text-secondary hover:text-text-primary hover:border-[#ED642B]/40'
+              }`}>
+              <span>{cat.icon}</span>
+              {cat.label}
+              <span className={`font-numeric text-[10px] ${isActive ? 'text-white/70' : 'text-text-tertiary'}`}>{cat.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── FILTERS ── */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -684,11 +747,11 @@ export const Vehicles: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Container / Cargo */}
+                  {/* Container / Cargo — with weight */}
                   {(vh.container_number || vh.cargo_type) && (
                     <div className="flex items-center gap-2 p-2.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
                       <Container size={13} className="text-indigo-500 shrink-0" />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         {vh.container_number && (
                           <p className="text-[11px] font-bold font-mono text-indigo-500">{vh.container_number}</p>
                         )}
@@ -696,6 +759,9 @@ export const Vehicles: React.FC = () => {
                           <p className="text-[10px] text-text-secondary">{vh.cargo_type} {vh.container_type ? `· ${vh.container_type}` : ''}</p>
                         )}
                       </div>
+                      {vh.capacity && (
+                        <span className="text-[10px] font-numeric font-bold text-indigo-500 shrink-0 bg-indigo-500/10 px-1.5 py-0.5 rounded">{vh.capacity}T</span>
+                      )}
                     </div>
                   )}
 

@@ -1,10 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
-import { ArrowLeft, Image, Share2, ShieldCheck, Download } from 'lucide-react';
+import { ArrowLeft, Image, Share2, ShieldCheck, Download, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
+import { apiClient } from '../../lib/api/client';
 import type { GatePassData } from '../../lib/api/types';
 
 /* ── Field cell — module-level to avoid "component created during render" ── */
@@ -29,13 +31,16 @@ const F = ({
 
 /* ─────────────────────────────────────────────────────────────── */
 
-type PassStatus = 'cleared' | 'inspected' | 'expired' | 'pre_approved';
+type PassStatus = 'pre_approved' | 'approved' | 'cleared' | 'inspected' | 'used' | 'expired' | 'revoked';
 
 const STATUS_CFG: Record<PassStatus, { label: string; topBar: string; badge: string }> = {
-  cleared:      { label: 'CLEARED',      topBar: 'bg-emerald-500',  badge: 'bg-emerald-50 border-emerald-300 text-emerald-700' },
-  inspected:    { label: 'INSPECTED',    topBar: 'bg-blue-500',     badge: 'bg-blue-50 border-blue-300 text-blue-700'          },
-  expired:      { label: 'EXPIRED',      topBar: 'bg-red-500',      badge: 'bg-red-50 border-red-300 text-red-600'             },
-  pre_approved: { label: 'PRE-APPROVED', topBar: 'bg-amber-400',    badge: 'bg-amber-50 border-amber-300 text-amber-700'       },
+  pre_approved: { label: 'PRE-APPROVED', topBar: 'bg-amber-400',    badge: 'bg-amber-50 border-amber-300 text-amber-700'           },
+  approved:     { label: 'APPROVED',     topBar: 'bg-emerald-500',  badge: 'bg-emerald-50 border-emerald-300 text-emerald-700'     },
+  cleared:      { label: 'CLEARED',      topBar: 'bg-emerald-600',  badge: 'bg-emerald-50 border-emerald-400 text-emerald-800'     },
+  inspected:    { label: 'INSPECTED',    topBar: 'bg-blue-500',     badge: 'bg-blue-50 border-blue-300 text-blue-700'              },
+  used:         { label: 'GATE USED',    topBar: 'bg-indigo-500',   badge: 'bg-indigo-50 border-indigo-300 text-indigo-700'        },
+  expired:      { label: 'EXPIRED',      topBar: 'bg-red-500',      badge: 'bg-red-50 border-red-300 text-red-600'                 },
+  revoked:      { label: 'REVOKED',      topBar: 'bg-gray-500',     badge: 'bg-gray-50 border-gray-300 text-gray-600'              },
 };
 
 function fmtFull(d: string) {
@@ -56,19 +61,37 @@ function fmtShort(d: string) {
 export const GatePassPage: React.FC = () => {
   const navigate     = useNavigate();
   const location     = useLocation();
+  const { id }       = useParams<{ id?: string }>();
   const { toast }    = useToast();
   const cardRef      = useRef<HTMLDivElement>(null);
   const [capturing, setCapturing] = useState(false);
 
-  // Pass data is carried via router state (navigate('/gate-pass', { state: { pass } }))
-  const pass: GatePassData | null = (location.state as any)?.pass ?? null;
+  // Prefer router state (fresh creation navigation) — fall back to fetching by ID
+  const statePass: GatePassData | null = (location.state as any)?.pass ?? null;
+
+  const { data: fetchedPass, isLoading } = useQuery({
+    queryKey: ['gate-pass', id],
+    queryFn: () => apiClient.getGatePassById(id!),
+    enabled: !statePass && !!id,
+    staleTime: 30_000,
+  });
+
+  const pass: GatePassData | null = statePass ?? fetchedPass ?? null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] gap-2 text-text-secondary text-sm">
+        <Loader2 size={16} className="animate-spin" /> Loading gate pass…
+      </div>
+    );
+  }
 
   if (!pass) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-text-secondary text-sm">No gate pass data found.</p>
-        <Button variant="outline" size="small" icon={<ArrowLeft size={13} />} onClick={() => navigate(-1)}>
-          Go Back
+        <Button variant="outline" size="small" icon={<ArrowLeft size={13} />} onClick={() => navigate('/gate-passes')}>
+          Back to Gate Passes
         </Button>
       </div>
     );
@@ -86,7 +109,7 @@ export const GatePassPage: React.FC = () => {
     pass.customs_seal_number ? `SEAL:${pass.customs_seal_number}`  : '',
     `FROM:${fmtFull(pass.time_window_start)}`,
     `TO:${fmtFull(pass.time_window_end)}`,
-    `STATUS:${pass.status.toUpperCase()}`,
+    `STATUS:${(pass.status ?? 'pre_approved').toUpperCase()}`,
   ].filter(Boolean).join(' | ');
 
   /** Capture the card as a PNG and trigger download */

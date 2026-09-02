@@ -14,9 +14,12 @@ if TYPE_CHECKING:
 
 class GatePassStatus(str, enum.Enum):
     PRE_APPROVED = "pre_approved"
-    CLEARED = "cleared"
-    INSPECTED = "inspected"
-    EXPIRED = "expired"
+    APPROVED     = "approved"
+    CLEARED      = "cleared"
+    INSPECTED    = "inspected"
+    USED         = "used"
+    EXPIRED      = "expired"
+    REVOKED      = "revoked"
 
 
 class GatePass(Base):

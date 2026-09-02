@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useVehicles } from '../../hooks/useVehicles';
@@ -150,6 +150,28 @@ export const LiveMap: React.FC = () => {
   // Theme available for future use
   useTheme();
 
+  // Read URL params — ?focus=vehicleId&origin_lat=...&dest_lat=... etc.
+  const [searchParams] = useSearchParams();
+  const focusVehicleId = searchParams.get('focus');
+  const originLat  = parseFloat(searchParams.get('origin_lat') || '');
+  const originLng  = parseFloat(searchParams.get('origin_lng') || '');
+  const destLat    = parseFloat(searchParams.get('dest_lat') || '');
+  const destLng    = parseFloat(searchParams.get('dest_lng') || '');
+  const originName = searchParams.get('origin_name') ? decodeURIComponent(searchParams.get('origin_name')!) : null;
+  const destName   = searchParams.get('dest_name')   ? decodeURIComponent(searchParams.get('dest_name')!)   : null;
+  const hasRoute   = !isNaN(originLat) && !isNaN(originLng) && !isNaN(destLat) && !isNaN(destLng);
+
+  // Build a Google Maps directions URL (opens in new tab as fallback or iframe src)
+  const googleMapsDirectionsUrl = hasRoute
+    ? `https://www.google.com/maps/dir/${originLat},${originLng}/${destLat},${destLng}`
+    : null;
+
+  const googleMapsEmbedUrl = hasRoute && import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+    ? `https://www.google.com/maps/embed/v1/directions?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&origin=${originLat},${originLng}&destination=${destLat},${destLng}&mode=driving`
+    : null;
+
+  const [showDirections, setShowDirections] = useState(hasRoute);
+
   // State
   const [selectedStyleId, setSelectedStyleId] = useState<string>('osm');
   const [showRoutes, setShowRoutes] = useState<boolean>(true);
@@ -159,6 +181,7 @@ export const LiveMap: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
+  const [vehicleCardExpanded, setVehicleCardExpanded] = useState<boolean>(false);
 
   // Queries
   const { data: vehicles } = useVehicles();
@@ -435,7 +458,83 @@ export const LiveMap: React.FC = () => {
 
   const activeVehicle = (vehicles || []).find((v) => v.id === selectedVehicleId);
   const activeVehicleGps = selectedVehicleId && gpsPositions ? gpsPositions[selectedVehicleId] : null;
-  const activeVehicleDwell = activeVehicle && dwells ? dwells.find((d) => d.vehicle_id === activeVehicle.id && !d.departure_time) : null;
+  const activeVehicleDwell = activeVehicle && dwells
+    ? dwells.find((d: any) => d.vehicle_id === activeVehicle.id && !d.departure_time)
+    : null;
+
+  // Auto-focus vehicle from ?focus= URL param
+  useEffect(() => {
+    if (!focusVehicleId || !vehicles) return;
+    const vh = vehicles.find(v => v.id === focusVehicleId);
+    if (vh) handleFocusVehicle(vh);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusVehicleId, vehicles]);
+
+  // Draw origin→destination line on map when route params are present
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !hasRoute) return;
+
+    const addRouteLayer = () => {
+      // Remove existing trip-route layer if any
+      if (map.getLayer('trip-route-line')) map.removeLayer('trip-route-line');
+      if (map.getLayer('trip-route-points')) map.removeLayer('trip-route-points');
+      if (map.getSource('trip-route')) map.removeSource('trip-route');
+
+      map.addSource('trip-route', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [originLng, originLat],
+                  [destLng, destLat],
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      map.addLayer({
+        id: 'trip-route-line',
+        type: 'line',
+        source: 'trip-route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#ED642B',
+          'line-width': 4,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.9,
+        },
+      });
+
+      // Fit map to show origin and destination
+      const bounds = new maplibregl.LngLatBounds();
+      bounds.extend([originLng, originLat]);
+      bounds.extend([destLng, destLat]);
+      map.fitBounds(bounds, { padding: 80, duration: 1000 });
+    };
+
+    if (map.isStyleLoaded()) {
+      addRouteLayer();
+    } else {
+      map.once('load', addRouteLayer);
+    }
+
+    return () => {
+      const m = mapInstanceRef.current;
+      if (!m) return;
+      if (m.getLayer('trip-route-line')) m.removeLayer('trip-route-line');
+      if (m.getSource('trip-route')) m.removeSource('trip-route');
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRoute, originLat, originLng, destLat, destLng]);
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-bg-surface flex">
@@ -466,8 +565,38 @@ export const LiveMap: React.FC = () => {
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            {/* Toggle Stops */}
+          <div className="flex items-center gap-2 pointer-events-auto flex-wrap justify-end">
+
+            {/* ── Fleet Status Filter Pills ── */}
+            <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-lg bg-bg-surface/95 backdrop-blur-md border border-border-default shadow-md">
+              {([
+                { value: 'all',         label: 'All',        dot: 'bg-text-tertiary' },
+                { value: 'moving',      label: 'Transit',    dot: 'bg-emerald-500'  },
+                { value: 'in_transit',  label: 'Dispatch',   dot: 'bg-[#250C77]'    },
+                { value: 'stationary',  label: 'Stationary', dot: 'bg-amber-400'    },
+                { value: 'delayed',     label: 'Delayed',    dot: 'bg-red-500'      },
+                { value: 'idle',        label: 'Idle',       dot: 'bg-gray-400'     },
+                { value: 'maintenance', label: 'Maint.',     dot: 'bg-yellow-500'   },
+              ] as const).map(({ value, label, dot }) => {
+                const count = value === 'all'
+                  ? (vehicles || []).length
+                  : (vehicles || []).filter(v => v.status === value).length;
+                if (count === 0 && value !== 'all') return null;
+                const isActive = statusFilter === value;
+                return (
+                  <button key={value} onClick={() => setStatusFilter(value as any)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer whitespace-nowrap leading-none ${
+                      isActive ? 'bg-[#250C77] text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-surface-raised'
+                    }`}>
+                    <span className={`h-1 w-1 rounded-full ${dot}`} />
+                    {label}
+                    <span className={`font-numeric text-[9px] ${isActive ? 'opacity-60' : 'text-text-tertiary'}`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Toggle Transit Nodes */}
             <button
               onClick={() => setShowStops(!showStops)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold shadow-md transition-colors cursor-pointer backdrop-blur-md ${
@@ -477,7 +606,7 @@ export const LiveMap: React.FC = () => {
               }`}
             >
               <MapPin size={14} className={showStops ? 'text-[#ED642B]' : ''} />
-              <span>Stops</span>
+              <span>Transit Nodes</span>
             </button>
 
             {/* Toggle Delivery Routes */}
@@ -490,7 +619,7 @@ export const LiveMap: React.FC = () => {
               }`}
             >
               <Route size={14} />
-              <span>Routes</span>
+              <span>Corridors</span>
             </button>
 
             {/* Style Selector */}
@@ -524,43 +653,188 @@ export const LiveMap: React.FC = () => {
           </div>
         </div>
 
-        {/* Selected vehicle quick card overlay (bottom right) */}
-        {activeVehicle && activeVehicleGps && (
-          <div className="absolute bottom-6 left-6 max-w-sm rounded-2xl bg-bg-surface/95 backdrop-blur-md border border-border-strong p-4 shadow-2xl space-y-2 z-20 pointer-events-auto">
-            <div className="flex items-center justify-between border-b border-border-default pb-2">
+        {/* ── TRIP ROUTE PANEL (shown when navigating from TripDetail) ── */}
+        {hasRoute && showDirections && (
+          <div className="absolute top-16 left-4 z-20 w-72 rounded-2xl bg-bg-surface/97 backdrop-blur-md border border-border-strong shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-default bg-[#250C77]/10">
               <div className="flex items-center gap-2">
-                <Truck size={16} className="text-[#250C77]" />
-                <span className="font-numeric font-extrabold text-sm text-text-primary">
-                  {activeVehicle.registration_number}
-                </span>
+                <Route size={14} className="text-[#ED642B]" />
+                <span className="text-xs font-bold text-text-primary">Trip Route</span>
               </div>
-              <button
-                onClick={() => setSelectedVehicleId(null)}
-                className="p-1 text-text-tertiary hover:text-text-primary cursor-pointer"
-              >
-                <X size={14} />
+              <button onClick={() => setShowDirections(false)}
+                className="p-1 rounded-lg text-text-tertiary hover:text-text-primary cursor-pointer">
+                <X size={13} />
               </button>
             </div>
+            {/* Route stops */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex flex-col items-center pt-0.5">
+                  <div className="h-3 w-3 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="w-px flex-1 bg-border-default mt-1 mb-1" style={{ minHeight: 24 }} />
+                  <div className="h-3 w-3 rounded-full bg-[#ED642B] shrink-0" />
+                </div>
+                <div className="space-y-3 flex-1 min-w-0">
+                  <div>
+                    <p className="text-[10px] text-text-tertiary uppercase tracking-wider">Origin</p>
+                    <p className="text-xs font-semibold text-text-primary truncate">{originName || `${originLat.toFixed(4)}, ${originLng.toFixed(4)}`}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-text-tertiary uppercase tracking-wider">Destination</p>
+                    <p className="text-xs font-semibold text-text-primary truncate">{destName || `${destLat.toFixed(4)}, ${destLng.toFixed(4)}`}</p>
+                  </div>
+                </div>
+              </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs text-text-secondary">
-              <div>Type: <strong className="text-text-primary">{activeVehicle.vehicle_type}</strong></div>
-              <div>Speed: <strong className="text-text-primary font-numeric">{Math.round(activeVehicleGps.speed)} km/h</strong></div>
+              {/* Google Maps Directions button */}
+              <a
+                href={googleMapsDirectionsUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                Open in Google Maps
+                <ArrowRight size={12} />
+              </a>
+
+              {/* Embed if API key is set */}
+              {googleMapsEmbedUrl && (
+                <div className="rounded-xl overflow-hidden border border-border-default" style={{ height: 180 }}>
+                  <iframe
+                    title="Trip Directions"
+                    src={googleMapsEmbedUrl}
+                    width="100%"
+                    height="180"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              )}
+
+              {!googleMapsEmbedUrl && (
+                <p className="text-[10px] text-text-tertiary text-center">
+                  Add <code className="bg-bg-surface-raised px-1 rounded">VITE_GOOGLE_MAPS_API_KEY</code> to .env for the embedded directions view.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Selected vehicle quick card overlay (bottom-left) */}
+        {activeVehicle && activeVehicleGps && (
+          <div className="absolute bottom-6 left-6 w-72 rounded-2xl bg-bg-surface/97 backdrop-blur-md border border-border-strong shadow-2xl z-20 pointer-events-auto overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-default bg-[#250C77]/8">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="h-7 w-7 rounded-lg bg-[#250C77] flex items-center justify-center shrink-0">
+                  <Truck size={14} className="text-[#ED642B]" />
+                </div>
+                <div className="min-w-0">
+                  <span className="font-mono text-sm font-extrabold text-text-primary block truncate">{activeVehicle.registration_number}</span>
+                  <span className="text-[10px] text-text-tertiary truncate">{activeVehicle.vehicle_type}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => setVehicleCardExpanded(e => !e)}
+                  className="p-1 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised transition-colors cursor-pointer"
+                  title={vehicleCardExpanded ? 'Collapse' : 'Expand details'}>
+                  <ChevronLeft size={13} className={`transition-transform ${vehicleCardExpanded ? '-rotate-90' : 'rotate-90'}`} />
+                </button>
+                <button onClick={() => { setSelectedVehicleId(null); setVehicleCardExpanded(false); }}
+                  className="p-1 rounded-lg text-text-tertiary hover:text-text-primary cursor-pointer">
+                  <X size={13} />
+                </button>
+              </div>
             </div>
 
-            {activeVehicleDwell && (
-              <div className="p-2 rounded-xl bg-[#ED642B]/10 border border-[#ED642B]/20 text-[11px] text-[#ED642B] font-bold">
-                Excess dwell at {activeVehicleDwell.location_name}: +{formatMinutes(activeVehicleDwell.excess_minutes)}
+            {/* Always-visible summary */}
+            <div className="px-4 py-2.5 flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-numeric font-bold text-text-primary">{Math.round(activeVehicleGps.speed ?? 0)} km/h</span>
+              </div>
+              {activeVehicle.driver_name && (
+                <span className="text-text-secondary truncate">{activeVehicle.driver_name}</span>
+              )}
+              {activeVehicleDwell && (
+                <span className="ml-auto text-[10px] font-bold text-[#ED642B]">+{formatMinutes((activeVehicleDwell as any).excess_minutes ?? 0)}</span>
+              )}
+            </div>
+
+            {/* Expandable detail panel */}
+            {vehicleCardExpanded && (
+              <div className="px-4 pb-4 space-y-3 border-t border-border-default pt-3">
+                {/* Location */}
+                <div className="flex items-start gap-2">
+                  <MapPin size={12} className="text-[#ED642B] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] text-text-tertiary uppercase tracking-wider">Current Position</p>
+                    <p className="text-xs font-semibold text-text-primary font-numeric">
+                      {activeVehicleGps.latitude?.toFixed(5)}, {activeVehicleGps.longitude?.toFixed(5)}
+                    </p>
+                    {activeVehicleGps.recorded_at && (
+                      <p className="text-[10px] text-text-tertiary">Updated: {new Date(activeVehicleGps.recorded_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Active dwell */}
+                {activeVehicleDwell && (
+                  <div className="p-2.5 rounded-xl bg-[#ED642B]/10 border border-[#ED642B]/20 text-[11px]">
+                    <p className="font-bold text-[#ED642B]">Dwell: {(activeVehicleDwell as any).location_name}</p>
+                    <p className="text-text-secondary mt-0.5">Excess: +{formatMinutes((activeVehicleDwell as any).excess_minutes ?? 0)}</p>
+                  </div>
+                )}
+
+                {/* Load / Container */}
+                {(activeVehicle.container_number || activeVehicle.cargo_type) && (
+                  <div className="p-2.5 rounded-xl bg-indigo-500/8 border border-indigo-500/20 text-[11px]">
+                    <p className="font-bold text-indigo-500">
+                      {activeVehicle.container_number ? `Container: ${activeVehicle.container_number}` : 'Load assigned'}
+                    </p>
+                    {activeVehicle.cargo_type && <p className="text-text-secondary mt-0.5">{activeVehicle.cargo_type}</p>}
+                    {(activeVehicle as any).capacity && (
+                      <p className="text-text-secondary font-numeric">{(activeVehicle as any).capacity}T capacity</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Telematics grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-[10px] text-text-tertiary">Speed</p>
+                    <p className="font-numeric font-bold text-text-primary">{Math.round(activeVehicleGps.speed ?? 0)} km/h</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-text-tertiary">Heading</p>
+                    <p className="font-numeric font-bold text-text-primary">{Math.round(activeVehicleGps.heading ?? 0)}°</p>
+                  </div>
+                  {activeVehicle.fuel_level != null && (
+                    <div>
+                      <p className="text-[10px] text-text-tertiary">Fuel</p>
+                      <p className={`font-numeric font-bold ${activeVehicle.fuel_level < 20 ? 'text-red-500' : 'text-text-primary'}`}>{activeVehicle.fuel_level}%</p>
+                    </div>
+                  )}
+                  {activeVehicle.capacity && (
+                    <div>
+                      <p className="text-[10px] text-text-tertiary">Capacity</p>
+                      <p className="font-numeric font-bold text-text-primary">{activeVehicle.capacity}T</p>
+                    </div>
+                  )}
+                </div>
+
+                <Link to={`/vehicles/${activeVehicle.id}`}
+                  className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-xl bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-bold transition-colors">
+                  Full Asset Profile <ArrowRight size={12} />
+                </Link>
               </div>
             )}
-
-            <div className="pt-1 flex justify-end">
-              <Link
-                to={`/vehicles/${activeVehicle.id}`}
-                className="text-xs font-bold text-[#ED642B] hover:underline flex items-center gap-1"
-              >
-                <span>Full Telematics Profile</span> <ArrowRight size={12} />
-              </Link>
-            </div>
           </div>
         )}
       </div>

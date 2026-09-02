@@ -6,8 +6,9 @@ import type { EChartsOption } from 'echarts';
 import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatMinutes, formatDateShort } from '../../lib/format';
 import { useTheme } from '../../lib/ThemeContext';
+import { useFleetProductivity } from '../../hooks/useAnalytics';
 import {
-  BarChart3, Clock, DollarSign, Sparkles, ArrowRight, Download, BarChart2
+  BarChart3, Clock, DollarSign, Sparkles, ArrowRight, Download, BarChart2, Gauge
 } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
 import { useCorridorAnalysis } from '../../hooks/useAIAdvisor';
@@ -39,7 +40,7 @@ export const Analytics: React.FC = () => {
 
   const { data: trendData, isLoading: loadingTrends } = useQuery({
     queryKey: ['trendData'],
-    queryFn: apiClient.getTrendData
+    queryFn: () => apiClient.getTrendData()
   });
 
   const { data: locationStats, isLoading: loadingLocations } = useQuery({
@@ -48,6 +49,9 @@ export const Analytics: React.FC = () => {
   });
 
   const { data: analystReport } = useCorridorAnalysis();
+
+  // D-004: Fleet productivity from the backend endpoint
+  const { data: productivity } = useFleetProductivity(Number(dateRange));
 
   const filteredTrends = useMemo(() => {
     return trendData ? trendData.slice(-Number(dateRange)) : [];
@@ -63,6 +67,21 @@ export const Analytics: React.FC = () => {
   const avgDwell = filteredTrends.length
     ? Math.round(filteredTrends.reduce((acc, d) => acc + d.average_dwell_minutes, 0) / filteredTrends.length)
     : 0;
+
+  // D-004: Use backend productivity score when available; fall back to client-side derivation
+  // while the first fetch is in-flight so the UI never shows an empty slot.
+  const productivityScore: number = productivity?.score ?? (
+    filteredTrends.length > 0
+      ? Math.min(
+          Math.round(
+            (filteredTrends.reduce((a, d) => a + (d.average_dwell_minutes ?? 0) * d.visit_count, 0) /
+              Math.max(filteredTrends.reduce((a, d) => a + (d.average_dwell_minutes ?? 0) * d.visit_count, 0) +
+                filteredTrends.reduce((a, d) => a + d.excess_dwell_minutes, 0), 1)) * 100,
+          ),
+          100,
+        )
+      : 100
+  );
 
   // ── APACHE ECHARTS: Dwell Trend Option ──
   const dwellTrendOption = useMemo<EChartsOption>(() => {
@@ -243,7 +262,7 @@ export const Analytics: React.FC = () => {
       )}
 
       {/* ── AGGREGATE HUD STATS (SUPABASE METRIC CARD PATTERN) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard isLoading={loadingTrends}>
           <MetricCardHeader href="/insights">
             <MetricCardLabel
@@ -329,6 +348,50 @@ export const Analytics: React.FC = () => {
           <MetricCardSparkline
             data={filteredTrends.map(t => ({ value: t.average_dwell_minutes }))}
             color="#250C77"
+          />
+        </MetricCard>
+
+        {/* D-004: Fleet Productivity Score — from GET /analytics/fleet-productivity */}
+        <MetricCard isLoading={loadingTrends}>
+          <MetricCardHeader href="/analytics">
+            <MetricCardLabel
+              tooltip="Fleet productivity: ratio of expected dwell to actual dwell as a percentage. 100% = every vehicle finished exactly on SLA. Lower scores indicate excess delays across the fleet."
+              icon={<Gauge size={13} className={productivityScore >= 80 ? 'text-status-good' : productivityScore >= 60 ? 'text-status-warning' : 'text-status-danger'} />}
+            >
+              Fleet Productivity
+            </MetricCardLabel>
+          </MetricCardHeader>
+          <MetricCardContent>
+            <MetricCardValue
+              className={
+                productivityScore >= 80
+                  ? 'text-status-good'
+                  : productivityScore >= 60
+                  ? 'text-status-warning'
+                  : 'text-status-danger'
+              }
+            >
+              {productivityScore}%
+            </MetricCardValue>
+            <MetricCardDifferential
+              variant={productivityScore >= 80 ? 'positive' : 'negative'}
+            >
+              {productivity
+                ? `${productivity.on_time_visits}/${productivity.total_visits} on time`
+                : 'efficiency'}
+            </MetricCardDifferential>
+          </MetricCardContent>
+          <MetricCardSparkline
+            data={filteredTrends.map((t, i) => ({
+              value: Math.max(
+                0,
+                Math.min(
+                  100,
+                  100 - Math.round((t.excess_dwell_minutes / Math.max(t.total_dwell_minutes, 1)) * 100),
+                ),
+              ),
+            }))}
+            color={productivityScore >= 80 ? '#10B981' : productivityScore >= 60 ? '#F59E0B' : '#EF4444'}
           />
         </MetricCard>
       </div>

@@ -14,6 +14,7 @@ from app.deps import get_current_company
 from app.schemas.gate_pass import GatePassCreate, GatePassUpdate, GatePassResponse
 from app.schemas.common import PaginatedResponse
 from app.auth.rbac import require_role
+from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/gate-passes", tags=["Gate Passes"])
 
@@ -100,8 +101,27 @@ async def create_gate_pass(
     if not v_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
 
-    pass_number = _generate_pass_number(payload.vehicle_reg)
     now = datetime.now(timezone.utc)
+
+    # ── One active pass per trip enforcement ──────────────────────────────────
+    # If a trip_id is provided, find any existing active passes for that trip
+    # and auto-revoke them before issuing the new one.
+    if payload.trip_id:
+        existing_q = await db.execute(
+            select(GatePass).where(
+                GatePass.trip_id == payload.trip_id,
+                GatePass.status.in_([
+                    GatePassStatus.PRE_APPROVED,
+                    GatePassStatus.APPROVED,
+                ])
+            )
+        )
+        existing_active = existing_q.scalars().all()
+        for old_pass in existing_active:
+            old_pass.status = GatePassStatus.REVOKED
+            old_pass.updated_at = now
+
+    pass_number = _generate_pass_number(payload.vehicle_reg)
     gate_pass = GatePass(
         id=str(uuid.uuid4()),
         pass_number=pass_number,
@@ -111,6 +131,19 @@ async def create_gate_pass(
     db.add(gate_pass)
     await db.commit()
     await db.refresh(gate_pass)
+    # ── Notification ──
+    try:
+        v_result2 = await db.execute(select(Vehicle).where(Vehicle.id == gate_pass.vehicle_id))
+        vh2 = v_result2.scalar_one_or_none()
+        company_id_for_notif = vh2.company_id if vh2 else company_id
+        await notif_svc.gate_pass_issued(
+            db, company_id=company_id_for_notif,
+            pass_id=gate_pass.id, pass_number=gate_pass.pass_number,
+            vehicle_reg=gate_pass.vehicle_reg, terminal=gate_pass.terminal_name
+        )
+        await db.commit()
+    except Exception:
+        pass
     return gate_pass
 
 
@@ -217,3 +250,211 @@ async def update_gate_pass(
     await db.commit()
     await db.refresh(gate_pass)
     return gate_pass
+
+
+# ── Enhanced Gate Pass Controls ──────────────────────────────────────────────
+
+@router.post("/{pass_id}/approve", response_model=GatePassResponse, summary="Approve gate pass")
+async def approve_gate_pass(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER)),
+):
+    """Approve a pre-approved or pending gate pass. Admin/Fleet Manager only."""
+    q = (
+        select(GatePass)
+        .options(selectinload(GatePass.vehicle))
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    gate_pass = result.scalar_one_or_none()
+    
+    if not gate_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    if gate_pass.status in [GatePassStatus.REVOKED, GatePassStatus.EXPIRED]:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_STATUS", "message": f"Cannot approve gate pass with status: {gate_pass.status.value}"}}
+        )
+    
+    gate_pass.status = GatePassStatus.APPROVED
+    gate_pass.updated_at = datetime.now(timezone.utc)
+    
+    await db.commit()
+    await db.refresh(gate_pass)
+    return gate_pass
+
+
+@router.post("/{pass_id}/revoke", response_model=GatePassResponse, summary="Revoke gate pass")
+async def revoke_gate_pass(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER)),
+):
+    """
+    Revoke an active gate pass. This immediately invalidates the pass.
+    Admin/Fleet Manager only.
+    """
+    q = (
+        select(GatePass)
+        .options(selectinload(GatePass.vehicle))
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    gate_pass = result.scalar_one_or_none()
+    
+    if not gate_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    if gate_pass.status == GatePassStatus.USED:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "ALREADY_USED", "message": "Cannot revoke a gate pass that has already been used"}}
+        )
+    
+    gate_pass.status = GatePassStatus.REVOKED
+    gate_pass.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(gate_pass)
+    # ── Notification ──
+    try:
+        v_res = await db.execute(select(Vehicle).where(Vehicle.id == gate_pass.vehicle_id))
+        vh = v_res.scalar_one_or_none()
+        cid = vh.company_id if vh else company_id
+        await notif_svc.gate_pass_revoked(
+            db, company_id=cid, pass_id=gate_pass.id,
+            pass_number=gate_pass.pass_number, vehicle_reg=gate_pass.vehicle_reg
+        )
+        await db.commit()
+    except Exception:
+        pass
+    return gate_pass
+
+
+@router.post("/{pass_id}/reissue", response_model=GatePassResponse, status_code=status.HTTP_201_CREATED, summary="Reissue gate pass")
+async def reissue_gate_pass(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER, UserRole.DISPATCHER)),
+):
+    """
+    Create a new gate pass based on an expired or revoked pass.
+    The original pass remains in the system for audit purposes.
+    """
+    q = (
+        select(GatePass)
+        .options(selectinload(GatePass.vehicle))
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    original_pass = result.scalar_one_or_none()
+    
+    if not original_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    # Generate new pass based on original
+    pass_number = _generate_pass_number(original_pass.vehicle_reg)
+    now = datetime.now(timezone.utc)
+    
+    # Calculate new time window (extend by same duration as original)
+    from datetime import timedelta
+    original_duration = original_pass.time_window_end - original_pass.time_window_start
+    new_start = now
+    new_end = now + original_duration
+    
+    new_pass = GatePass(
+        id=str(uuid.uuid4()),
+        pass_number=pass_number,
+        vehicle_id=original_pass.vehicle_id,
+        trip_id=original_pass.trip_id,
+        vehicle_reg=original_pass.vehicle_reg,
+        vehicle_type=original_pass.vehicle_type,
+        driver_name=original_pass.driver_name,
+        driver_phone=original_pass.driver_phone,
+        container_number=original_pass.container_number,
+        customs_seal_number=original_pass.customs_seal_number,
+        cargo_type=original_pass.cargo_type,
+        cargo_weight_tonnes=original_pass.cargo_weight_tonnes,
+        terminal_name=original_pass.terminal_name,
+        time_window_start=new_start,
+        time_window_end=new_end,
+        status=GatePassStatus.PRE_APPROVED,
+        carrier_name=original_pass.carrier_name,
+        created_at=now,
+        updated_at=now,
+    )
+    
+    db.add(new_pass)
+    await db.commit()
+    await db.refresh(new_pass)
+    
+    return new_pass
+
+
+@router.post("/{pass_id}/mark-used", response_model=GatePassResponse, summary="Mark gate pass as used")
+async def mark_gate_pass_used(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(WRITE_ROLES),
+):
+    """Mark a gate pass as used when vehicle enters the terminal."""
+    q = (
+        select(GatePass)
+        .options(selectinload(GatePass.vehicle))
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    gate_pass = result.scalar_one_or_none()
+    
+    if not gate_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    if gate_pass.status not in [GatePassStatus.PRE_APPROVED, GatePassStatus.APPROVED]:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_STATUS", "message": f"Cannot mark gate pass as used from status: {gate_pass.status.value}"}}
+        )
+    
+    gate_pass.status = GatePassStatus.USED
+    gate_pass.updated_at = datetime.now(timezone.utc)
+    
+    await db.commit()
+    await db.refresh(gate_pass)
+    return gate_pass
+
+
+@router.delete("/{pass_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete gate pass")
+async def delete_gate_pass(
+    pass_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(require_role(UserRole.ADMIN)),
+):
+    """
+    Permanently delete a gate pass. Admin only.
+    Consider using revoke instead for audit trail purposes.
+    """
+    q = (
+        select(GatePass)
+        .join(Vehicle, GatePass.vehicle_id == Vehicle.id)
+        .where(GatePass.id == pass_id, Vehicle.company_id == company_id)
+    )
+    result = await db.execute(q)
+    gate_pass = result.scalar_one_or_none()
+    
+    if not gate_pass:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Gate pass not found"}})
+    
+    await db.delete(gate_pass)
+    await db.commit()
+    return None

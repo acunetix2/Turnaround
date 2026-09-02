@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageTabs } from '../../components/ui/PageTabs';
 import {
   Save, Bell, DollarSign, Clock, Globe, User, Shield, Building, Lock
 } from 'lucide-react';
@@ -21,7 +22,7 @@ export const Settings: React.FC = () => {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'account' | 'baselines' | 'rates' | 'telematics' | 'alerts'>('account');
+  const [activeTab, setActiveTab] = useState<'baselines' | 'rates' | 'telematics' | 'alerts'>('baselines');
 
   // Account details state
   const [profileName, setProfileName] = useState(user?.name || 'Operations Lead');
@@ -117,9 +118,9 @@ export const Settings: React.FC = () => {
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-text-primary tracking-tight">Account & Configuration</h1>
+          <h1 className="text-lg font-bold text-text-primary tracking-tight">Platform Configuration</h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Manage your personal profile, organization settings, target stop times, and alert thresholds.
+            Operational baselines, cost rates, telematics integrations, and alert thresholds.
           </p>
         </div>
 
@@ -144,28 +145,16 @@ export const Settings: React.FC = () => {
       </div>
 
       {/* ── TABS ── */}
-      <div className="flex items-center gap-1 border-b border-border-default overflow-x-auto pb-px">
-        {[
-          { id: 'account',   label: 'Account & Organization', icon: <User size={14} /> },
-          { id: 'baselines', label: 'Stop Time Targets',      icon: <Clock size={14} /> },
-          { id: 'rates',     label: 'Costs & Penalties',       icon: <DollarSign size={14} /> },
-          { id: 'telematics', label: 'Tracking & Webhooks',    icon: <Globe size={14} /> },
-          { id: 'alerts',    label: 'Alerts & Notifications',  icon: <Bell size={14} /> },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
-              activeTab === tab.id
-                ? 'border-[#ED642B] text-[#ED642B] bg-[#ED642B]/5 font-bold'
-                : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-bg-surface-raised'
-            }`}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
+      <PageTabs
+        tabs={[
+          { id: 'baselines',  label: 'Stop Time Targets',      icon: <Clock size={13} /> },
+          { id: 'rates',      label: 'Costs & Penalties',       icon: <DollarSign size={13} /> },
+          { id: 'telematics', label: 'Tracking & Webhooks',     icon: <Globe size={13} /> },
+          { id: 'alerts',     label: 'Alerts & Notifications',  icon: <Bell size={13} /> },
+        ]}
+        active={activeTab}
+        onChange={(id) => setActiveTab(id as any)}
+      />
 
       {/* ── TAB PANELS ── */}
       <div className="rounded-xl border border-border-default bg-bg-surface p-6 shadow-sm">

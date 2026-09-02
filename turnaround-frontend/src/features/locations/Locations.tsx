@@ -630,9 +630,10 @@ export const Locations: React.FC = () => {
               const excess = stats?.avg_excess_delay_minutes || 0
 
               return (
-                <div
+                <Link
                   key={loc.id}
-                  className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm hover:border-[#ED642B]/40 hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                  to={`/locations/${loc.id}`}
+                  className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm hover:border-[#ED642B]/40 hover:shadow-md transition-all flex flex-col justify-between space-y-4 cursor-pointer block"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -686,14 +687,14 @@ export const Locations: React.FC = () => {
                       Inspect Profile <ArrowRight size={11} />
                     </Link>
                     {canMutate && (
-                      <div className="flex items-center gap-1">
-                        <Button size="tiny" variant="ghost" onClick={() => handleOpenEdit(loc)}>
+                      <div className="flex items-center gap-1" onClick={e => e.preventDefault()}>
+                        <Button size="tiny" variant="ghost" onClick={(e) => { e.preventDefault(); handleOpenEdit(loc); }}>
                           <Edit2 size={12} />
                         </Button>
                         <Button
                           size="tiny"
                           variant="ghost"
-                          onClick={() => handleDelete(loc.id, loc.name)}
+                          onClick={(e) => { e.preventDefault(); handleDelete(loc.id, loc.name); }}
                           className="hover:text-red-500"
                         >
                           <Trash2 size={12} />
@@ -701,7 +702,7 @@ export const Locations: React.FC = () => {
                       </div>
                     )}
                   </div>
-                </div>
+                </Link>
               )
             })
           )}

@@ -45,5 +45,6 @@ class TripResponse(TripBase):
     created_at: datetime
     origin: Optional[LocationResponse] = None
     destination: Optional[LocationResponse] = None
+    vehicle: Optional[VehicleResponse] = None
 
     model_config = ConfigDict(from_attributes=True)

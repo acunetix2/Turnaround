@@ -13,9 +13,10 @@ from app.db.models.dwell_event import DwellEvent
 from app.db.models.insight import Insight
 from app.db.models.demurrage_claim import DemurrageClaim
 from app.db.models.gate_pass import GatePass
+from app.db.models.notification import Notification
 
 __all__ = [
     "Company", "User", "Vehicle", "Location",
     "Trip", "GPSEvent", "DwellEvent", "Insight",
-    "DemurrageClaim", "GatePass",
+    "DemurrageClaim", "GatePass", "Notification",
 ]

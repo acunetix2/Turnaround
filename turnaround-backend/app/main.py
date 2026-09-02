@@ -12,13 +12,13 @@ from app.db.base import Base
 # Import all models so SQLAlchemy registers them against Base metadata
 from app.db.models import (  # noqa: F401
     Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight,
-    DemurrageClaim, GatePass
+    DemurrageClaim, GatePass, Notification
 )
 from app.middleware.database import DatabaseMiddleware, QueryTimeoutMiddleware
 from app.routers import (
     health, vehicles, locations, trips,
     gps_events, dwell_events, analytics, insights, predictions, ai,
-    demurrage, gate_passes
+    demurrage, gate_passes, users, account, notifications, company
 )
 
 # ── Structured Logging ──────────────────────────────────────────────────────
@@ -121,9 +121,10 @@ app.add_middleware(
 )
 
 # ── Database Connection Middleware ──────────────────────────────────────────
-# Add database middleware for connection recovery and timeout handling
-app.add_middleware(DatabaseMiddleware, max_retries=2)
-app.add_middleware(QueryTimeoutMiddleware, timeout_seconds=30)
+# NOTE: Pure-ASGI middleware classes are registered directly on the ASGI stack,
+# not via add_middleware (which wraps them in BaseHTTPMiddleware and breaks them).
+# Connection health is handled by pool_pre_ping=True in session.py.
+# These are intentionally left out of add_middleware to avoid 503 crashes.
 
 
 # ── Global Exception Handler ────────────────────────────────────────────────
@@ -151,6 +152,10 @@ app.include_router(predictions.router, prefix=API_PREFIX)
 app.include_router(ai.router, prefix=API_PREFIX)
 app.include_router(demurrage.router, prefix=API_PREFIX)
 app.include_router(gate_passes.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(account.router, prefix=API_PREFIX)
+app.include_router(notifications.router, prefix=API_PREFIX)
+app.include_router(company.router, prefix=API_PREFIX)
 
 
 @app.get("/", tags=["Root"], summary="API root redirect")

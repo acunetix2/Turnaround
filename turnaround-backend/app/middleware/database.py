@@ -1,117 +1,80 @@
 """
-Database middleware for connection recovery and retry logic.
+Database middleware — lightweight pass-through.
+
+BaseHTTPMiddleware cannot reliably catch exceptions raised inside call_next
+because Starlette streams the response body lazily; by the time an exception
+surfaces from a route handler the middleware's try/except has already exited.
+
+We therefore use a minimal pure-ASGI implementation that:
+  - Passes all requests straight through (no retry loop that can misfire).
+  - Logs DisconnectionError / SATimeoutError at WARNING for observability.
+  - Lets every other exception propagate to FastAPI's global exception handler.
+
+Connection-level retries are better handled at the SQLAlchemy pool level
+(pool_pre_ping=True in session.py) rather than at the HTTP middleware layer.
 """
 import asyncio
 import logging
-from typing import Callable, Any
-from fastapi import Request, Response, HTTPException
-from sqlalchemy.exc import DisconnectionError, TimeoutError, SQLAlchemyError
-from starlette.middleware.base import BaseHTTPMiddleware
+from typing import Callable
 
-from app.db.health import ensure_connection_health
+from fastapi import Request, Response, HTTPException
+from sqlalchemy.exc import DisconnectionError, TimeoutError as SATimeoutError
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
 
-class DatabaseMiddleware(BaseHTTPMiddleware):
+# ── Simple pass-through used as DatabaseMiddleware ───────────────────────────
+
+class DatabaseMiddleware:
     """
-    Middleware to handle database connection issues and automatic recovery.
+    Minimal ASGI middleware. Passes requests through unchanged.
+    Does NOT wrap call_next in a try/except — that pattern is broken for
+    streaming responses in BaseHTTPMiddleware.
     """
-    
-    def __init__(self, app, max_retries: int = 2):
-        super().__init__(app)
-        self.max_retries = max_retries
-    
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """
-        Process request with database connection error handling.
-        """
-        retry_count = 0
-        
-        while retry_count <= self.max_retries:
-            try:
-                # Process the request
-                response = await call_next(request)
-                return response
-                
-            except (DisconnectionError, TimeoutError) as e:
-                retry_count += 1
-                logger.warning(
-                    f"Database connection error (attempt {retry_count}/{self.max_retries + 1}): {e}"
-                )
-                
-                if retry_count <= self.max_retries:
-                    # Attempt connection recovery
-                    logger.info("Attempting database connection recovery...")
-                    
-                    recovery_success = await ensure_connection_health()
-                    
-                    if recovery_success:
-                        logger.info("Database connection recovered, retrying request")
-                        # Add small delay before retry
-                        await asyncio.sleep(0.1 * retry_count)
-                        continue
-                    else:
-                        logger.error("Database connection recovery failed")
-                        break
-                else:
-                    logger.error(f"Max retries ({self.max_retries}) exceeded for database operation")
-                    break
-                    
-            except SQLAlchemyError as e:
-                # Log SQL errors but don't retry (likely not connection-related)
-                logger.error(f"SQLAlchemy error: {e}")
-                raise HTTPException(
-                    status_code=503,
-                    detail={"error": {"code": "DATABASE_ERROR", "message": "Database operation failed"}}
-                )
-                
-            except Exception as e:
-                # Other errors should not trigger retry
-                logger.error(f"Unexpected error in database middleware: {e}")
-                raise
-        
-        # If we get here, all retries were exhausted
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": {
-                    "code": "DATABASE_UNAVAILABLE",
-                    "message": "Database connection could not be established after retries"
-                }
-            }
-        )
+
+    def __init__(self, app: ASGIApp, max_retries: int = 2):
+        self.app = app
+        # max_retries kept for API compatibility; not used at this layer.
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        await self.app(scope, receive, send)
 
 
-class QueryTimeoutMiddleware(BaseHTTPMiddleware):
+# ── Timeout middleware (also pure-ASGI) ──────────────────────────────────────
+
+class QueryTimeoutMiddleware:
     """
-    Middleware to add query timeout monitoring for long-running requests.
+    Applies a wall-clock timeout to every HTTP request.
+    Uses pure ASGI so the timeout fires correctly even for streaming responses.
     """
-    
-    def __init__(self, app, timeout_seconds: int = 30):
-        super().__init__(app)
+
+    def __init__(self, app: ASGIApp, timeout_seconds: int = 30):
+        self.app = app
         self.timeout_seconds = timeout_seconds
-    
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """
-        Process request with timeout monitoring.
-        """
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         try:
-            # Set a timeout for the entire request
-            response = await asyncio.wait_for(
-                call_next(request),
-                timeout=self.timeout_seconds
+            await asyncio.wait_for(
+                self.app(scope, receive, send),
+                timeout=self.timeout_seconds,
             )
-            return response
-            
         except asyncio.TimeoutError:
-            logger.warning(f"Request timeout after {self.timeout_seconds}s: {request.url}")
-            raise HTTPException(
-                status_code=504,
-                detail={
-                    "error": {
-                        "code": "REQUEST_TIMEOUT",
-                        "message": f"Request timed out after {self.timeout_seconds} seconds"
-                    }
-                }
-            )
+            path = scope.get("path", "unknown")
+            logger.warning(f"Request timeout ({self.timeout_seconds}s): {path}")
+            # Send a 504 response manually since we're in raw ASGI
+            body = b'{"error":{"code":"REQUEST_TIMEOUT","message":"Request timed out."}}'
+            await send({
+                "type": "http.response.start",
+                "status": 504,
+                "headers": [
+                    [b"content-type", b"application/json"],
+                    [b"content-length", str(len(body)).encode()],
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})

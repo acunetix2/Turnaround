@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Send, RefreshCw, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
-  Sparkles, ShieldCheck, Lightbulb
+  Sparkles, ShieldCheck, Lightbulb, ExternalLink
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
@@ -10,6 +10,7 @@ import { useCorridorAnalysis, useCopilotQuery } from '../../hooks/useAIAdvisor';
 import { formatCurrency, formatMinutes } from '../../lib/format';
 import { Spinner } from '../../components/common/Loader';
 import type { AICopilotMessage } from '../../lib/api/types';
+import type { ChartData } from '../../lib/api/types';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { useTheme } from '../../lib/ThemeContext';
@@ -23,7 +24,12 @@ import { toast } from 'sonner';
  */
 const FormattedMarkdownMessage: React.FC<{ content: string; isUser: boolean }> = ({ content, isUser }) => {
   if (isUser) {
-    return <p className="whitespace-pre-wrap font-medium">{content}</p>;
+    return <p className="whitespace-pre-wrap font-medium">{content || ''}</p>;
+  }
+
+  // Guard against undefined/null content
+  if (!content) {
+    return <p className="text-xs text-text-tertiary italic">No response content</p>;
   }
 
   // Parse lines and detect tables, headers, lists
@@ -206,9 +212,10 @@ export const AIAdvisor: React.FC = () => {
     queryFn: apiClient.getDashboardStats,
   });
   const copilotMutation = useCopilotQuery();
+  const navigate = useNavigate();
 
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<AICopilotMessage[]>([
+  const [messages, setMessages] = useState<(AICopilotMessage & { chart_data?: ChartData | null })[]>([
     {
       role: 'assistant',
       content: 'Fleet Performance Analyst online. I have analyzed your real-time vehicle telemetry, stop turnaround cycles, and idle cost metrics. Ask for specific stop bottlenecks, financial recovery models, or route efficiency audits.',
@@ -234,6 +241,7 @@ export const AIAdvisor: React.FC = () => {
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: res.response,
+        chart_data: res.chart_data,
         timestamp: new Date().toISOString(),
       }]);
     } catch {
@@ -626,6 +634,19 @@ export const AIAdvisor: React.FC = () => {
                   }`}
                 >
                   <FormattedMarkdownMessage content={msg.content} isUser={isUser} />
+                  {/* View in Visuals button — only on assistant messages with chart_data */}
+                  {!isUser && (msg as any).chart_data && (
+                    <button
+                      onClick={() => navigate('/analytics', {
+                        state: { injectChart: (msg as any).chart_data }
+                      })}
+                      className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#250C77]/10 hover:bg-[#250C77]/20 border border-[#250C77]/30 text-[11px] font-bold text-[#250C77] dark:text-[#ED642B] transition-colors cursor-pointer"
+                    >
+                      <BarChart3 size={12} />
+                      View in Visuals
+                      <ExternalLink size={11} className="opacity-60" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
