@@ -87,6 +87,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/", include_in_schema=False)
+async def root_status():
+    return {"service": "turnaround-backend", "status": "ok"}
+
 # ── Request / Access Logging Middleware ────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
