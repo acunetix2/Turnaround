@@ -19,6 +19,11 @@ import {
   ChartHeader,
   ChartTitle,
   ChartContent,
+  ChartLine,
+  ChartEmptyState,
+  ChartLoadingState,
+  ChartActions,
+  ChartFooter,
 } from '../../components/ui/Chart';
 import { format } from 'date-fns';
 import {
@@ -89,7 +94,7 @@ export const Dashboard: React.FC = () => {
 
   const { data: trendData } = useQuery({
     queryKey: ['trendData'],
-    queryFn: apiClient.getTrendData,
+    queryFn: () => apiClient.getTrendData(),
   });
 
   const analysisMutation = useMutation({
@@ -321,10 +326,11 @@ export const Dashboard: React.FC = () => {
     return (
       <div className="space-y-5 animate-pulse">
         <div className="h-10 w-64 bg-bg-surface-raised rounded-xl" />
-        <div className="h-44 rounded-2xl bg-bg-surface border border-border-default" />
+        <div className="h-32 bg-bg-surface-raised rounded-2xl" />
+        <div className="h-72 bg-bg-surface-raised rounded-2xl" />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <div className="h-[580px] rounded-2xl bg-bg-surface border border-border-default lg:col-span-8" />
-          <div className="h-[580px] rounded-2xl bg-bg-surface border border-border-default lg:col-span-4" />
+          <div className="h-96 bg-bg-surface-raised rounded-2xl lg:col-span-8" />
+          <div className="h-96 bg-bg-surface-raised rounded-2xl lg:col-span-4" />
         </div>
       </div>
     );
@@ -643,6 +649,86 @@ export const Dashboard: React.FC = () => {
         );
       })()}
 
+      {/* ── FULL-WIDTH TELEMETRY ACTIVITY TREND ── */}
+      <Chart isLoading={!trendData}>
+        <ChartCard>
+          <ChartHeader>
+            <ChartTitle tooltip="Fleet velocity, stop visit volume and financial impact over time across corridors.">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp size={14} className="text-[#ED642B]" />
+                Telemetry Activity Trend
+              </div>
+            </ChartTitle>
+            <ChartActions>
+              <div className="flex items-center p-0.5 rounded-md bg-bg-surface-raised border border-border-default">
+                {(['3M', '6M', '12M'] as const).map((r) => (
+                  <button key={r} onClick={() => setChartRange(r)}
+                    className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                      chartRange === r ? 'bg-[#250C77] text-white shadow-sm' : 'text-text-tertiary hover:text-text-primary'
+                    }`}>{r}</button>
+                ))}
+              </div>
+              <Link to="/analytics" className="text-xs font-medium text-[#ED642B] hover:underline flex items-center gap-1">
+                Full analytics <ArrowRight size={12} />
+              </Link>
+            </ChartActions>
+          </ChartHeader>
+
+          {/* Headline numbers */}
+          <div className="flex items-center gap-6 px-4 pt-4 pb-0">
+            <div>
+              <p className="font-numeric text-2xl font-semibold text-text-primary">{activeTrucks} Active Units</p>
+              <p className="text-[11px] text-status-good font-medium mt-0.5">Live telemetry synchronized</p>
+            </div>
+            {idleLoss > 0 && (
+              <div className="ml-6 pl-6 border-l border-border-default">
+                <p className="font-numeric text-2xl font-semibold text-[#ED642B]">{formatCurrency(idleLoss)}</p>
+                <p className="text-[11px] text-text-tertiary font-medium mt-0.5">Today's idle cost</p>
+              </div>
+            )}
+          </div>
+
+          <ChartContent
+            isEmpty={!trendData || (Array.isArray(trendData) && trendData.length === 0)}
+            emptyState={<ChartEmptyState title="No telemetry data yet" description="Stop visits will appear here as vehicles move through monitored corridors." />}
+            loadingState={<ChartLoadingState height={288} />}
+            className="h-72"
+          >
+            <ChartLine
+              data={(Array.isArray(trendData) ? trendData : []).map(p => ({
+                date: p.date ? new Date(p.date).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : '',
+                visits: p.visit_count ?? 0,
+                excess: Math.round(p.excess_dwell_minutes ?? 0),
+                cost: Math.round((p.financial_impact_kes ?? 0) / 1000),
+              }))}
+              xAxisKey="date"
+              dataKeys={['visits', 'excess', 'cost']}
+              config={{
+                visits: { label: 'Stop Visits',       color: '#250C77' },
+                excess: { label: 'Excess Delay (min)', color: '#ED642B' },
+                cost:   { label: 'Loss (KES ×1000)',   color: '#EF4444' },
+              }}
+              showGrid
+              showYAxis
+              isFullHeight
+            />
+          </ChartContent>
+
+          <ChartFooter className="flex items-center gap-5 px-4 py-2.5">
+            {[
+              { label: 'Stop Visits',        color: '#250C77' },
+              { label: 'Excess Delay (min)', color: '#ED642B' },
+              { label: 'Loss (KES ×1000)',   color: '#EF4444' },
+            ].map(({ label, color }) => (
+              <div key={label} className="flex items-center gap-1.5 text-[11px] text-text-tertiary">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                {label}
+              </div>
+            ))}
+          </ChartFooter>
+        </ChartCard>
+      </Chart>
+
       {/* ── 2-COLUMN LAYOUT ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
@@ -773,111 +859,14 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* ── RIGHT RAIL ── */}
-        <div className="lg:col-span-4 space-y-6">
-
-          {/* Turnaround Cycle Card */}
-          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-border-default pb-3">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary">Turnaround Cycle</h3>
-                <p className="text-[11px] text-text-secondary mt-0.5">Fleet delivery completion status.</p>
-              </div>
-              <span className="text-xs font-numeric font-bold text-text-tertiary">Live</span>
-            </div>
-
-            {totalFleet > 0 && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-text-primary">Clearance rate</span>
-                  <span className="font-numeric text-text-tertiary">{onScheduleCount} / {totalFleet}</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-bg-surface-raised overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-status-good transition-all duration-700"
-                    style={{ width: `${totalFleet > 0 ? (onScheduleCount / totalFleet) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-2.5">
-              <div className="p-3 rounded-xl bg-bg-surface-raised/70 border border-border-default/60 text-center space-y-1">
-                <p className="font-numeric text-xl font-extrabold text-status-good">{onScheduleCount}</p>
-                <p className="text-[10px] font-bold text-text-tertiary uppercase">On Time</p>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-surface-raised/70 border border-border-default/60 text-center space-y-1">
-                <p className="font-numeric text-xl font-extrabold text-[#ED642B]">{delayedTrucks}</p>
-                <p className="text-[10px] font-bold text-text-tertiary uppercase">Delayed</p>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-surface-raised/70 border border-border-default/60 text-center space-y-1">
-                <p className="font-numeric text-xl font-extrabold text-[#250C77]">{activeTrucks}</p>
-                <p className="text-[10px] font-bold text-text-tertiary uppercase">In Transit</p>
-              </div>
-            </div>
-
-            {stats.average_excess_delay_minutes > 0 && (
-              <p className="text-[11px] text-text-tertiary text-center font-semibold pt-1 border-t border-border-default">
-                Avg excess dwell: <span className="text-text-primary font-bold">{formatMinutes(stats.average_excess_delay_minutes)}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Telemetry Activity Area Trend Chart (Supabase Studio Chart Pattern) */}
-          <Chart>
-            <ChartCard>
-              <ChartHeader>
-                <ChartTitle tooltip="Live fleet velocity and stop volume over time across corridors">
-                  <div className="flex items-center gap-1.5">
-                    <TrendingUp size={14} className="text-[#ED642B]" />
-                    <span>Telemetry Activity Trend</span>
-                  </div>
-                </ChartTitle>
-                <div className="flex items-center p-0.5 rounded-md bg-bg-surface-raised border border-border-default">
-                  {(['3M', '6M', '12M'] as const).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setChartRange(r)}
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                        chartRange === r
-                          ? 'bg-[#250C77] text-white shadow-sm'
-                          : 'text-text-tertiary hover:text-text-primary'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </ChartHeader>
-
-              <ChartContent>
-                <div className="mb-2">
-                  <p className="font-numeric text-2xl font-semibold text-text-primary tracking-tight">
-                    {activeTrucks} Active Units
-                  </p>
-                  <p className="font-numeric text-[11px] font-medium text-status-good mt-0.5">
-                    Live telemetry stream synchronized
-                  </p>
-                </div>
-
-                <div className="h-40 w-full pt-1">
-                  <ReactECharts
-                    option={trendChartOption}
-                    style={{ height: '100%', width: '100%' }}
-                    opts={{ renderer: 'svg' }}
-                  />
-                </div>
-              </ChartContent>
-            </ChartCard>
-          </Chart>
-
-          {/* Interactive ROI Savings & Demurrage Recovery Calculator (Hackathon Winning Pitch Widget) */}
+        {/* ── ROI & TURNAROUND SAVINGS CALCULATOR ── */}
+        <div className="lg:col-span-12">
           <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-border-default pb-3">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
                   <DollarSign size={13} className="text-[#ED642B]" />
-                  ROI & Turnaround Savings Calculator
+                  ROI &amp; Turnaround Savings Calculator
                 </h3>
                 <p className="text-[11px] text-text-secondary mt-0.5">Projected capital recaptured by eliminating excess stop dwell.</p>
               </div>
@@ -886,112 +875,316 @@ export const Dashboard: React.FC = () => {
               </span>
             </div>
 
-            {/* Slider Controls */}
-            <div className="space-y-3 text-xs">
+            {/* Slider Controls — horizontal on wide screens */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs">
               <div>
                 <div className="flex justify-between text-[11px] text-text-secondary mb-1">
                   <span>Fleet Size: <strong className="text-text-primary">{roiTrucks} Trucks</strong></span>
                   <span>Max 150</span>
                 </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="150"
-                  value={roiTrucks}
+                <input type="range" min="5" max="150" value={roiTrucks}
                   onChange={(e) => setRoiTrucks(Number(e.target.value))}
-                  className="w-full accent-[#250C77] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer"
-                />
+                  className="w-full accent-[#250C77] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer" />
               </div>
-
               <div>
                 <div className="flex justify-between text-[11px] text-text-secondary mb-1">
                   <span>Dwell Saved / Stop: <strong className="text-text-primary">{roiDelaySaved} Minutes</strong></span>
                   <span>Target 60m</span>
                 </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="90"
-                  step="5"
-                  value={roiDelaySaved}
+                <input type="range" min="5" max="90" step="5" value={roiDelaySaved}
                   onChange={(e) => setRoiDelaySaved(Number(e.target.value))}
-                  className="w-full accent-[#ED642B] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer"
-                />
+                  className="w-full accent-[#ED642B] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer" />
               </div>
-
               <div>
                 <div className="flex justify-between text-[11px] text-text-secondary mb-1">
                   <span>Operating Rate: <strong className="text-text-primary">{formatCurrency(roiHourlyRate)}/hr</strong></span>
                   <span>KES 8k/h</span>
                 </div>
-                <input
-                  type="range"
-                  min="1500"
-                  max="8000"
-                  step="500"
-                  value={roiHourlyRate}
+                <input type="range" min="1500" max="8000" step="500" value={roiHourlyRate}
                   onChange={(e) => setRoiHourlyRate(Number(e.target.value))}
-                  className="w-full accent-[#250C77] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer"
-                />
+                  className="w-full accent-[#250C77] h-1.5 bg-bg-surface-raised rounded-lg cursor-pointer" />
               </div>
             </div>
 
             {/* Financial & Environmental Yield */}
-            <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-border-default">
-              <div className="p-2.5 rounded-xl bg-bg-surface-raised border border-border-default">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-border-default">
+              <div className="p-3 rounded-xl bg-bg-surface-raised border border-border-default">
                 <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Monthly Recaptured</span>
-                <span className="font-numeric text-sm font-bold text-status-good block mt-0.5">
-                  {formatCurrency(monthlySavings)}
-                </span>
+                <span className="font-numeric text-lg font-bold text-status-good block mt-0.5">{formatCurrency(monthlySavings)}</span>
                 <span className="text-[9.5px] text-text-tertiary">{formatCurrency(annualSavings)} / yr</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-bg-surface-raised border border-border-default">
-                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">CO₂ Emissions Averted</span>
-                <span className="font-numeric text-sm font-bold text-text-primary block mt-0.5">
-                  {co2ReductionTonnes} Tonnes
-                </span>
-                <span className="text-[9.5px] text-text-tertiary">{fuelSavedLiters.toLocaleString()} L idling diesel</span>
+              <div className="p-3 rounded-xl bg-bg-surface-raised border border-border-default">
+                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">CO₂ Averted</span>
+                <span className="font-numeric text-lg font-bold text-text-primary block mt-0.5">{co2ReductionTonnes} T</span>
+                <span className="text-[9.5px] text-text-tertiary">{fuelSavedLiters.toLocaleString()} L idle diesel</span>
+              </div>
+              <div className="p-3 rounded-xl bg-bg-surface-raised border border-border-default">
+                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Value Multiplier</span>
+                <span className="font-numeric text-lg font-bold text-[#250C77] block mt-0.5">{roiMultiplier}x</span>
+                <span className="text-[9.5px] text-text-tertiary">vs platform cost</span>
+              </div>
+              <div className="p-3 rounded-xl bg-bg-surface-raised border border-border-default">
+                <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Fleet Coverage</span>
+                <span className="font-numeric text-lg font-bold text-text-primary block mt-0.5">{roiTrucks} units</span>
+                <span className="text-[9.5px] text-text-tertiary">{Math.round(roiTrucks * 22 * 2)} stop events/mo</span>
               </div>
             </div>
           </div>
-
-          {/* Corridor Dispatch Pipeline */}
-          <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3.5">
-            <div className="flex items-center justify-between border-b border-border-default pb-3">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary">Dispatch Pipeline</h3>
-                <p className="text-[11px] text-text-secondary mt-0.5">Trips by operational stage.</p>
-              </div>
-              <span className="text-xs font-numeric font-bold text-text-tertiary">{totalTrips} trips</span>
-            </div>
-
-            {totalTrips > 0 ? (
-              <>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-numeric text-2xl font-extrabold text-text-primary">{totalTrips}</span>
-                  <span className="font-numeric text-xs font-bold text-status-good">dispatched this period</span>
-                </div>
-
-                <div className="w-full h-2 rounded-full overflow-hidden flex bg-bg-surface-raised">
-                  {cleared > 0  && <div className="h-full bg-status-good" style={{ width: `${(cleared / totalTrips) * 100}%` }} />}
-                  {inTransit > 0 && <div className="h-full bg-[#ED642B]" style={{ width: `${(inTransit / totalTrips) * 100}%` }} />}
-                  {planned > 0  && <div className="h-full bg-[#250C77]" style={{ width: `${(planned / totalTrips) * 100}%` }} />}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-[10.5px] font-bold text-text-secondary pt-1">
-                  <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-good" />Cleared ({cleared})</div>
-                  <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#ED642B]" />En Route ({inTransit})</div>
-                  <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#250C77]" />Planned ({planned})</div>
-                </div>
-              </>
-            ) : (
-              <div className="py-6 text-center text-xs text-text-tertiary">
-                No trips dispatched yet. Trips appear here after dispatch.
-              </div>
-            )}
-          </div>
-
         </div>
+
+        {/* ── RIGHT RAIL ── empty, kept for future use */}
+        <div className="lg:col-span-4 hidden" />
+      </div>
+
+      {/* ── THREE-COLUMN STATS STRIP ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+
+        {/* Turnaround Cycle */}
+        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-border-default pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary">Turnaround Cycle</h3>
+              <p className="text-[11px] text-text-secondary mt-0.5">Fleet delivery completion status.</p>
+            </div>
+            <span className="text-xs font-numeric font-bold text-text-tertiary">Live</span>
+          </div>
+
+          {totalFleet > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-text-primary">Clearance rate</span>
+                <span className="font-numeric text-text-tertiary">{onScheduleCount} / {totalFleet}</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-bg-surface-raised overflow-hidden">
+                <div className="h-full rounded-full bg-status-good transition-all duration-700"
+                  style={{ width: `${totalFleet > 0 ? (onScheduleCount / totalFleet) * 100 : 0}%` }} />
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              { val: onScheduleCount, label: 'On Time',   color: 'text-status-good' },
+              { val: delayedTrucks,   label: 'Delayed',   color: 'text-[#ED642B]' },
+              { val: activeTrucks,    label: 'In Transit', color: 'text-[#250C77]' },
+            ].map(({ val, label, color }) => (
+              <div key={label} className="p-3 rounded-xl bg-bg-surface-raised/70 border border-border-default/60 text-center space-y-1">
+                <p className={`font-numeric text-xl font-extrabold ${color}`}>{val}</p>
+                <p className="text-[10px] font-bold text-text-tertiary uppercase">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {stats.average_excess_delay_minutes > 0 && (
+            <p className="text-[11px] text-text-tertiary text-center font-semibold pt-1 border-t border-border-default">
+              Avg excess dwell: <span className="text-text-primary font-bold">{formatMinutes(stats.average_excess_delay_minutes)}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Top Stop Bottlenecks */}
+        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-border-default pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+                <MapPin size={13} className="text-[#ED642B]" />
+                Top Stop Bottlenecks
+              </h3>
+              <p className="text-[11px] text-text-secondary mt-0.5">Highest-impact dwell locations today.</p>
+            </div>
+            <Link to="/locations" className="text-xs font-medium text-[#ED642B] hover:underline flex items-center gap-1">
+              All stops <ArrowRight size={12} />
+            </Link>
+          </div>
+          {(locationStats || []).length === 0 ? (
+            <p className="text-xs text-text-tertiary text-center py-4">No stop data available.</p>
+          ) : (
+            <div className="space-y-2">
+              {(locationStats || []).slice(0, 5).map((loc: any, idx: number) => {
+                const excess = loc.avg_excess_delay_minutes || 0;
+                const impact = loc.financial_impact || loc.total_excess_cost || 0;
+                const visits = loc.total_visits || 0;
+                const maxExcess = Math.max(...(locationStats || []).map((l: any) => l.avg_excess_delay_minutes || 0), 1);
+                return (
+                  <div key={loc.location_id || idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-text-primary truncate max-w-[130px]">{loc.location_name || '—'}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className={`font-numeric font-bold text-[11px] ${excess > 30 ? 'text-[#ED642B]' : 'text-text-secondary'}`}>+{Math.round(excess)}m</span>
+                        <span className="font-numeric font-bold text-[11px] text-money-accent">{formatCurrency(impact)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-bg-surface-raised overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${excess > 30 ? 'bg-[#ED642B]' : 'bg-[#250C77]'}`}
+                          style={{ width: `${Math.min((excess / maxExcess) * 100, 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] text-text-tertiary shrink-0">{visits}v</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Dispatch Pipeline */}
+        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3.5">
+          <div className="flex items-center justify-between border-b border-border-default pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary">Dispatch Pipeline</h3>
+              <p className="text-[11px] text-text-secondary mt-0.5">Trips by operational stage.</p>
+            </div>
+            <Link to="/trips" className="text-xs font-medium text-[#ED642B] hover:underline flex items-center gap-1">
+              All trips <ArrowRight size={12} />
+            </Link>
+          </div>
+          {totalTrips > 0 ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="font-numeric text-2xl font-extrabold text-text-primary">{totalTrips}</span>
+                <span className="font-numeric text-xs font-bold text-status-good">dispatched this period</span>
+              </div>
+              <div className="w-full h-2 rounded-full overflow-hidden flex bg-bg-surface-raised">
+                {cleared > 0   && <div className="h-full bg-status-good" style={{ width: `${(cleared / totalTrips) * 100}%` }} />}
+                {inTransit > 0 && <div className="h-full bg-[#ED642B]" style={{ width: `${(inTransit / totalTrips) * 100}%` }} />}
+                {planned > 0   && <div className="h-full bg-[#250C77]" style={{ width: `${(planned / totalTrips) * 100}%` }} />}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-[10.5px] font-bold text-text-secondary pt-1">
+                <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-good" />Cleared ({cleared})</div>
+                <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#ED642B]" />En Route ({inTransit})</div>
+                <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#250C77]" />Planned ({planned})</div>
+              </div>
+            </>
+          ) : (
+            <div className="py-6 text-center text-xs text-text-tertiary">No trips dispatched yet.</div>
+          )}
+        </div>
+
+      </div>
+
+      {/* ── BOTTOM SECTIONS: RECENT TRIPS + ACTIVE INSIGHTS ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Recent Trips */}
+        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-border-default pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary">Recent Dispatches</h3>
+              <p className="text-[11px] text-text-secondary mt-0.5">Latest trips across all corridors.</p>
+            </div>
+            <Link to="/trips" className="text-xs font-medium text-[#ED642B] hover:underline flex items-center gap-1">
+              All trips <ArrowRight size={12} />
+            </Link>
+          </div>
+          {(tripsData || []).length === 0 ? (
+            <p className="text-xs text-text-tertiary text-center py-4">No trips dispatched yet.</p>
+          ) : (
+            <div className="space-y-0">
+              {(tripsData as any[]).slice(0, 6).map((t: any, idx: number) => {
+                const origin = t.origin_name || t.origin?.name || '—';
+                const dest   = t.destination_name || t.destination?.name || '—';
+                const reg    = t.vehicle_reg || t.vehicle?.registration_number || '—';
+                const statusColors: Record<string, string> = {
+                  in_transit: 'bg-emerald-500',
+                  delayed:    'bg-red-500',
+                  planned:    'bg-[#250C77]',
+                  completed:  'bg-blue-500',
+                  cancelled:  'bg-gray-400',
+                };
+                const dot = statusColors[t.status] || 'bg-gray-400';
+                return (
+                  <Link to={`/trips/${t.id}`} key={t.id}
+                    className={`flex items-center gap-3 py-2.5 hover:bg-bg-surface-raised/50 transition-colors cursor-pointer ${idx !== 0 ? 'border-t border-border-default' : ''}`}>
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${dot}`} />
+                    <span className="font-mono text-xs font-bold text-text-primary w-24 shrink-0 truncate">{reg}</span>
+                    <div className="flex items-center gap-1 text-[11px] min-w-0 flex-1">
+                      <span className="text-text-secondary truncate">{origin}</span>
+                      <span className="text-text-tertiary shrink-0">→</span>
+                      <span className="font-semibold text-text-primary truncate">{dest}</span>
+                    </div>
+                    <span className="text-[10px] text-text-tertiary font-numeric shrink-0 capitalize">{t.status?.replace('_', ' ')}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Active Insights / Alerts */}
+        <div className="rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-border-default pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+                <AlertTriangle size={13} className="text-[#ED642B]" />
+                Active Alerts & Insights
+              </h3>
+              <p className="text-[11px] text-text-secondary mt-0.5">Detected anomalies and system recommendations.</p>
+            </div>
+            <Link to="/insights" className="text-xs font-medium text-[#ED642B] hover:underline flex items-center gap-1">
+              All insights <ArrowRight size={12} />
+            </Link>
+          </div>
+          {/* Delayed trucks alert */}
+          {delayedTrucks > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/8 border border-red-500/20">
+              <div className="h-6 w-6 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Truck size={12} className="text-red-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-text-primary">{delayedTrucks} Unit{delayedTrucks > 1 ? 's' : ''} Exceeding SLA</p>
+                <p className="text-[11px] text-text-secondary mt-0.5">Fleet units currently past their expected stop duration. Estimated loss: {formatCurrency(idleLoss)}.</p>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 border border-red-500/25 shrink-0">HIGH</span>
+            </div>
+          )}
+          {/* Top bottleneck alert */}
+          {stats?.top_bottleneck && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/8 border border-amber-500/20">
+              <div className="h-6 w-6 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <MapPin size={12} className="text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-text-primary">Bottleneck: {stats.top_bottleneck.location_name}</p>
+                <p className="text-[11px] text-text-secondary mt-0.5">Highest financial impact location. {formatCurrency(stats.top_bottleneck.financial_impact)} idle cost.</p>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 border border-amber-500/25 shrink-0">MED</span>
+            </div>
+          )}
+          {/* On time positive */}
+          {Number(onTimeRate) >= 90 && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
+              <div className="h-6 w-6 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 size={12} className="text-emerald-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-text-primary">Excellent On-Time Rate: {onTimeRate}%</p>
+                <p className="text-[11px] text-text-secondary mt-0.5">Fleet operating at peak turnaround efficiency. All monitored corridors within SLA.</p>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 border border-emerald-500/25 shrink-0">GOOD</span>
+            </div>
+          )}
+          {/* Trips pipeline */}
+          {totalTrips > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-[#250C77]/8 border border-[#250C77]/20">
+              <div className="h-6 w-6 rounded-lg bg-[#250C77]/15 flex items-center justify-center shrink-0 mt-0.5">
+                <BarChart3 size={12} className="text-[#250C77]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-text-primary">{inTransit} Active Dispatches, {planned} Planned</p>
+                <p className="text-[11px] text-text-secondary mt-0.5">{cleared} trips delivered this period. {planned} awaiting departure on scheduled corridors.</p>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#250C77]/15 text-[#250C77] border border-[#250C77]/25 shrink-0">INFO</span>
+            </div>
+          )}
+          {delayedTrucks === 0 && !stats?.top_bottleneck && Number(onTimeRate) < 90 && totalTrips === 0 && (
+            <div className="py-6 text-center text-xs text-text-tertiary">
+              <CheckCircle2 size={20} className="mx-auto mb-2 text-status-good" />
+              No active alerts. All systems nominal.
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

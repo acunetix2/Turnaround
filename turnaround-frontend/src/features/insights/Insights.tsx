@@ -16,10 +16,15 @@ export const Insights: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
 
-  const { data: insights, isLoading, isError, refetch } = useQuery({
+  const { data: rawInsights, isLoading, isError, refetch } = useQuery({
     queryKey: ['insights'],
     queryFn: apiClient.getInsights
   });
+
+  // Normalize: backend may return an array or a paginated object
+  const insights: any[] = Array.isArray(rawInsights)
+    ? rawInsights
+    : (rawInsights as any)?.items ?? [];
 
   const { data: locations } = useQuery({
     queryKey: ['locations'],
@@ -63,7 +68,7 @@ export const Insights: React.FC = () => {
     );
   }
 
-  if (isError || !insights) {
+  if (isError) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center bg-bg-surface border border-border-default rounded-xl">
         <Brain size={36} className="text-status-danger" />

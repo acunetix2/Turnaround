@@ -1,65 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
-@theme {
-  /* ═══════════════════════════════════════════════════════════════════
-     SUPABASE-INSPIRED DESIGN SYSTEM & TYPOGRAPHY
-     Geist / Inter UI Font + JetBrains Mono / Geist Mono Numbers
-     ═══════════════════════════════════════════════════════════════════ */
-
-  /* Dark mode baseline values */
-  --color-bg-canvas: #0B0524;
-  --color-bg-surface: #180B4A;
-  --color-bg-surface-raised: #250C77;
-  --color-bg-surface-hover: #321296;
-
-  --color-border-default: rgba(255, 255, 255, 0.10);
-  --color-border-strong: rgba(237, 100, 43, 0.35);
-  --color-border-accent: rgba(237, 100, 43, 0.50);
-
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #BDB6DE;
-  --color-text-tertiary: #7D73A8;
-
-  /* ── BRAND TOKENS (FedEx Corporate Purple & Express Orange) */
-  --color-fedex-purple: #250C77;
-  --color-fedex-purple-light: #3D1BA8;
-  --color-fedex-purple-dark: #16074A;
-  --color-fedex-orange: #ED642B;
-  --color-fedex-orange-hover: #D4521D;
-
-  --color-brand-700: #B83E10;
-  --color-brand-600: #D4521D;
-  --color-brand-500: #ED642B;
-  --color-brand-400: #F27E4E;
-  --color-brand-300: #F7A583;
-  --color-brand-100: rgba(237, 100, 43, 0.12);
-
-  /* ── STATUS ACCENTS */
-  --color-status-good: #10B981;
-  --color-status-good-bg: rgba(16, 185, 129, 0.12);
-  --color-status-warning: #F59E0B;
-  --color-status-warning-bg: rgba(245, 158, 11, 0.12);
-  --color-status-danger: #EF4444;
-  --color-status-danger-bg: rgba(239, 68, 68, 0.14);
-
-  /* ── FINANCIAL ACCENT */
-  --color-money-accent: #FBBF24;
-
-  /* ── CHARTS */
-  --color-chart-1: #ED642B;
-  --color-chart-2: #8B5CF6;
-  --color-chart-3: #10B981;
-  --color-chart-4: #EF4444;
-  --color-chart-5: #F59E0B;
-
-  /* ── TYPOGRAPHY (Supabase Design System - Geist / Inter) */
+@theme inline {
+  /* ── TYPOGRAPHY ────────────────────────────────────────────────── */
   --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-ui: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", "Fira Code", monospace;
   --font-numeric: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  /* ── TYPE SCALE */
+  /* ── TYPE SCALE ────────────────────────────────────────────────── */
   --text-xs: 11.5px;
   --text-xs-line-height: 16px;
   --text-sm: 13px;
@@ -79,88 +28,120 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-full: 999px;
+
+  /* ── DESIGN TOKENS — inline means utilities emit var() references, not static values ── */
+  --color-bg-canvas:         var(--color-bg-canvas);
+  --color-bg-surface:        var(--color-bg-surface);
+  --color-bg-surface-raised: var(--color-bg-surface-raised);
+  --color-bg-surface-hover:  var(--color-bg-surface-hover);
+
+  --color-border-default:    var(--color-border-default);
+  --color-border-strong:     var(--color-border-strong);
+
+  --color-text-primary:      var(--color-text-primary);
+  --color-text-secondary:    var(--color-text-secondary);
+  --color-text-tertiary:     var(--color-text-tertiary);
+
+  --color-brand-500:         var(--color-brand-500);
+  --color-brand-600:         var(--color-brand-600);
+  --color-brand-400:         var(--color-brand-400);
+  --color-brand-100:         var(--color-brand-100);
+
+  --color-status-good:        #10B981;
+  --color-status-good-bg:     var(--color-status-good-bg);
+  --color-status-warning:     #F59E0B;
+  --color-status-warning-bg:  var(--color-status-warning-bg);
+  --color-status-danger:      #EF4444;
+  --color-status-danger-bg:   var(--color-status-danger-bg);
+
+  /* ── STATIC BRAND TOKENS ────────────────────────────────────────── */
+  --color-fedex-purple:        #250C77;
+  --color-fedex-purple-light:  #3D1BA8;
+  --color-fedex-purple-dark:   #16074A;
+  --color-fedex-orange:        #ED642B;
+  --color-fedex-orange-hover:  #D4521D;
+  --color-money-accent:        #FBBF24;
+
+  --color-chart-1: #ED642B;
+  --color-chart-2: #8B5CF6;
+  --color-chart-3: #10B981;
+  --color-chart-4: #EF4444;
+  --color-chart-5: #F59E0B;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   DARK THEME (Corporate Purple + Express Orange on Deep Canvas)
+   DARK THEME
    ═══════════════════════════════════════════════════════════════════ */
 :root,
-[data-theme="dark"] {
-  --color-bg-canvas: #0B0524;
-  --color-bg-surface: #180B4A;
+[data-theme="dark"],
+html.dark {
+  --color-bg-canvas:         #0B0524;
+  --color-bg-surface:        #180B4A;
   --color-bg-surface-raised: #250C77;
-  --color-bg-surface-hover: #321296;
+  --color-bg-surface-hover:  #321296;
 
-  --color-border-default: rgba(255, 255, 255, 0.10);
-  --color-border-strong: rgba(237, 100, 43, 0.35);
+  --color-border-default:    rgba(255, 255, 255, 0.10);
+  --color-border-strong:     rgba(237, 100, 43, 0.35);
 
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #BDB6DE;
-  --color-text-tertiary: #7D73A8;
+  --color-text-primary:      #FFFFFF;
+  --color-text-secondary:    #BDB6DE;
+  --color-text-tertiary:     #7D73A8;
 
-  --color-brand-500: #ED642B;
-  --color-brand-400: #F27E4E;
-  --color-brand-100: rgba(237, 100, 43, 0.15);
+  --color-brand-500:         #ED642B;
+  --color-brand-600:         #D4521D;
+  --color-brand-400:         #F27E4E;
+  --color-brand-100:         rgba(237, 100, 43, 0.15);
 
-  --bg-canvas: #0B0524;
-  --bg-surface: #180B4A;
-  --bg-surface-raised: #250C77;
-  --text-primary: #FFFFFF;
-  --border-default: rgba(255, 255, 255, 0.10);
-  --border-strong: rgba(237, 100, 43, 0.35);
+  --color-status-good-bg:    rgba(16, 185, 129, 0.12);
+  --color-status-warning-bg: rgba(245, 158, 11, 0.12);
+  --color-status-danger-bg:  rgba(239, 68, 68, 0.14);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.50);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.60);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.75);
+  --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.50);
+  --shadow-md:         0 4px 16px rgba(0, 0, 0, 0.60);
+  --shadow-lg:         0 12px 40px rgba(0, 0, 0, 0.75);
 
-  --sidebar-bg-top: #250C77;
+  --sidebar-bg-top:    #250C77;
   --sidebar-bg-bottom: #0E0530;
-  --header-bg: rgba(24, 11, 74, 0.96);
-  --toast-bg: #1E0C5E;
+  --header-bg:         rgba(24, 11, 74, 0.96);
+  --toast-bg:          #1E0C5E;
 
   color-scheme: dark;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   LIGHT THEME (FedEx Courier White + Corporate Purple Text + Express Orange Accents)
+   LIGHT THEME
    ═══════════════════════════════════════════════════════════════════ */
-[data-theme="light"] {
-  --color-bg-canvas: #F5F3FB;
-  --color-bg-surface: #FFFFFF;
+[data-theme="light"],
+html.light {
+  --color-bg-canvas:         #F5F3FB;
+  --color-bg-surface:        #FFFFFF;
   --color-bg-surface-raised: #ECE8F8;
-  --color-bg-surface-hover: #E2DCF4;
+  --color-bg-surface-hover:  #E2DCF4;
 
-  --color-border-default: rgba(37, 12, 119, 0.12);
-  --color-border-strong: rgba(237, 100, 43, 0.40);
+  --color-border-default:    rgba(37, 12, 119, 0.12);
+  --color-border-strong:     rgba(237, 100, 43, 0.40);
 
-  --color-text-primary: #250C77;
-  --color-text-secondary: #55488A;
-  --color-text-tertiary: #8F84BE;
+  --color-text-primary:      #250C77;
+  --color-text-secondary:    #55488A;
+  --color-text-tertiary:     #8F84BE;
 
-  --color-brand-500: #ED642B;
-  --color-brand-600: #D4521D;
-  --color-brand-400: #ED642B;
-  --color-brand-100: rgba(237, 100, 43, 0.10);
+  --color-brand-500:         #ED642B;
+  --color-brand-600:         #D4521D;
+  --color-brand-400:         #ED642B;
+  --color-brand-100:         rgba(237, 100, 43, 0.10);
 
-  --color-status-good-bg: rgba(16, 185, 129, 0.10);
+  --color-status-good-bg:    rgba(16, 185, 129, 0.10);
   --color-status-warning-bg: rgba(245, 158, 11, 0.10);
-  --color-status-danger-bg: rgba(239, 68, 68, 0.10);
+  --color-status-danger-bg:  rgba(239, 68, 68, 0.10);
 
-  --bg-canvas: #F5F3FB;
-  --bg-surface: #FFFFFF;
-  --bg-surface-raised: #ECE8F8;
-  --text-primary: #250C77;
-  --border-default: rgba(37, 12, 119, 0.12);
-  --border-strong: rgba(237, 100, 43, 0.40);
+  --shadow-sm:         0 1px 3px rgba(37, 12, 119, 0.08);
+  --shadow-md:         0 4px 16px rgba(37, 12, 119, 0.12);
+  --shadow-lg:         0 12px 40px rgba(37, 12, 119, 0.16);
 
-  --shadow-sm: 0 1px 3px rgba(37, 12, 119, 0.08);
-  --shadow-md: 0 4px 16px rgba(37, 12, 119, 0.12);
-  --shadow-lg: 0 12px 40px rgba(37, 12, 119, 0.16);
-
-  --sidebar-bg-top: #250C77;
+  --sidebar-bg-top:    #250C77;
   --sidebar-bg-bottom: #16074A;
-  --header-bg: rgba(255, 255, 255, 0.97);
-  --toast-bg: #FFFFFF;
+  --header-bg:         rgba(255, 255, 255, 0.97);
+  --toast-bg:          #FFFFFF;
 
   color-scheme: light;
 }

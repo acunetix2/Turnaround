@@ -16,6 +16,7 @@ from app.schemas.demurrage import (
 )
 from app.schemas.common import PaginatedResponse
 from app.auth.rbac import require_role
+from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/demurrage", tags=["Demurrage"])
 
@@ -142,6 +143,15 @@ async def create_claim(
     db.add(claim)
     await db.commit()
     await db.refresh(claim)
+    try:
+        await notif_svc.demurrage_flagged(
+            db, company_id=company_id, claim_id=claim.id,
+            vehicle_reg=claim.vehicle_reg, location=claim.location_name,
+            amount_kes=float(claim.claimed_amount_kes or 0)
+        )
+        await db.commit()
+    except Exception:
+        pass
     return claim
 
 

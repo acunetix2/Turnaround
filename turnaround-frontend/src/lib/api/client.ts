@@ -782,18 +782,6 @@ export const apiClient = {
     return res.json();
   },
 
-  async function _triggerDownload(url: string, filename: string, authHeaders: HeadersInit): Promise<void> {
-    const res = await fetch(url, { headers: authHeaders });
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-    const blob = await res.blob();
-    const objUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objUrl;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(objUrl);
-  }
-
   async _triggerDownload(url: string, filename: string): Promise<void> {
     const res = await fetch(url, { headers: getHeaders() });
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);

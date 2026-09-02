@@ -4,15 +4,16 @@ import { useAuth } from '../../auth/AuthProvider'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../lib/api/client'
 import { useTheme } from '../../lib/ThemeContext'
+import { useCompany } from '../../lib/CompanyContext'
 import {
   LayoutDashboard,
   Compass,
   Truck,
   MapPin,
-  Brain,
+  AlertOctagon,
   BarChart3,
   LogOut,
-  Sparkles,
+  BrainCircuit,
   Sliders,
   Sun,
   Moon,
@@ -21,6 +22,12 @@ import {
   Route,
   DollarSign,
   FileCheck,
+  Users,
+  UserCircle,
+  Warehouse,
+  BotMessageSquare,
+  Bell,
+  Building2,
 } from 'lucide-react'
 import { BrandLogo } from '../common/BrandLogo'
 import { RouteProgressBar } from '../common/Loader'
@@ -67,6 +74,8 @@ function SidebarNavContent() {
   const isDark = theme === 'dark'
   const { state } = useSidebar()
   const isCollapsed = state === 'collapsed'
+  const isAdmin = user?.role === 'admin'
+  const { config: companyConfig } = useCompany()
 
   const [commandOpen, setCommandOpen] = useState(false)
 
@@ -82,6 +91,14 @@ function SidebarNavContent() {
     queryFn: apiClient.getVehicles,
     staleTime: 30000,
   })
+
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications', 'unread_count'],
+    queryFn: () => apiClient.getNotifications({ unread_only: true, limit: 1 }),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+  const unreadNotifCount = notifData?.unread ?? 0
 
   // Deduplicate vehicles by registration_number
   const uniqueVehicles = React.useMemo(() => {
@@ -115,28 +132,37 @@ function SidebarNavContent() {
   }, [])
 
   const navItems: NavItem[] = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Dashboard',        path: '/dashboard',     icon: LayoutDashboard },
     {
-      name: 'Map',
+      name: 'Corridor Tracker',
       path: '/map',
       icon: Compass,
       badgeCount: delayedCount > 0 ? delayedCount : activeTrucks > 0 ? activeTrucks : undefined,
       badgeDanger: delayedCount > 0,
     },
-    { name: 'Trips', path: '/trips', icon: Route },
-    { name: 'Gate Passes', path: '/gate-passes', icon: FileCheck },
-    { name: 'Delay Charges', path: '/demurrage', icon: DollarSign },
-    {
-      name: 'Assets',
-      path: '/vehicles',
-      icon: Truck,
-      badgeCount: totalFleet > 0 ? totalFleet : undefined,
-    },
-    { name: 'Stops', path: '/locations', icon: MapPin },
-    { name: 'Delays', path: '/insights', icon: Brain },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-    { name: 'Analyst', path: '/ai-advisor', icon: Sparkles },
-    { name: 'Settings', path: '/settings', icon: Sliders },
+    // ── Operations ──────────────────────────────────────────────────────────
+    { name: 'Trips',            path: '/trips',         icon: Route },
+    { name: 'Gate Passes',      path: '/gate-passes',   icon: FileCheck },
+    { name: 'Delay Charges',    path: '/demurrage',     icon: DollarSign },
+    // ── Fleet (fleet_manager+) ───────────────────────────────────────────
+    ...(['admin','fleet_manager'].includes(user?.role || '') ? [
+      { name: 'Carrier Assets',  path: '/vehicles',     icon: Truck, badgeCount: totalFleet > 0 ? totalFleet : undefined },
+      { name: 'Freight Stations', path: '/locations',   icon: Warehouse },
+    ] : []),
+    // ── Analytics (all staff) ────────────────────────────────────────────
+    { name: 'Delay Alerts',     path: '/insights',      icon: AlertOctagon },
+    { name: 'Analytics',        path: '/analytics',     icon: BarChart3 },
+    { name: 'Fleet AI',         path: '/ai-advisor',    icon: BotMessageSquare },
+    { name: 'Notifications',    path: '/notifications', icon: Bell, badgeCount: unreadNotifCount > 0 ? unreadNotifCount : undefined, badgeDanger: unreadNotifCount > 0 },
+    // ── Settings (fleet_manager+) ────────────────────────────────────────
+    ...(['admin','fleet_manager'].includes(user?.role || '') ? [
+      { name: 'Settings',        path: '/settings',     icon: Sliders },
+    ] : []),
+    // ── /admin/* — admin only ────────────────────────────────────────────
+    ...(isAdmin ? [
+      { name: 'Team',            path: '/admin/team',   icon: Users },
+      { name: 'Configuration',   path: '/admin/config', icon: Building2 },
+    ] : []),
   ]
 
   const handleLogout = async () => {
@@ -157,6 +183,24 @@ function SidebarNavContent() {
           <BrandLogo size={26} showText={!isCollapsed} />
           <SidebarTrigger />
         </div>
+        {/* Company overview — shown when expanded */}
+        {!isCollapsed && companyConfig && (
+          <div className="mt-2 mx-1 px-2.5 py-2 rounded-lg bg-[#250C77]/8 border border-[#250C77]/15 flex items-center gap-2.5">
+            {companyConfig.logo_url ? (
+              <img src={companyConfig.logo_url} alt="logo" className="h-6 w-6 rounded object-contain shrink-0" />
+            ) : (
+              <div className="h-6 w-6 rounded bg-[#250C77]/20 flex items-center justify-center shrink-0">
+                <Building2 size={12} className="text-[#250C77]" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-text-primary truncate">{companyConfig.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] text-text-tertiary">{companyConfig.currency} · {companyConfig.country || 'Kenya'}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </SidebarHeader>
 
       {/* Quick Search */}
@@ -269,30 +313,38 @@ function SidebarNavContent() {
             {!isCollapsed && (
               <div className="min-w-0">
                 <p className="text-[11px] font-medium text-text-primary truncate">{user?.name || '—'}</p>
-                <p className="text-[9.5px] text-text-tertiary truncate">{user?.company_name || '—'}</p>
+                <p className="text-[9.5px] text-text-tertiary truncate">{companyConfig?.name || user?.company_name || '—'}</p>
               </div>
             )}
           </div>
           {!isCollapsed && (
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="p-1 rounded-md text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
-                title="Toggle Theme"
-              >
-                {isDark ? <Sun size={13} /> : <Moon size={13} />}
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="p-1 rounded-md text-text-tertiary hover:text-status-danger transition-colors cursor-pointer"
-                title="Sign out"
-              >
-                <LogOut size={13} />
-              </button>
-            </div>
-          )}
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="p-1 rounded-md text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
+                  title="Toggle Theme"
+                >
+                  {isDark ? <Sun size={13} /> : <Moon size={13} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/account')}
+                  className="p-1 rounded-md text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
+                  title="Account Settings"
+                >
+                  <UserCircle size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="p-1 rounded-md text-text-tertiary hover:text-status-danger transition-colors cursor-pointer"
+                  title="Sign out"
+                >
+                  <LogOut size={13} />
+                </button>
+              </div>
+            )}
         </div>
       </SidebarFooter>
 
@@ -333,7 +385,7 @@ function SidebarNavContent() {
                 value="AI Diagnostic Advisor"
                 onSelect={() => handleCommandSelect('/ai-advisor')}
               >
-                <Sparkles className="mr-2.5 h-4 w-4 text-[#250C77]" />
+                <BotMessageSquare className="mr-2.5 h-4 w-4 text-[#250C77]" />
                 <span>Run AI Corridor Performance Diagnostic</span>
               </CommandItem>
             </CommandGroup>

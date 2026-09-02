@@ -3,12 +3,12 @@ import { apiClient } from '../lib/api/client';
 import { queryKeys } from '../lib/query-keys';
 
 /**
- * Fetches the latest GPS position for every active vehicle.
- * Polls every 15 seconds for near-live map updates.
+ * Fetches the latest GPS position for every active vehicle via the
+ * GET /vehicles/live aggregate endpoint (D-002).
  *
- * DECISION: Using a single aggregate endpoint GET /gps/events rather than
- * N+1 per-vehicle fetches. If the backend doesn't expose an aggregate,
- * flag this and negotiate a /vehicles/live endpoint (see DECISIONS.md).
+ * Returns Record<vehicle_id, LiveVehiclePosition> — one request covers the
+ * entire fleet regardless of size, eliminating N+1 per-vehicle fetches.
+ * Polls every 15 seconds for near-live map updates.
  */
 export function useLiveGPSEvents(pollIntervalMs = 15_000) {
   return useQuery({

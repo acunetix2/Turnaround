@@ -68,10 +68,11 @@ export const LocationDetail: React.FC = () => {
     queryFn: () => apiClient.getDwellEvents()
   });
 
-  const { data: insights } = useQuery({
+  const { data: rawInsights } = useQuery({
     queryKey: ['insights'],
     queryFn: apiClient.getInsights
   });
+  const insights = Array.isArray(rawInsights) ? rawInsights : (rawInsights as any)?.items ?? [];
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Location>) => apiClient.updateLocation(id || '', data),

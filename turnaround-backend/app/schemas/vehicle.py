@@ -73,6 +73,8 @@ class VehicleUpdate(BaseModel):
     maintenance_status: Optional[MaintenanceStatus] = None
     next_inspection_date: Optional[str] = None
 
+    model_config = ConfigDict(extra='ignore')  # silently drop unknown fields
+
 
 class VehicleResponse(VehicleBase):
     id: str

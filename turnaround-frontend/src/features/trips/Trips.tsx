@@ -1,4 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { PageTabs } from '../../components/ui/PageTabs';
+import {
+  DatePicker,
+  DatePickerTrigger,
+  DatePickerButton,
+  DatePickerContent,
+} from '../../components/ui/DatePicker';
+import { Calendar } from '../../components/ui/Calendar';
+import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../lib/api/client';
@@ -11,9 +20,9 @@ import * as zod from 'zod';
 import {
   Route, Truck, MapPin, Plus, Search, Clock,
   CheckCircle2, ShieldCheck, Container, Package,
-  Navigation, X, Compass, Ticket
+  Navigation, X, Compass, Ticket, Ban, RefreshCw,
+  Archive, ChevronDown, MoreVertical, LayoutGrid, List,
 } from 'lucide-react';
-import { GatePassCreateModal, type GatePassFormValues } from '../gate-pass/GatePassCreateModal';
 import type { Trip } from '../../lib/api/types';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
@@ -57,6 +66,336 @@ const createTripSchema = zod.object({
 
 type CreateTripFormValues = zod.infer<typeof createTripSchema>;
 
+// ── Smart status resolver ─────────────────────────────────────────────────────
+
+/** Planned trips whose departure time has passed show as "Overdue" */
+function resolveTripStatus(trip: Trip): string {
+  if (
+    trip.status === 'planned' &&
+    trip.planned_departure &&
+    new Date(trip.planned_departure).getTime() < Date.now()
+  ) {
+    return 'overdue';
+  }
+  return trip.status;
+}
+
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+
+const ConfirmDialog: React.FC<{
+  title: string; message: string; confirmLabel: string; danger?: boolean;
+  onConfirm: () => void; onCancel: () => void;
+}> = ({ title, message, confirmLabel, danger, onConfirm, onCancel }) => (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-bg-surface border border-border-default rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4">
+      <h3 className="text-sm font-bold text-text-primary">{title}</h3>
+      <p className="text-xs text-text-secondary leading-relaxed">{message}</p>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="small" onClick={onCancel}>Cancel</Button>
+        <Button variant={danger ? 'danger' : 'primary'} size="small" onClick={onConfirm}>{confirmLabel}</Button>
+      </div>
+    </div>
+  </div>
+);
+
+// ── Trip Action Menu (3-dot, scoped per trip) ─────────────────────────────────
+
+interface TripMenuProps {
+  trip: Trip;
+  resolvedStatus: string;
+  canMutate: boolean;
+  canManage: boolean;
+  busyTripId: string | null;
+  onGatePass: () => void;
+  onStart: () => void;
+  onDeliver: () => void;
+  onReassign: () => void;
+  onEditDates: () => void;
+  onCancel: () => void;
+  onArchive: () => void;
+}
+
+const TripActionMenu: React.FC<TripMenuProps> = ({
+  trip, resolvedStatus, canMutate, canManage, busyTripId,
+  onGatePass, onStart, onDeliver, onReassign, onEditDates, onCancel, onArchive,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const isBusy = busyTripId === trip.id;
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Close on scroll so menu doesn't float away
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => setOpen(false);
+    window.addEventListener('scroll', handler, true);
+    return () => window.removeEventListener('scroll', handler, true);
+  }, [open]);
+
+  const handleOpen = () => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+    setOpen(o => !o);
+  };
+
+  const item = (label: string, icon: React.ReactNode, onClick: () => void, danger = false) => (
+    <button
+      key={label}
+      onClick={() => { setOpen(false); onClick(); }}
+      disabled={isBusy}
+      className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-left transition-colors cursor-pointer disabled:opacity-40 ${
+        danger ? 'text-red-500 hover:bg-red-500/10' : 'text-text-primary hover:bg-bg-surface-raised'
+      }`}
+    >
+      {icon}{label}
+    </button>
+  );
+
+  const isActive = resolvedStatus === 'planned' || resolvedStatus === 'overdue' || resolvedStatus === 'in_transit';
+  const isDone   = resolvedStatus === 'completed' || resolvedStatus === 'cancelled';
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={handleOpen}
+        className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised transition-colors cursor-pointer"
+        title="Actions"
+      >
+        {isBusy
+          ? <span className="h-3.5 w-3.5 border-2 border-text-tertiary border-t-transparent rounded-full animate-spin block" />
+          : <MoreVertical size={14} />
+        }
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
+          className="w-52 bg-bg-surface border border-border-default rounded-xl shadow-2xl py-1 overflow-hidden"
+        >
+          {item('Generate Gate Pass', <Ticket size={12} className="text-[#ED642B]" />, onGatePass)}
+
+          <div className="my-1 border-t border-border-default" />
+
+          {canMutate && (resolvedStatus === 'planned' || resolvedStatus === 'overdue') &&
+            item('Mark as Departed', <Navigation size={12} className="text-emerald-500" />, onStart)}
+
+          {canMutate && resolvedStatus === 'in_transit' &&
+            item('Mark as Delivered', <CheckCircle2 size={12} className="text-emerald-500" />, onDeliver)}
+
+          {canMutate && isActive && (
+            <>
+              <div className="my-1 border-t border-border-default" />
+              {item('Reassign Vehicle', <RefreshCw size={12} />, onReassign)}
+              {item('Adjust Schedule', <Clock size={12} />, onEditDates)}
+            </>
+          )}
+
+          {canManage && isActive && (
+            <>
+              <div className="my-1 border-t border-border-default" />
+              {item('Cancel Dispatch', <Ban size={12} />, onCancel, true)}
+            </>
+          )}
+
+          {canManage && isDone &&
+            item('Move to Archive', <Archive size={12} />, onArchive)}
+        </div>
+      )}
+    </>
+  );
+};
+
+// ── Edit Dates Modal ──────────────────────────────────────────────────────────
+
+const EditDatesModal: React.FC<{
+  trip: Trip;
+  onConfirm: (plannedDeparture: string, plannedArrival: string) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}> = ({ trip, onConfirm, onCancel, isSaving }) => {
+  const [depDate, setDepDate] = useState<Date | undefined>(
+    trip.planned_departure ? new Date(trip.planned_departure) : new Date()
+  );
+  const [arrDate, setArrDate] = useState<Date | undefined>(
+    trip.planned_arrival ? new Date(trip.planned_arrival) : new Date(Date.now() + 8 * 3600 * 1000)
+  );
+  const [depTime, setDepTime] = useState(
+    trip.planned_departure ? new Date(trip.planned_departure).toTimeString().slice(0,5) : '08:00'
+  );
+  const [arrTime, setArrTime] = useState(
+    trip.planned_arrival ? new Date(trip.planned_arrival).toTimeString().slice(0,5) : '16:00'
+  );
+
+  const buildIso = (date?: Date, time?: string) => {
+    if (!date) return '';
+    const [h, m] = (time || '00:00').split(':');
+    const d = new Date(date);
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d.toISOString();
+  };
+
+  const depIso = buildIso(depDate, depTime);
+  const arrIso = buildIso(arrDate, arrTime);
+  const canSave = depIso && arrIso && new Date(arrIso) > new Date(depIso);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-bg-surface border border-border-default rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="p-5 border-b border-border-default flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-text-primary">Adjust Schedule</h3>
+            <p className="text-[11px] text-text-tertiary font-mono">{(trip as any).vehicle_reg || trip.vehicle_id}</p>
+          </div>
+          <button onClick={onCancel} className="p-1 rounded-lg text-text-tertiary hover:text-text-primary cursor-pointer"><X size={15} /></button>
+        </div>
+        <div className="p-5 space-y-4 text-xs">
+          {/* Departure */}
+          <div>
+            <label className="block font-semibold text-text-primary mb-1.5 flex items-center gap-1.5">
+              <Clock size={12} className="text-[#ED642B]" /> Planned Departure
+            </label>
+            <DatePicker>
+              <DatePickerTrigger asChild>
+                <DatePickerButton variant="outline" className="w-full h-9 text-xs justify-start">
+                  {depDate ? format(depDate, 'dd MMM yyyy') : 'Pick date'}
+                </DatePickerButton>
+              </DatePickerTrigger>
+              <DatePickerContent>
+                <Calendar mode="single" selected={depDate} onSelect={setDepDate} initialFocus />
+              </DatePickerContent>
+            </DatePicker>
+            <input type="time" value={depTime} onChange={e => setDepTime(e.target.value)}
+              className="mt-1.5 w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-1.5 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none" />
+          </div>
+
+          {/* Arrival */}
+          <div>
+            <label className="block font-semibold text-text-primary mb-1.5 flex items-center gap-1.5">
+              <CheckCircle2 size={12} className="text-emerald-500" /> Estimated Arrival (ETA)
+            </label>
+            <DatePicker>
+              <DatePickerTrigger asChild>
+                <DatePickerButton variant="outline" className="w-full h-9 text-xs justify-start">
+                  {arrDate ? format(arrDate, 'dd MMM yyyy') : 'Pick date'}
+                </DatePickerButton>
+              </DatePickerTrigger>
+              <DatePickerContent>
+                <Calendar mode="single" selected={arrDate} onSelect={setArrDate} initialFocus minDate={depDate} />
+              </DatePickerContent>
+            </DatePicker>
+            <input type="time" value={arrTime} onChange={e => setArrTime(e.target.value)}
+              className="mt-1.5 w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-1.5 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none" />
+          </div>
+
+          {arrIso && depIso && new Date(arrIso) <= new Date(depIso) && (
+            <p className="text-[11px] text-red-500 flex items-center gap-1">
+              <Ban size={11} /> Arrival must be after departure
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border-default">
+            <Button variant="ghost" size="small" onClick={onCancel}>Cancel</Button>
+            <Button variant="primary" size="small" loading={isSaving} disabled={!canSave}
+              icon={<Clock size={12} />}
+              onClick={() => onConfirm(depIso, arrIso)}>
+              Update Schedule
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Reassign Modal ────────────────────────────────────────────────────────────
+
+const ReassignModal: React.FC<{
+  trip: Trip;
+  vehicles: any[];
+  onConfirm: (vehicleId: string) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}> = ({ trip, vehicles, onConfirm, onCancel, isSaving }) => {
+  const [selectedVehicle, setSelectedVehicle] = useState('');
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-bg-surface border border-border-default rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="p-5 border-b border-border-default flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-text-primary">Reassign Trip</h3>
+            <p className="text-[11px] text-text-tertiary">Currently: <span className="font-mono font-bold">{trip.vehicle_reg}</span></p>
+          </div>
+          <button onClick={onCancel} className="p-1 rounded-lg text-text-tertiary hover:text-text-primary cursor-pointer"><X size={15} /></button>
+        </div>
+        <div className="p-5 space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-text-primary mb-1.5">Select New Vehicle</label>
+            <div className="relative">
+              <select
+                value={selectedVehicle}
+                onChange={e => setSelectedVehicle(e.target.value)}
+                className="w-full appearance-none bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none pr-8"
+              >
+                <option value="">— Select vehicle —</option>
+                {vehicles.filter(v => v.id !== trip.vehicle_id).map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.registration_number} ({v.vehicle_type}){v.driver_name ? ` · ${v.driver_name}` : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border-default">
+            <Button variant="ghost" size="small" onClick={onCancel}>Cancel</Button>
+            <Button
+              variant="primary"
+              size="small"
+              loading={isSaving}
+              disabled={!selectedVehicle}
+              icon={<Truck size={12} />}
+              onClick={() => onConfirm(selectedVehicle)}
+            >
+              Reassign
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Route name helpers (backend returns nested origin/destination/vehicle objects) ─
+const tripOrigin = (t: Trip): string =>
+  (t as any).origin_name || t.origin?.name || '—';
+const tripDest = (t: Trip): string =>
+  (t as any).destination_name || t.destination?.name || '—';
+const tripVehicleReg = (t: Trip): string =>
+  (t as any).vehicle_reg || (t as any).vehicle?.registration_number || '—';
+const tripDriver = (t: Trip): string =>
+  (t as any).driver_name || (t as any).vehicle?.driver_name || 'Unassigned';
+const tripDriverPhone = (t: Trip): string =>
+  (t as any).driver_phone || (t as any).vehicle?.driver_phone || '—';
+
 export const Trips: React.FC = () => {
   const queryClient = useQueryClient();
   const { role } = useAuth();
@@ -68,48 +407,79 @@ export const Trips: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'in_transit' | 'delayed' | 'planned' | 'completed'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'journeys' | 'table'>('journeys');
+  const [showArchived, setShowArchived] = useState(false);
   // Track which specific trip is generating a pass (null = none)
   const [generatingPassForTrip, setGeneratingPassForTrip] = useState<string | null>(null);
-  // Gate pass create modal — holds the trip that was clicked
-  const [passModalTrip, setPassModalTrip] = useState<import('../../lib/api/types').Trip | null>(null);
 
-  // Step 1 — clicking "Gate Pass" on a trip opens the confirmation modal
-  const handleGatePassClick = async (trip: Trip) => {
+  // Generate gate pass via backend API
+  const generateGatePass = async (trip: Trip) => {
     if (!trip.vehicle_id || !trip.destination_id) {
-      toast({ variant: 'error', title: 'Cannot Generate Pass', message: 'Trip must have a vehicle and destination assigned.' });
+      toast({
+        variant: 'error',
+        title: 'Cannot Generate Pass',
+        message: 'Trip must have a vehicle and destination assigned.'
+      });
       return;
     }
-    // Fast duplicate check before showing modal
-    if (trip.id) {
-      setGeneratingPassForTrip(trip.id);
-      try {
-        const existingPass = await apiClient.getActiveGatePassForTrip(trip.id);
-        if (existingPass) {
-          toast({ variant: 'info', title: 'Using Existing Gate Pass', message: `Pass ${existingPass.pass_number} already issued for this trip.` });
-          navigate('/gate-pass', { state: { pass: existingPass } });
-          return;
-        }
-      } finally {
-        setGeneratingPassForTrip(null);
-      }
-    }
-    setPassModalTrip(trip);
-  };
 
-  // Step 2 — modal confirmed: fire the API call with the user-edited values
-  const handleGatePassConfirm = async (values: GatePassFormValues) => {
-    if (!passModalTrip) return;
-    setGeneratingPassForTrip(passModalTrip.id);
+    setGeneratingPassForTrip(trip.id);
+
     try {
-      const createdPass = await apiClient.createGatePass(values);
+      // Resolve vehicle_reg: prefer trip join, fall back to vehicles cache
+      const vehicle = (vehiclesData?.items ?? vehiclesData ?? []).find(
+        (v: any) => v.id === trip.vehicle_id
+      );
+      const resolvedReg = trip.vehicle_reg || vehicle?.registration_number || '';
+
+      if (!resolvedReg) {
+        toast({ variant: 'error', title: 'Cannot Generate Pass', message: 'Vehicle registration number not found.' });
+        return;
+      }
+
+      // Call backend to create gate pass
+      const passData: any = {
+        vehicle_id: trip.vehicle_id,
+        trip_id: trip.id,
+        vehicle_reg: resolvedReg,
+        vehicle_type: trip.vehicle_type || vehicle?.vehicle_type,
+        driver_name: trip.driver_name || vehicle?.driver_name || 'Driver',
+        driver_phone: trip.driver_phone || vehicle?.driver_phone,
+        container_number: trip.container_number,
+        customs_seal_number: trip.customs_seal_number,
+        cargo_type: trip.cargo_type,
+        cargo_weight_tonnes: trip.cargo_weight_tonnes,
+        terminal_name: trip.destination_name || 'Terminal',
+        time_window_start: trip.planned_departure || new Date().toISOString(),
+        time_window_end: trip.planned_arrival || new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        status: 'pre_approved',
+        carrier_name: 'Siginon Global Logistics'
+      };
+
+      const createdPass = await apiClient.createGatePass(passData);
+      
+      // Invalidate gate passes cache
       queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.all() });
-      if (passModalTrip.vehicle_id) queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byVehicle(passModalTrip.vehicle_id) });
-      if (passModalTrip.id) queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byTrip(passModalTrip.id) });
-      toast({ variant: 'success', title: 'Gate Pass Issued', message: `Pass ${createdPass.pass_number} created successfully.` });
-      setPassModalTrip(null);
-      navigate('/gate-pass', { state: { pass: createdPass } });
+      if (trip.vehicle_id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byVehicle(trip.vehicle_id) });
+      }
+      if (trip.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.gatePasses.byTrip(trip.id) });
+      }
+      
+      toast({
+        variant: 'success',
+        title: 'Gate Pass Generated',
+        message: `Pass ${createdPass.pass_number} created successfully.`
+      });
+      
+      // Navigate to the gate pass page with both the pass data (state) and ID-based URL
+      navigate(`/gate-pass/${createdPass.id}`, { state: { pass: createdPass } });
     } catch (error: any) {
-      toast({ variant: 'error', title: 'Failed to Issue Pass', message: error?.message || 'Could not create gate pass. Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Failed to Generate Pass',
+        message: error?.message || 'Could not create gate pass. Please try again.'
+      });
     } finally {
       setGeneratingPassForTrip(null);
     }
@@ -166,6 +536,63 @@ export const Trips: React.FC = () => {
     }
   });
 
+  // ── Enhanced trip control mutations ──────────────────────────────────────
+  const [tripConfirm, setTripConfirm] = useState<{ action: string; trip: Trip } | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<Trip | null>(null);
+  const [busyTripId, setBusyTripId] = useState<string | null>(null);
+
+  const invalidateTrips = () => {
+    queryClient.invalidateQueries({ queryKey: ['trips'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+  };
+
+  const cancelTripMutation = useMutation({
+    mutationFn: (id: string) => { setBusyTripId(id); return apiClient.cancelTrip(id); },
+    onSettled: () => setBusyTripId(null),
+    onSuccess: () => { invalidateTrips(); setTripConfirm(null); toast({ variant: 'success', title: 'Trip Cancelled' }); },
+    onError: (e: any) => toast({ variant: 'error', title: 'Cancel Failed', message: e?.message }),
+  });
+
+  const completeTripMutation = useMutation({
+    mutationFn: (id: string) => { setBusyTripId(id); return apiClient.completeTrip(id); },
+    onSettled: () => setBusyTripId(null),
+    onSuccess: () => { invalidateTrips(); setTripConfirm(null); toast({ variant: 'success', title: 'Delivered', message: 'Consignment marked as delivered.' }); },
+    onError: (e: any) => toast({ variant: 'error', title: 'Failed', message: e?.message }),
+  });
+
+  const archiveTripMutation = useMutation({
+    mutationFn: (id: string) => { setBusyTripId(id); return apiClient.archiveTrip(id); },
+    onSettled: () => setBusyTripId(null),
+    onSuccess: () => { invalidateTrips(); setTripConfirm(null); toast({ variant: 'success', title: 'Trip Archived' }); },
+    onError: (e: any) => toast({ variant: 'error', title: 'Failed', message: e?.message }),
+  });
+
+  const reassignTripMutation = useMutation({
+    mutationFn: ({ id, vehicle_id }: { id: string; vehicle_id: string }) => { setBusyTripId(id); return apiClient.reassignTrip(id, { vehicle_id }); },
+    onSettled: () => setBusyTripId(null),
+    onSuccess: () => { invalidateTrips(); setReassignTarget(null); toast({ variant: 'success', title: 'Trip Reassigned' }); },
+    onError: (e: any) => toast({ variant: 'error', title: 'Reassign Failed', message: e?.message }),
+  });
+
+  const [editDatesTarget, setEditDatesTarget] = useState<Trip | null>(null);
+
+  const editDatesMutation = useMutation({
+    mutationFn: ({ id, planned_departure, planned_arrival }: { id: string; planned_departure: string; planned_arrival: string }) => {
+      setBusyTripId(id);
+      return apiClient.updateTrip(id, { planned_departure, planned_arrival });
+    },
+    onSettled: () => setBusyTripId(null),
+    onSuccess: () => { invalidateTrips(); setEditDatesTarget(null); toast({ variant: 'success', title: 'Schedule Updated', message: 'Departure and arrival times saved.' }); },
+    onError: (e: any) => toast({ variant: 'error', title: 'Update Failed', message: e?.message }),
+  });
+
+  const runTripConfirm = () => {
+    if (!tripConfirm) return;
+    if (tripConfirm.action === 'cancel')   cancelTripMutation.mutate(tripConfirm.trip.id);
+    if (tripConfirm.action === 'complete') completeTripMutation.mutate(tripConfirm.trip.id);
+    if (tripConfirm.action === 'archive')  archiveTripMutation.mutate(tripConfirm.trip.id);
+  };
+
   const {
     register,
     handleSubmit,
@@ -181,6 +608,20 @@ export const Trips: React.FC = () => {
       corridor_name: 'Northern Corridor (Mombasa - Nairobi)',
     }
   });
+
+  // Date picker state for create modal
+  const [pickerDep, setPickerDep] = useState<Date | undefined>(new Date());
+  const [pickerArr, setPickerArr] = useState<Date | undefined>(new Date(Date.now() + 8 * 60 * 60 * 1000));
+  const [depTime, setDepTime] = useState('08:00');
+  const [arrTime, setArrTime] = useState('16:00');
+
+  const buildIso = (date?: Date, time?: string) => {
+    if (!date) return '';
+    const [h, m] = (time || '00:00').split(':');
+    const d = new Date(date);
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d.toISOString().slice(0, 16);
+  };
 
   const watchedVehicleId = watch('vehicle_id');
   const watchedCorridorName = watch('corridor_name');
@@ -238,10 +679,15 @@ export const Trips: React.FC = () => {
 
   const trips = tripsData || [];
 
+  const TRIP_ARCHIVED = ['completed', 'cancelled', 'archived'];
+
   // Filter trips
   const filteredTrips = useMemo(() => {
     return trips.filter((t) => {
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+      const isArch = TRIP_ARCHIVED.includes(t.status);
+      if (showArchived && !isArch) return false;
+      if (!showArchived && isArch) return false;
+      if (!showArchived && statusFilter !== 'all' && t.status !== statusFilter) return false;
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
@@ -254,7 +700,7 @@ export const Trips: React.FC = () => {
         (t.cargo_type || '').toLowerCase().includes(q)
       );
     });
-  }, [trips, statusFilter, searchQuery]);
+  }, [trips, statusFilter, searchQuery, showArchived]);
 
   // Derived Summary Metrics
   const activeTripsCount = trips.filter(t => t.status === 'in_transit' || t.status === 'delayed').length;
@@ -271,10 +717,16 @@ export const Trips: React.FC = () => {
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-status-good/15 text-status-good border border-status-good/30"><span className="h-1.5 w-1.5 rounded-full bg-status-good animate-pulse" />In Transit</span>;
       case 'delayed':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-red-500/15 text-red-500 border border-red-500/30"><span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />Delayed</span>;
+      case 'overdue':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30"><span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />Overdue</span>;
       case 'planned':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-[#250C77]/15 text-[#250C77] border border-[#250C77]/30">Scheduled</span>;
       case 'completed':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-500/15 text-blue-500 border border-blue-500/30">Delivered</span>;
+      case 'cancelled':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-gray-500/15 text-gray-500 border border-gray-500/30">Cancelled</span>;
+      case 'archived':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-gray-400/15 text-gray-400 border border-gray-400/30">Archived</span>;
       default:
         return <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-bg-surface-raised text-text-tertiary">Unknown</span>;
     }
@@ -284,51 +736,57 @@ export const Trips: React.FC = () => {
     <div className="space-y-6 max-w-7xl">
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-[#250C77] text-white flex items-center justify-center shadow-md">
-              <Route size={18} className="text-[#ED642B]" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-text-primary tracking-tight">Active Dispatches & Consignments</h1>
-              <p className="text-xs text-text-secondary mt-0.5">
-                End-to-end corridor waypoint tracking, ETA predictions, and customs seal integrity.
-              </p>
-            </div>
+        <div className="flex items-center gap-2.5">
+          <div className="h-9 w-9 rounded-xl bg-[#250C77] text-white flex items-center justify-center shadow-md">
+            <Route size={18} className="text-[#ED642B]" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-text-primary tracking-tight">Active Dispatches & Consignments</h1>
+            <p className="text-xs text-text-secondary mt-0.5">
+              End-to-end corridor waypoint tracking, ETA predictions, and customs seal integrity.
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          {/* Layout toggle */}
           <div className="flex items-center p-0.5 rounded-lg bg-bg-surface-raised border border-border-default">
-            <button
-              onClick={() => setActiveTab('journeys')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${activeTab === 'journeys' ? 'bg-bg-surface text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-primary'}`}
-            >
-              Journey Cards
+            <button onClick={() => setActiveTab('journeys')} title="Grid view"
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${activeTab === 'journeys' ? 'bg-bg-surface shadow-sm text-[#250C77]' : 'text-text-tertiary hover:text-text-primary'}`}>
+              <LayoutGrid size={14} />
             </button>
-            <button
-              onClick={() => setActiveTab('table')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${activeTab === 'table' ? 'bg-bg-surface text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-primary'}`}
-            >
-              Dispatch Table
+            <button onClick={() => setActiveTab('table')} title="Table view"
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${activeTab === 'table' ? 'bg-bg-surface shadow-sm text-[#250C77]' : 'text-text-tertiary hover:text-text-primary'}`}>
+              <List size={14} />
             </button>
           </div>
-
+          {/* Archive toggle */}
+          <button onClick={() => setShowArchived(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+              showArchived ? 'bg-amber-500/15 text-amber-600 border-amber-500/30' : 'bg-bg-surface text-text-tertiary border-border-default hover:text-text-primary'
+            }`}>
+            <Archive size={13} />
+            {showArchived ? 'Archived' : 'Archive'}
+          </button>
           {canMutate && (
-            <Button
-              variant="primary"
-              size="small"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                reset();
-                setShowCreateModal(true);
-              }}
-            >
-              Dispatch Consignment
+            <Button variant="primary" size="small" icon={<Plus size={14} />}
+              onClick={() => { reset(); setShowCreateModal(true); }}>
+              Dispatch
             </Button>
           )}
         </div>
       </div>
+
+      {/* ── TAB BAR + ARCHIVE BANNER ── */}
+      {showArchived ? (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-700 font-semibold">
+          <Archive size={13} />
+          Archived dispatches ({filteredTrips.length}) — completed, cancelled &amp; archived
+          <button onClick={() => setShowArchived(false)} className="ml-auto underline cursor-pointer font-semibold">
+            Back to active
+          </button>
+        </div>
+      ) : null}
 
       {/* ── KPI METRICS STRIP ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -390,6 +848,7 @@ export const Trips: React.FC = () => {
       </div>
 
       {/* ── FILTER & SEARCH BAR ── */}
+      {!showArchived && (
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-default">
         <div className="relative w-full sm:w-80">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
@@ -403,7 +862,7 @@ export const Trips: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
-          {(['all', 'in_transit', 'delayed', 'planned', 'completed'] as const).map((s) => (
+          {(['all', 'in_transit', 'delayed', 'planned'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -413,202 +872,142 @@ export const Trips: React.FC = () => {
                   : 'bg-bg-surface-raised text-text-secondary hover:text-text-primary'
               }`}
             >
-              {s === 'all' ? 'All Dispatches' : s === 'in_transit' ? 'In Transit' : s}
+              {s === 'all' ? 'All Active' : s === 'in_transit' ? 'In Transit' : s}
             </button>
           ))}
         </div>
       </div>
+      )}
 
-      {/* ── VIEW TAB 1: VISUAL JOURNEY CARDS WITH WAYPOINT STEPPER ── */}
-      {activeTab === 'journeys' && (
-        <div className="space-y-4">
+      {/* ── VIEW TAB 1: COMPACT JOURNEY GRID ── */}
+      {(activeTab === 'journeys' && !showArchived) && (
+        <div>
           {filteredTrips.length === 0 ? (
             <div className="rounded-2xl border border-border-default bg-bg-surface p-12 text-center text-xs text-text-tertiary">
-              <Route size={32} className="mx-auto mb-2 opacity-30 text-[#250C77]" />
-              <p className="font-semibold text-text-secondary">No consignments match the current filter</p>
-              <p className="text-[11px] mt-0.5">Adjust your search parameters or dispatch a new corridor trip.</p>
+              <Route size={28} className="mx-auto mb-2 opacity-30 text-[#250C77]" />
+              <p className="font-semibold text-text-secondary">No active dispatches</p>
+              <p className="text-[11px] mt-0.5">Adjust your search or dispatch a new corridor trip.</p>
             </div>
           ) : (
-            filteredTrips.map((trip) => {
-              const checkpoints = trip.checkpoints || [];
-              const isDelayed = trip.status === 'delayed';
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredTrips.map((trip) => {
+                const isDelayed = trip.status === 'delayed';
+                const rs = resolveTripStatus(trip);
+                return (
+                  <div
+                    key={trip.id}
+                    onClick={() => navigate(`/trips/${trip.id}`)}
+                    className={`rounded-xl border bg-bg-surface p-4 shadow-sm space-y-3 transition-all hover:shadow-md cursor-pointer ${
+                      isDelayed || rs === 'overdue'
+                        ? 'border-red-500/40'
+                        : 'border-border-default hover:border-[#ED642B]/40'
+                    }`}
+                  >
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          isDelayed || rs === 'overdue' ? 'bg-red-500/10 text-red-500' : 'bg-[#250C77]/10 text-[#250C77]'
+                        }`}>
+                          <Truck size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <Link
+                            to={`/vehicles/${trip.vehicle_id}`}
+                            className="font-mono text-xs font-bold text-text-primary hover:text-[#ED642B] transition-colors block truncate"
+                          >
+                            {tripVehicleReg(trip)}
+                          </Link>
+                          <p className="text-[10px] text-text-tertiary truncate">{tripDriver(trip)}</p>                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {getStatusBadge(rs)}
+                        <TripActionMenu
+                          trip={trip}
+                          resolvedStatus={rs}
+                          canMutate={canMutate}
+                          canManage={role === 'admin' || role === 'fleet_manager'}
+                          busyTripId={busyTripId}
+                          onGatePass={() => generateGatePass(trip)}
+                          onStart={() => updateTripMutation.mutate({ id: trip.id, data: { status: 'in_transit' } })}
+                          onDeliver={() => setTripConfirm({ action: 'complete', trip })}
+                          onReassign={() => setReassignTarget(trip)}
+                          onEditDates={() => setEditDatesTarget(trip)}
+                          onCancel={() => setTripConfirm({ action: 'cancel', trip })}
+                          onArchive={() => setTripConfirm({ action: 'archive', trip })}
+                        />
+                      </div>
+                    </div>
 
-              return (
-                <div
-                  key={trip.id}
-                  className={`rounded-2xl border bg-bg-surface p-5 shadow-sm space-y-4 transition-all ${
-                    isDelayed
-                      ? 'border-red-500/40 bg-gradient-to-r from-red-500/5 via-bg-surface to-bg-surface'
-                      : 'border-border-default hover:border-[#ED642B]/40'
-                  }`}
-                >
-                  {/* Top Trip Header */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-border-default">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 border ${
-                        isDelayed ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-[#250C77]/10 border-[#250C77]/20 text-[#250C77]'
-                      }`}>
-                        <Truck size={20} />
+                    {/* Route */}
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <MapPin size={10} className="text-text-tertiary shrink-0" />
+                      <span className="text-text-secondary truncate">{tripOrigin(trip)}</span>
+                      <span className="text-text-tertiary shrink-0">→</span>
+                      <MapPin size={10} className="text-[#ED642B] shrink-0" />
+                      <span className="font-semibold text-text-primary truncate">{tripDest(trip)}</span>
+                    </div>
+
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {trip.container_number && (
+                        <span className="inline-flex items-center gap-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-bold border border-indigo-500/15">
+                          <Container size={9} />{trip.container_number}
+                        </span>
+                      )}
+                      {trip.cargo_type && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-bg-surface-raised text-text-tertiary border border-border-default">
+                          {trip.cargo_type}
+                        </span>
+                      )}
+                      {trip.cargo_weight_tonnes && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-bg-surface-raised text-text-tertiary border border-border-default font-numeric">
+                          {trip.cargo_weight_tonnes}T
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Times */}
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div>
+                        <p className="text-text-tertiary mb-0.5">Departure</p>
+                        <p className="font-numeric font-semibold text-text-primary">{formatDateTime(trip.planned_departure)}</p>
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link to={`/vehicles/${trip.vehicle_id}`} className="font-mono text-sm font-bold text-text-primary hover:text-[#ED642B] transition-colors">
-                            {trip.vehicle_reg || 'FLEET UNIT'}
-                          </Link>
-                          {getStatusBadge(trip.status)}
-                          {trip.container_number && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[10.5px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 font-bold">
-                              <Container size={10} /> {trip.container_number}
-                            </span>
-                          )}
-                          {trip.customs_seal_number && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 font-medium">
-                              Seal: {trip.customs_seal_number}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-2 flex-wrap">
-                          <span>{trip.corridor_name || 'Northern Trade Corridor'}</span>
-                          <span>•</span>
-                          <span>{trip.cargo_type || 'Commercial Freight'} ({trip.cargo_weight_tonnes || 24}T)</span>
-                        </p>
+                        <p className="text-text-tertiary mb-0.5">ETA</p>
+                        <p className="font-numeric font-semibold text-text-primary">{formatDateTime(trip.planned_arrival)}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 self-end md:self-auto text-xs">
-                      {trip.driver_name && (
-                        <div className="flex items-center gap-2 p-2 rounded-xl bg-bg-surface-raised border border-border-default">
-                          <div className="h-6 w-6 rounded-md bg-[#250C77] text-white font-bold text-xs flex items-center justify-center">
-                            {trip.driver_name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-text-primary text-[11px] leading-tight">{trip.driver_name}</p>
-                            <p className="text-[9.5px] text-text-tertiary font-mono">{trip.driver_phone || 'Driver'}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {trip.risk_score != null && (
-                        <div className="p-2 rounded-xl bg-bg-surface-raised border border-border-default text-right min-w-[90px]">
-                          <span className="text-[9.5px] uppercase font-bold text-text-tertiary block">Delay Risk</span>
-                          <span className={`font-numeric text-xs font-extrabold ${trip.risk_score > 50 ? 'text-red-500' : 'text-status-good'}`}>
-                            {trip.risk_score}% {trip.risk_score > 50 ? 'High' : 'Low'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ── INTERACTIVE WAYPOINT STEPPER ── */}
-                  <div className="py-2">
-                    <div className="flex items-center justify-between text-xs font-semibold text-text-tertiary mb-3">
-                      <span className="flex items-center gap-1"><MapPin size={12} className="text-text-tertiary" /> Origin: <strong className="text-text-primary">{trip.origin_name}</strong></span>
-                      <span className="flex items-center gap-1">Destination: <strong className="text-text-primary">{trip.destination_name}</strong> <MapPin size={12} className="text-[#ED642B]" /></span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                      {checkpoints.map((chk, idx) => {
-                        const isDone = chk.status === 'completed';
-                        const isCurrent = chk.status === 'current';
-                        const hasExcess = (chk.excess_dwell_minutes || 0) > 0;
-
-                        return (
-                          <div
-                            key={chk.id || idx}
-                            className={`p-3 rounded-xl border relative transition-all ${
-                              isCurrent
-                                ? 'bg-[#ED642B]/10 border-[#ED642B] ring-1 ring-[#ED642B]/30'
-                                : isDone
-                                ? 'bg-bg-surface-raised/60 border-border-default'
-                                : 'bg-bg-surface-raised/20 border-dashed border-border-default opacity-60'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <span className="text-[10px] font-bold uppercase text-text-tertiary">
-                                Stop #{idx + 1}
-                              </span>
-                              {isDone ? (
-                                <span className="inline-flex items-center text-status-good text-[10px] font-bold">
-                                  <CheckCircle2 size={11} className="mr-0.5" /> Cleared
-                                </span>
-                              ) : isCurrent ? (
-                                <span className="inline-flex items-center text-[#ED642B] text-[10px] font-bold">
-                                  <Navigation size={11} className="mr-0.5 animate-pulse" /> In Bay
-                                </span>
-                              ) : (
-                                <span className="text-text-tertiary text-[10px]">Pending</span>
-                              )}
-                            </div>
-
-                            <p className="text-xs font-bold text-text-primary truncate">{chk.location_name}</p>
-
-                            <div className="mt-2 pt-2 border-t border-border-default/50 text-[10.5px] flex items-center justify-between text-text-secondary">
-                              <span>Target: {chk.expected_dwell_minutes}m</span>
-                              {chk.actual_dwell_minutes != null && (
-                                <span className={`font-numeric font-bold ${hasExcess ? 'text-red-500' : 'text-status-good'}`}>
-                                  {chk.actual_dwell_minutes}m {hasExcess ? `(+${chk.excess_dwell_minutes}m)` : ''}
-                                </span>
-                              )}
-                              {chk.eta && <span className="text-[#ED642B] font-bold">ETA: {chk.eta}</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Bottom Action Footer */}
-                  <div className="flex items-center justify-between pt-2 border-t border-border-default text-xs text-text-tertiary flex-wrap gap-2">
-                    <div className="flex items-center gap-4 text-[11px]">
-                      <span>Dispatched: <strong className="text-text-primary font-numeric">{formatDateTime(trip.planned_departure)}</strong></span>
-                      <span>Target Arrival: <strong className="text-text-primary font-numeric">{formatDateTime(trip.planned_arrival)}</strong></span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
+                    {/* Actions row — primary CTA only; all other actions via ⋯ menu */}
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-border-default">
                       <Button
                         variant="outline"
                         size="small"
-                        icon={<Ticket size={12} className="text-[#ED642B]" />}
-                        onClick={() => handleGatePassClick(trip)}
+                        icon={<Ticket size={11} className="text-[#ED642B]" />}
+                        onClick={() => generateGatePass(trip)}
                         loading={generatingPassForTrip === trip.id}
                       >
                         Gate Pass
                       </Button>
-                      {canMutate && trip.status !== 'completed' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const nextStatus = trip.status === 'planned' ? 'in_transit' : 'completed';
-                            updateTripMutation.mutate({
-                              id: trip.id,
-                              data: {
-                                status: nextStatus,
-                                ...(nextStatus === 'completed' ? { actual_arrival: new Date().toISOString() } : {})
-                              }
-                            });
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-bg-surface-raised hover:bg-status-good/20 hover:text-status-good border border-border-default font-semibold text-[11px] text-text-primary transition-colors cursor-pointer"
-                        >
-                          {trip.status === 'planned' ? 'Start Transit' : 'Mark Delivered'}
-                        </button>
-                      )}
                       <Link
                         to={`/map?focus=${trip.vehicle_id}`}
-                        className="px-3 py-1.5 rounded-lg bg-bg-surface-raised hover:bg-[#250C77] hover:text-white border border-border-default font-semibold text-[11px] text-text-primary transition-colors flex items-center gap-1.5"
+                        className="ml-auto p-1.5 rounded-lg bg-bg-surface-raised hover:bg-[#250C77] hover:text-white border border-border-default text-text-tertiary transition-colors"
+                        title="Track on map"
                       >
-                        <Compass size={12} className="text-[#ED642B]" /> Track on Live Map
+                        <Compass size={12} />
                       </Link>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
         </div>
       )}
 
       {/* ── VIEW TAB 2: FULL DISPATCH TABLE ── */}
-      {activeTab === 'table' && (
+      {(activeTab === 'table' && !showArchived) && (
         <div className="rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
           <Table>
             <TableHeader>
@@ -632,43 +1031,49 @@ export const Trips: React.FC = () => {
                 </TableRow>
               ) : (
                 filteredTrips.map((t) => (
-                  <TableRow key={t.id}>
+                  <TableRow key={t.id} className="cursor-pointer hover:bg-bg-surface-raised/40" onClick={() => navigate(`/trips/${t.id}`)}>
                     <TableCell className="font-mono text-xs font-bold text-text-primary">
-                      <Link to={`/vehicles/${t.vehicle_id}`} className="hover:text-[#ED642B] transition-colors">
-                        {t.vehicle_reg}
-                      </Link>
+                      <span className="hover:text-[#ED642B] transition-colors">{tripVehicleReg(t)}</span>
                     </TableCell>
                     <TableCell className="text-xs text-text-primary">
-                      <div className="font-medium">{t.driver_name || 'Unassigned'}</div>
-                      <div className="text-[10px] text-text-tertiary font-mono">{t.driver_phone}</div>
+                      <div className="font-medium">{tripDriver(t)}</div>
+                      <div className="text-[10px] text-text-tertiary font-mono">{tripDriverPhone(t)}</div>
                     </TableCell>
-                    <TableCell className="text-xs font-medium text-text-primary">{t.origin_name}</TableCell>
-                    <TableCell className="text-xs font-medium text-text-primary">{t.destination_name}</TableCell>
+                    <TableCell className="text-xs font-medium text-text-primary">{tripOrigin(t)}</TableCell>
+                    <TableCell className="text-xs font-medium text-text-primary">{tripDest(t)}</TableCell>
                     <TableCell className="text-xs">
-                      {t.container_number ? (
-                        <span className="font-mono font-bold text-indigo-400 text-[11px] block">{t.container_number}</span>
+                      {(t as any).container_number ? (
+                        <span className="font-mono font-bold text-indigo-400 text-[11px] block">{(t as any).container_number}</span>
                       ) : <span className="text-text-tertiary">—</span>}
-                      {t.customs_seal_number && <span className="text-[9.5px] text-text-tertiary font-mono block">Seal: {t.customs_seal_number}</span>}
+                      {(t as any).customs_seal_number && <span className="text-[9.5px] text-text-tertiary font-mono block">Seal: {(t as any).customs_seal_number}</span>}
                     </TableCell>
                     <TableCell className="font-numeric text-[11px] text-text-secondary">{formatDateTime(t.planned_departure)}</TableCell>
-                    <TableCell>{getStatusBadge(t.status)}</TableCell>
-                    <TableCell className="text-right pr-4">
+                    <TableCell>{getStatusBadge(resolveTripStatus(t))}</TableCell>
+                    <TableCell className="text-right pr-4" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <Button
                           variant="ghost"
                           size="small"
                           icon={<Ticket size={12} className="text-[#ED642B]" />}
-                          onClick={() => handleGatePassClick(t)}
+                          onClick={() => generateGatePass(t)}
                           loading={generatingPassForTrip === t.id}
                         >
                           Pass
                         </Button>
-                        <Link
-                          to={`/vehicles/${t.vehicle_id}`}
-                          className="text-xs font-bold text-[#ED642B] hover:underline"
-                        >
-                          Details
-                        </Link>
+                        <TripActionMenu
+                          trip={t}
+                          resolvedStatus={resolveTripStatus(t)}
+                          canMutate={canMutate}
+                          canManage={role === 'admin' || role === 'fleet_manager'}
+                          busyTripId={busyTripId}
+                          onGatePass={() => generateGatePass(t)}
+                          onStart={() => updateTripMutation.mutate({ id: t.id, data: { status: 'in_transit' } })}
+                          onDeliver={() => setTripConfirm({ action: 'complete', trip: t })}
+                          onReassign={() => setReassignTarget(t)}
+                          onEditDates={() => setEditDatesTarget(t)}
+                          onCancel={() => setTripConfirm({ action: 'cancel', trip: t })}
+                          onArchive={() => setTripConfirm({ action: 'archive', trip: t })}
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -676,6 +1081,85 @@ export const Trips: React.FC = () => {
               )}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* ── ARCHIVED TRIPS LIST ── */}
+      {showArchived && (
+        <div className="rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
+          {filteredTrips.length === 0 ? (
+            <div className="p-12 text-center">
+              <Archive size={28} className="mx-auto mb-3 opacity-20 text-[#250C77]" />
+              <p className="text-sm font-semibold text-text-secondary">No archived trips</p>
+              <p className="text-xs text-text-tertiary mt-1">Completed, cancelled and archived trips appear here.</p>
+            </div>
+          ) : activeTab === 'journeys' ? (
+            /* ── archive grid ── */
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredTrips.map((t) => {
+                const rs = resolveTripStatus(t);
+                return (
+                  <div key={t.id} onClick={() => navigate(`/trips/${t.id}`)}
+                    className="rounded-xl border border-border-default bg-bg-surface-raised/40 p-3.5 space-y-2 hover:border-[#ED642B]/30 cursor-pointer transition-all">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-text-primary truncate">{tripVehicleReg(t)}</span>
+                      {getStatusBadge(rs)}
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px]">
+                      <MapPin size={9} className="text-text-tertiary shrink-0" />
+                      <span className="text-text-secondary truncate">{tripOrigin(t)}</span>
+                      <span className="text-text-tertiary shrink-0 mx-0.5">→</span>
+                      <MapPin size={9} className="text-[#ED642B] shrink-0" />
+                      <span className="text-text-primary font-semibold truncate">{tripDest(t)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-text-tertiary">
+                      <span>{tripDriver(t)}</span>
+                      <span className="font-numeric">{formatDateTime((t as any).actual_arrival || t.planned_arrival)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* ── archive list ── */
+            <>
+              <div className="hidden md:grid grid-cols-[9rem_1fr_9rem_6rem_6rem_4rem] gap-3 items-center px-4 py-2 bg-bg-surface-raised/60 border-b border-border-default">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">Vehicle</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">Route</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">Completed</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">Status</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">Cargo</p>
+                <span />
+              </div>
+              {filteredTrips.map((t, idx) => (
+                <div key={t.id} onClick={() => navigate(`/trips/${t.id}`)}
+                  className={`flex md:grid md:grid-cols-[9rem_1fr_9rem_6rem_6rem_4rem] gap-3 items-center px-4 py-2.5 hover:bg-bg-surface-raised/50 transition-colors cursor-pointer ${idx !== 0 ? 'border-t border-border-default' : ''}`}>
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-black text-text-primary truncate">{tripVehicleReg(t)}</p>
+                    <p className="text-[10px] text-text-tertiary truncate">{tripDriver(t)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] min-w-0">
+                    <span className="text-text-secondary truncate">{tripOrigin(t)}</span>
+                    <span className="text-text-tertiary shrink-0 mx-0.5">→</span>
+                    <span className="font-semibold text-text-primary truncate">{tripDest(t)}</span>
+                  </div>
+                  <p className="text-[10px] text-text-tertiary font-numeric">{formatDateTime((t as any).actual_arrival || t.planned_arrival)}</p>
+                  {getStatusBadge(t.status)}
+                  <p className="text-[10px] text-text-tertiary">{(t as any).cargo_weight_tonnes ? `${(t as any).cargo_weight_tonnes}T` : '—'}</p>
+                  <div className="flex justify-end" onClick={e => e.stopPropagation()}>
+                    <TripActionMenu trip={t} resolvedStatus={t.status} canMutate={canMutate}
+                      canManage={role === 'admin' || role === 'fleet_manager'} busyTripId={busyTripId}
+                      onGatePass={() => generateGatePass(t)}
+                      onStart={() => updateTripMutation.mutate({ id: t.id, data: { status: 'in_transit' } })}
+                      onDeliver={() => setTripConfirm({ action: 'complete', trip: t })}
+                      onReassign={() => setReassignTarget(t)} onEditDates={() => setEditDatesTarget(t)}
+                      onCancel={() => setTripConfirm({ action: 'cancel', trip: t })}
+                      onArchive={() => setTripConfirm({ action: 'archive', trip: t })} />
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -789,20 +1273,42 @@ export const Trips: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold text-text-primary mb-1">Planned Departure Schedule *</label>
-                  <input
-                    type="datetime-local"
-                    {...register('planned_departure')}
-                    className="w-full bg-bg-surface-raised border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none font-numeric"
-                  />
+                  <DatePicker>
+                    <DatePickerTrigger asChild>
+                      <DatePickerButton variant="outline" className="w-full h-9 text-xs justify-start">
+                        {pickerDep ? format(pickerDep, 'dd MMM yyyy') : 'Pick date'}
+                      </DatePickerButton>
+                    </DatePickerTrigger>
+                    <DatePickerContent>
+                      <Calendar mode="single" selected={pickerDep} onSelect={(d) => {
+                        setPickerDep(d);
+                        setValue('planned_departure', buildIso(d, depTime));
+                      }} initialFocus />
+                    </DatePickerContent>
+                  </DatePicker>
+                  <input type="time" value={depTime} onChange={e => { setDepTime(e.target.value); setValue('planned_departure', buildIso(pickerDep, e.target.value)); }}
+                    className="mt-1.5 w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-1.5 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none font-numeric" />
+                  {errors.planned_departure && <p className="text-[11px] text-red-500 mt-1">{errors.planned_departure.message}</p>}
                 </div>
 
                 <div>
                   <label className="block font-semibold text-text-primary mb-1">Estimated Arrival (ETA) *</label>
-                  <input
-                    type="datetime-local"
-                    {...register('planned_arrival')}
-                    className="w-full bg-bg-surface-raised border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none font-numeric"
-                  />
+                  <DatePicker>
+                    <DatePickerTrigger asChild>
+                      <DatePickerButton variant="outline" className="w-full h-9 text-xs justify-start">
+                        {pickerArr ? format(pickerArr, 'dd MMM yyyy') : 'Pick date'}
+                      </DatePickerButton>
+                    </DatePickerTrigger>
+                    <DatePickerContent>
+                      <Calendar mode="single" selected={pickerArr} onSelect={(d) => {
+                        setPickerArr(d);
+                        setValue('planned_arrival', buildIso(d, arrTime));
+                      }} initialFocus minDate={pickerDep} />
+                    </DatePickerContent>
+                  </DatePicker>
+                  <input type="time" value={arrTime} onChange={e => { setArrTime(e.target.value); setValue('planned_arrival', buildIso(pickerArr, e.target.value)); }}
+                    className="mt-1.5 w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-1.5 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none font-numeric" />
+                  {errors.planned_arrival && <p className="text-[11px] text-red-500 mt-1">{errors.planned_arrival.message}</p>}
                 </div>
               </div>
 
@@ -861,26 +1367,56 @@ export const Trips: React.FC = () => {
         </div>
       )}
 
-      {/* ── GATE PASS CREATE MODAL ── */}
-      {passModalTrip && (() => {
-        const vehicle = (vehiclesData?.items ?? vehiclesData ?? []).find(
-          (v: any) => v.id === passModalTrip.vehicle_id
-        );
-        return (
-          <GatePassCreateModal
-            trip={passModalTrip}
-            vehicleReg={passModalTrip.vehicle_reg || vehicle?.registration_number || ''}
-            vehicleType={passModalTrip.vehicle_type || vehicle?.vehicle_type}
-            driverName={passModalTrip.driver_name || vehicle?.driver_name || 'Driver'}
-            driverPhone={passModalTrip.driver_phone || vehicle?.driver_phone}
-            driverLicense={vehicle?.driver_license}
-            companyName={undefined}
-            onConfirm={handleGatePassConfirm}
-            onClose={() => setPassModalTrip(null)}
-            isLoading={generatingPassForTrip === passModalTrip.id}
-          />
-        );
-      })()}
+      {/* ── TRIP CONFIRM DIALOG ── */}
+      {tripConfirm && (
+        <ConfirmDialog
+          title={
+            tripConfirm.action === 'cancel'   ? 'Cancel Trip' :
+            tripConfirm.action === 'complete' ? 'Complete Trip' :
+            'Archive Trip'
+          }
+          message={
+            tripConfirm.action === 'cancel'
+              ? `Cancel the trip for ${tripConfirm.trip.vehicle_reg}? This cannot be undone.`
+              : tripConfirm.action === 'complete'
+              ? `Mark ${tripConfirm.trip.vehicle_reg} as delivered to ${tripConfirm.trip.destination_name}?`
+              : `Archive this completed/cancelled trip? It will be hidden from active lists.`
+          }
+          confirmLabel={
+            tripConfirm.action === 'cancel' ? 'Cancel Trip' :
+            tripConfirm.action === 'complete' ? 'Mark Delivered' :
+            'Archive'
+          }
+          danger={tripConfirm.action === 'cancel'}
+          onConfirm={runTripConfirm}
+          onCancel={() => setTripConfirm(null)}
+        />
+      )}
+
+      {/* ── REASSIGN MODAL ── */}
+      {reassignTarget && (
+        <ReassignModal
+          trip={reassignTarget}
+          vehicles={vehiclesData || []}
+          isSaving={reassignTripMutation.isPending}
+          onConfirm={(vehicleId) => reassignTripMutation.mutate({ id: reassignTarget.id, vehicle_id: vehicleId })}
+          onCancel={() => setReassignTarget(null)}
+        />
+      )}
+
+      {/* ── EDIT DATES MODAL ── */}
+      {editDatesTarget && (
+        <EditDatesModal
+          trip={editDatesTarget}
+          isSaving={editDatesMutation.isPending}
+          onConfirm={(dep, arr) => editDatesMutation.mutate({
+            id: editDatesTarget.id,
+            planned_departure: dep,
+            planned_arrival: arr,
+          })}
+          onCancel={() => setEditDatesTarget(null)}
+        />
+      )}
     </div>
   );
 };
