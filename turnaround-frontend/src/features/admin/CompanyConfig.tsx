@@ -52,10 +52,8 @@ const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export const CompanyConfig: React.FC = () => {
-  const { role } = useAuth();
   const { config, isLoading, update, refresh } = useCompany();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'general' | 'operations' | 'billing' | 'security'>('general');
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<CC>>({});
@@ -67,18 +65,7 @@ export const CompanyConfig: React.FC = () => {
 
   const set = (k: keyof CC, v: any) => setForm(f => ({ ...f, [k]: v }));
 
-  if (role !== 'admin') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center">
-          <Shield size={24} className="text-red-500" />
-        </div>
-        <p className="text-sm font-bold text-text-primary">Admin Access Required</p>
-        <p className="text-xs text-text-secondary">Only company administrators can access configuration.</p>
-        <Button variant="outline" size="small" onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
-      </div>
-    );
-  }
+  // Route already enforces admin-only via ProtectedRoute in routes.tsx
 
   const handleSave = async () => {
     setSaving(true);

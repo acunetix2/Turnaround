@@ -132,7 +132,7 @@ function SidebarNavContent() {
   }, [])
 
   const navItems: NavItem[] = [
-    { name: 'Dashboard',         path: '/dashboard',     icon: LayoutDashboard },
+    { name: 'Dashboard',        path: '/dashboard',     icon: LayoutDashboard },
     {
       name: 'Corridor Tracker',
       path: '/map',
@@ -140,26 +140,29 @@ function SidebarNavContent() {
       badgeCount: delayedCount > 0 ? delayedCount : activeTrucks > 0 ? activeTrucks : undefined,
       badgeDanger: delayedCount > 0,
     },
-    { name: 'Trips',             path: '/trips',         icon: Route },
-    { name: 'Gate Passes',       path: '/gate-passes',   icon: FileCheck },
-    { name: 'Delay Charges',     path: '/demurrage',     icon: DollarSign },
-    {
-      name: 'Carrier Assets',
-      path: '/vehicles',
-      icon: Truck,
-      badgeCount: totalFleet > 0 ? totalFleet : undefined,
-    },
-    { name: 'Freight Stations',  path: '/locations',     icon: Warehouse },
-    { name: 'Delay Alerts',      path: '/insights',      icon: AlertOctagon },
-    { name: 'Analytics',         path: '/analytics',     icon: BarChart3 },
-    { name: 'Fleet AI',          path: '/ai-advisor',    icon: BotMessageSquare },
-    { name: 'Notifications', path: '/notifications', icon: Bell, badgeCount: unreadNotifCount > 0 ? unreadNotifCount : undefined, badgeDanger: unreadNotifCount > 0 },
-    // Admin-only section
-    ...(isAdmin ? [
-      { name: 'Team',            path: '/users',         icon: Users },
-      { name: 'Configuration',   path: '/admin/config',  icon: Building2 },
+    // ── Operations ──────────────────────────────────────────────────────────
+    { name: 'Trips',            path: '/trips',         icon: Route },
+    { name: 'Gate Passes',      path: '/gate-passes',   icon: FileCheck },
+    { name: 'Delay Charges',    path: '/demurrage',     icon: DollarSign },
+    // ── Fleet (fleet_manager+) ───────────────────────────────────────────
+    ...(['admin','fleet_manager'].includes(user?.role || '') ? [
+      { name: 'Carrier Assets',  path: '/vehicles',     icon: Truck, badgeCount: totalFleet > 0 ? totalFleet : undefined },
+      { name: 'Freight Stations', path: '/locations',   icon: Warehouse },
     ] : []),
-    { name: 'Settings',          path: '/settings',      icon: Sliders },
+    // ── Analytics (all staff) ────────────────────────────────────────────
+    { name: 'Delay Alerts',     path: '/insights',      icon: AlertOctagon },
+    { name: 'Analytics',        path: '/analytics',     icon: BarChart3 },
+    { name: 'Fleet AI',         path: '/ai-advisor',    icon: BotMessageSquare },
+    { name: 'Notifications',    path: '/notifications', icon: Bell, badgeCount: unreadNotifCount > 0 ? unreadNotifCount : undefined, badgeDanger: unreadNotifCount > 0 },
+    // ── Settings (fleet_manager+) ────────────────────────────────────────
+    ...(['admin','fleet_manager'].includes(user?.role || '') ? [
+      { name: 'Settings',        path: '/settings',     icon: Sliders },
+    ] : []),
+    // ── /admin/* — admin only ────────────────────────────────────────────
+    ...(isAdmin ? [
+      { name: 'Team',            path: '/admin/team',   icon: Users },
+      { name: 'Configuration',   path: '/admin/config', icon: Building2 },
+    ] : []),
   ]
 
   const handleLogout = async () => {
@@ -193,7 +196,6 @@ function SidebarNavContent() {
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold text-text-primary truncate">{companyConfig.name}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[9px] font-bold px-1 py-0 rounded bg-emerald-500/15 text-emerald-600 border border-emerald-500/20">Pro</span>
                 <span className="text-[10px] text-text-tertiary">{companyConfig.currency} · {companyConfig.country || 'Kenya'}</span>
               </div>
             </div>

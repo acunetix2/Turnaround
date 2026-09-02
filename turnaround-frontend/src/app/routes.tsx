@@ -1,3 +1,4 @@
+import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../auth/ProtectedRoute';
@@ -25,31 +26,27 @@ import { UserManagement } from '../features/users/UserManagement';
 import { Notifications } from '../features/notifications/Notifications';
 import { CompanyConfig } from '../features/admin/CompanyConfig';
 import { RouteErrorBoundary } from '../components/common/RouteErrorBoundary';
+import type { UserRole } from '../lib/api/types';
+
+// Role sets
+const ADMIN:         UserRole[] = ['admin'];
+const ADMIN_MANAGER: UserRole[] = ['admin', 'fleet_manager'];
+const OPERATIONS:    UserRole[] = ['admin', 'fleet_manager', 'dispatcher'];
+const ALL_STAFF:     UserRole[] = ['admin', 'fleet_manager', 'dispatcher', 'driver', 'viewer', 'analyst'];
+
+// Wrap element in a role-checked ProtectedRoute
+function guard(element: React.ReactElement, roles: UserRole[]) {
+  return <ProtectedRoute allowedRoles={roles}>{element}</ProtectedRoute>;
+}
 
 export const router = createBrowserRouter([
-  // Public marketing & auth routes
-  {
-    path: '/',
-    element: <Landing />,
-    errorElement: <RouteErrorBoundary />,
-  },
-  {
-    path: '/login',
-    element: <Login />,
-    errorElement: <RouteErrorBoundary />,
-  },
-  {
-    path: '/signup',
-    element: <Signup />,
-    errorElement: <RouteErrorBoundary />,
-  },
-  {
-    path: '/forgot-password',
-    element: <ForgotPassword />,
-    errorElement: <RouteErrorBoundary />,
-  },
+  // ── Public routes ────────────────────────────────────────────────────────
+  { path: '/',                element: <Landing />,        errorElement: <RouteErrorBoundary /> },
+  { path: '/login',           element: <Login />,          errorElement: <RouteErrorBoundary /> },
+  { path: '/signup',          element: <Signup />,         errorElement: <RouteErrorBoundary /> },
+  { path: '/forgot-password', element: <ForgotPassword />, errorElement: <RouteErrorBoundary /> },
 
-  // Protected app routes
+  // ── Authenticated app shell ──────────────────────────────────────────────
   {
     element: (
       <ProtectedRoute>
@@ -58,28 +55,45 @@ export const router = createBrowserRouter([
     ),
     errorElement: <RouteErrorBoundary />,
     children: [
-      { path: '/dashboard',       element: <Dashboard />,        errorElement: <RouteErrorBoundary /> },
-      { path: '/map',             element: <LiveMap />,          errorElement: <RouteErrorBoundary /> },
-      { path: '/trips',           element: <Trips />,            errorElement: <RouteErrorBoundary /> },
-      { path: '/trips/:id',       element: <TripDetail />,       errorElement: <RouteErrorBoundary /> },
-      { path: '/gate-passes',     element: <GatePassList />,     errorElement: <RouteErrorBoundary /> },
-      { path: '/gate-pass',       element: <GatePassPage />,     errorElement: <RouteErrorBoundary /> },
-      { path: '/gate-pass/:id',   element: <GatePassPage />,     errorElement: <RouteErrorBoundary /> },
-      { path: '/demurrage',       element: <DelayCharges />,     errorElement: <RouteErrorBoundary /> },
-      { path: '/vehicles',        element: <Vehicles />,         errorElement: <RouteErrorBoundary /> },
-      { path: '/vehicles/:id',    element: <VehicleDetail />,    errorElement: <RouteErrorBoundary /> },
-      { path: '/locations',       element: <Locations />,        errorElement: <RouteErrorBoundary /> },
-      { path: '/locations/:id',   element: <LocationDetail />,   errorElement: <RouteErrorBoundary /> },
-      { path: '/insights',        element: <Insights />,         errorElement: <RouteErrorBoundary /> },
-      { path: '/analytics',       element: <Analytics />,        errorElement: <RouteErrorBoundary /> },
-      { path: '/settings',        element: <Settings />,         errorElement: <RouteErrorBoundary /> },
-      { path: '/account',         element: <AccountSettings />,  errorElement: <RouteErrorBoundary /> },
-      { path: '/users',           element: <UserManagement />,   errorElement: <RouteErrorBoundary /> },
-      { path: '/notifications',   element: <Notifications />,    errorElement: <RouteErrorBoundary /> },
-      { path: '/admin/config',    element: <CompanyConfig />,    errorElement: <RouteErrorBoundary /> },
-      { path: '/ai-advisor',      element: <AIAdvisor />,        errorElement: <RouteErrorBoundary /> },
+
+      // ── General (all authenticated users) ────────────────────────────────
+      { path: '/dashboard',        element: <Dashboard />,                              errorElement: <RouteErrorBoundary /> },
+      { path: '/notifications',    element: <Notifications />,                         errorElement: <RouteErrorBoundary /> },
+      { path: '/account',          element: <AccountSettings />,                       errorElement: <RouteErrorBoundary /> },
+
+      // ── Corridor Tracker (all staff) ──────────────────────────────────────
+      { path: '/map',              element: guard(<LiveMap />, ALL_STAFF),              errorElement: <RouteErrorBoundary /> },
+
+      // ── Operations (dispatchers and above) ───────────────────────────────
+      { path: '/trips',            element: guard(<Trips />, OPERATIONS),              errorElement: <RouteErrorBoundary /> },
+      { path: '/trips/:id',        element: guard(<TripDetail />, OPERATIONS),         errorElement: <RouteErrorBoundary /> },
+      { path: '/gate-passes',      element: guard(<GatePassList />, OPERATIONS),       errorElement: <RouteErrorBoundary /> },
+      { path: '/gate-pass',        element: guard(<GatePassPage />, OPERATIONS),       errorElement: <RouteErrorBoundary /> },
+      { path: '/gate-pass/:id',    element: guard(<GatePassPage />, OPERATIONS),       errorElement: <RouteErrorBoundary /> },
+      { path: '/demurrage',        element: guard(<DelayCharges />, OPERATIONS),       errorElement: <RouteErrorBoundary /> },
+
+      // ── Fleet management (fleet manager and above) ────────────────────────
+      { path: '/vehicles',         element: guard(<Vehicles />, ADMIN_MANAGER),        errorElement: <RouteErrorBoundary /> },
+      { path: '/vehicles/:id',     element: guard(<VehicleDetail />, ADMIN_MANAGER),   errorElement: <RouteErrorBoundary /> },
+      { path: '/locations',        element: guard(<Locations />, ADMIN_MANAGER),       errorElement: <RouteErrorBoundary /> },
+      { path: '/locations/:id',    element: guard(<LocationDetail />, ADMIN_MANAGER),  errorElement: <RouteErrorBoundary /> },
+
+      // ── Analytics & Insights (all staff) ─────────────────────────────────
+      { path: '/insights',         element: guard(<Insights />, ALL_STAFF),            errorElement: <RouteErrorBoundary /> },
+      { path: '/analytics',        element: guard(<Analytics />, ALL_STAFF),           errorElement: <RouteErrorBoundary /> },
+      { path: '/ai-advisor',       element: guard(<AIAdvisor />, ALL_STAFF),           errorElement: <RouteErrorBoundary /> },
+
+      // ── Settings (fleet manager and above) ────────────────────────────────
+      { path: '/settings',         element: guard(<Settings />, ADMIN_MANAGER),        errorElement: <RouteErrorBoundary /> },
+
+      // ── /admin/* — admin only ─────────────────────────────────────────────
+      { path: '/admin/team',       element: guard(<UserManagement />, ADMIN),          errorElement: <RouteErrorBoundary /> },
+      { path: '/admin/config',     element: guard(<CompanyConfig />, ADMIN),           errorElement: <RouteErrorBoundary /> },
+
+      // Legacy redirects so old bookmarks don't 404
+      { path: '/users',            element: <Navigate to="/admin/team" replace /> },
     ],
   },
+
   { path: '*', element: <Navigate to="/dashboard" replace /> },
 ]);
-

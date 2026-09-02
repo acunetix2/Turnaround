@@ -237,7 +237,7 @@ export const Vehicles: React.FC = () => {
       vehicle_type: '',
       capacity: 28,
       hourly_operating_cost: 3500,
-      status: 'stationary',
+      status: 'idle',
       driver_name: '',
       driver_phone: '',
       driver_license: '',
@@ -265,7 +265,7 @@ export const Vehicles: React.FC = () => {
       vehicle_type:         v.vehicle_type || '',
       capacity:             v.capacity || 28,
       hourly_operating_cost: v.hourly_operating_cost || 3500,
-      status:               normalizeFormStatus(v.status),
+      status:               (v.status as any) || 'idle',
       driver_name:          v.driver_name || '',
       driver_phone:         v.driver_phone || '',
       driver_license:       v.driver_license || '',
@@ -322,19 +322,7 @@ export const Vehicles: React.FC = () => {
     }
 
     const payload = { ...data, image_url: imageDataUrl } as any;
-    // Map frontend display statuses to backend VehicleStatus enum values
-    const statusMap: Record<string, string> = {
-      moving:      'in_transit',
-      stationary:  'idle',
-      delayed:     'delayed',
-      active:      'active',
-      idle:        'idle',
-      maintenance: 'maintenance',
-      in_transit:  'in_transit',
-    };
-    if (payload.status && statusMap[payload.status]) {
-      payload.status = statusMap[payload.status];
-    }
+    // status is already the correct backend enum value — no mapping needed
     // Strip undefined/null/empty-string/NaN fields so PATCH only sends changed values
     Object.keys(payload).forEach(k => {
       const v = payload[k];
@@ -1075,9 +1063,11 @@ export const Vehicles: React.FC = () => {
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Current Status *</label>
                       <select {...register('status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="moving">In Transit</option>
-                        <option value="stationary">Stationary</option>
+                        <option value="active">Active</option>
+                        <option value="in_transit">In Transit</option>
+                        <option value="idle">Stationary / Idle</option>
                         <option value="delayed">Delayed</option>
+                        <option value="maintenance">Under Maintenance</option>
                       </select>
                     </div>
                     <div>
