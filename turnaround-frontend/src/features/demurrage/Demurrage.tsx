@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api/client';
-import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatMinutes, formatDateTime } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
 import {

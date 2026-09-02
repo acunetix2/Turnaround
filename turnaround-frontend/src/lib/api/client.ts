@@ -55,6 +55,10 @@ function getHeaders(): HeadersInit {
   };
 }
 
+export function extractErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'An unexpected error occurred';
+}
+
 /**
  * Normalise a raw backend Trip response into the frontend Trip interface.
  * The backend returns nested `origin` / `destination` objects; the frontend
@@ -437,7 +441,7 @@ export const apiClient = {
     return Array.isArray(data) ? data : (data.items || []);
   },
 
-  async getTrendData(): Promise<TrendDataPoint[]> {
+  async getTrendData(_days?: number): Promise<TrendDataPoint[]> {
     if (USE_MOCKS) {
       await sleep(250);
       return mockTrendData;
@@ -446,6 +450,13 @@ export const apiClient = {
     if (!res.ok) throw new Error('Failed to fetch trend data');
     const data = await res.json();
     return Array.isArray(data) ? data : (data.points || []);
+  },
+
+  async getFleetProductivity(_days?: number): Promise<unknown> {
+    if (USE_MOCKS) return { score: 0, visits: [], total_financial_waste: 0 };
+    const res = await fetch(`${API_BASE_URL}/analytics/fleet-productivity`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch fleet productivity');
+    return res.json();
   },
 
   // --- Predictions ---
