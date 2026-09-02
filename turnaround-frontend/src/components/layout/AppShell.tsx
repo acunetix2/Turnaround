@@ -180,6 +180,25 @@ function SidebarNavContent() {
           <BrandLogo size={26} showText={!isCollapsed} />
           <SidebarTrigger />
         </div>
+        {/* Company overview — shown when expanded */}
+        {!isCollapsed && companyConfig && (
+          <div className="mt-2 mx-1 px-2.5 py-2 rounded-lg bg-[#250C77]/8 border border-[#250C77]/15 flex items-center gap-2.5">
+            {companyConfig.logo_url ? (
+              <img src={companyConfig.logo_url} alt="logo" className="h-6 w-6 rounded object-contain shrink-0" />
+            ) : (
+              <div className="h-6 w-6 rounded bg-[#250C77]/20 flex items-center justify-center shrink-0">
+                <Building2 size={12} className="text-[#250C77]" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-text-primary truncate">{companyConfig.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[9px] font-bold px-1 py-0 rounded bg-emerald-500/15 text-emerald-600 border border-emerald-500/20">Pro</span>
+                <span className="text-[10px] text-text-tertiary">{companyConfig.currency} · {companyConfig.country || 'Kenya'}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </SidebarHeader>
 
       {/* Quick Search */}
@@ -292,7 +311,7 @@ function SidebarNavContent() {
             {!isCollapsed && (
               <div className="min-w-0">
                 <p className="text-[11px] font-medium text-text-primary truncate">{user?.name || '—'}</p>
-                <p className="text-[9.5px] text-text-tertiary truncate">{user?.company_name || '—'}</p>
+                <p className="text-[9.5px] text-text-tertiary truncate">{companyConfig?.name || user?.company_name || '—'}</p>
               </div>
             )}
           </div>

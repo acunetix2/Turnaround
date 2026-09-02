@@ -202,9 +202,15 @@ async def cancel_trip(
         )
     
     trip.status = "cancelled"
-    
+
     await db.commit()
     await db.refresh(trip)
+    try:
+        reg = trip.vehicle.registration_number if trip.vehicle else trip.vehicle_id[:8]
+        await notif_svc.trip_status_changed(db, company_id=company_id, trip_id=trip.id, vehicle_reg=reg, new_status="cancelled")
+        await db.commit()
+    except Exception:
+        pass
     return trip
 
 

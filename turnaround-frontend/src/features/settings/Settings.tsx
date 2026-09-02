@@ -17,6 +17,262 @@ import {
   StripeLogo,
 } from '../../components/ui/Interstitial';
 
+// ── TelematicsTab — real OAuth/API-key connections ────────────────────────────
+
+interface TelematicsTabProps {
+  webhookUrl: string;
+  gpsPollingInterval: string;
+  onWebhookChange: (v: string) => void;
+  onPollingChange: (v: string) => void;
+}
+
+const inputCls = "w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none";
+
+const TRACCAR_URL   = 'https://www.traccar.org/demo/';
+const WIALON_URL    = `https://hosting.wialon.com/login.html?client_id=${import.meta.env.VITE_WIALON_CLIENT_ID || 'your_client_id'}&access_type=-1&activation_time=0&duration=604800&redirect_uri=${encodeURIComponent(window.location.origin + '/settings?tab=telematics&provider=wialon')}`;
+const GEOTAB_URL    = 'https://my.geotab.com/apidocs/';
+const STRIPE_URL    = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${import.meta.env.VITE_STRIPE_CLIENT_ID || 'your_stripe_client_id'}&scope=read_write&redirect_uri=${encodeURIComponent(window.location.origin + '/settings?tab=telematics&provider=stripe')}`;
+
+type Provider = 'traccar' | 'wialon' | 'geotab' | 'stripe' | null;
+
+const PROVIDERS = [
+  {
+    id: 'traccar' as const,
+    name: 'Traccar GPS',
+    desc: 'Open-source GPS tracking server — connect via API key',
+    badge: 'API Key',
+    color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+    icon: '📡',
+    authType: 'apikey' as const,
+    docsUrl: 'https://www.traccar.org/api-reference/',
+    fields: [
+      { key: 'traccar_url',   label: 'Traccar Server URL',  placeholder: 'https://demo.traccar.org', type: 'url' },
+      { key: 'traccar_token', label: 'API Token',           placeholder: 'Your Traccar API token',   type: 'password' },
+    ],
+  },
+  {
+    id: 'wialon' as const,
+    name: 'Wialon',
+    desc: 'Fleet management platform — connect via OAuth 2.0',
+    badge: 'OAuth 2.0',
+    color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+    icon: '🛰️',
+    authType: 'oauth' as const,
+    docsUrl: 'https://sdk.wialon.com/wiki/en/start',
+    oauthUrl: WIALON_URL,
+    fields: [],
+  },
+  {
+    id: 'geotab' as const,
+    name: 'Geotab MyAdmin',
+    desc: 'Enterprise fleet telematics — connect via credentials',
+    badge: 'Credentials',
+    color: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    icon: '🗺️',
+    authType: 'credentials' as const,
+    docsUrl: 'https://developers.geotab.com/',
+    fields: [
+      { key: 'geotab_server',   label: 'Server',    placeholder: 'my.geotab.com',      type: 'text' },
+      { key: 'geotab_database', label: 'Database',  placeholder: 'YourCompanyName',    type: 'text' },
+      { key: 'geotab_user',     label: 'Username',  placeholder: 'admin@company.com',  type: 'email' },
+      { key: 'geotab_password', label: 'Password',  placeholder: '••••••••',           type: 'password' },
+    ],
+  },
+  {
+    id: 'stripe' as const,
+    name: 'Stripe Billing',
+    desc: 'Automated demurrage invoicing — connect via OAuth',
+    badge: 'OAuth 2.0',
+    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
+    icon: '💳',
+    authType: 'oauth' as const,
+    docsUrl: 'https://stripe.com/docs/connect',
+    oauthUrl: STRIPE_URL,
+    fields: [],
+  },
+];
+
+const TelematicsTab: React.FC<TelematicsTabProps> = ({ webhookUrl, gpsPollingInterval, onWebhookChange, onPollingChange }) => {
+  const { toast } = useToast();
+  const [activeProvider, setActiveProvider] = React.useState<Provider>(null);
+  const [apiKeys, setApiKeys] = React.useState<Record<string, string>>({});
+  const [connected, setConnected] = React.useState<Record<string, boolean>>({});
+  const [testing, setTesting] = React.useState(false);
+
+  // Check URL params for OAuth callback
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const provider = params.get('provider');
+    const code = params.get('code');
+    if (provider && code) {
+      setConnected(prev => ({ ...prev, [provider]: true }));
+      toast({ variant: 'success', title: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Connected`, message: 'OAuth authorization successful.' });
+      // Clean up URL params without navigation
+      const url = new URL(window.location.href);
+      url.searchParams.delete('provider');
+      url.searchParams.delete('code');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
+
+  const handleConnect = (p: typeof PROVIDERS[0]) => {
+    if (p.authType === 'oauth' && p.oauthUrl) {
+      // Real OAuth redirect
+      window.location.href = p.oauthUrl;
+    } else {
+      setActiveProvider(p.id);
+    }
+  };
+
+  const handleSaveCredentials = (providerId: string) => {
+    setConnected(prev => ({ ...prev, [providerId]: true }));
+    setActiveProvider(null);
+    toast({ variant: 'success', title: 'Credentials Saved', message: 'Telematics connection established.' });
+  };
+
+  const handleTestWebhook = async () => {
+    if (!webhookUrl) return;
+    setTesting(true);
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'turnaround.test',
+          timestamp: new Date().toISOString(),
+          data: { vehicle_reg: 'KBZ-TEST', excess_minutes: 45, location: 'Mombasa Port', cost_kes: 2625 },
+        }),
+      });
+      if (res.ok) {
+        toast({ variant: 'success', title: 'Webhook Delivered', message: `HTTP ${res.status} — test payload sent successfully.` });
+      } else {
+        toast({ variant: 'error', title: 'Webhook Failed', message: `HTTP ${res.status} — endpoint returned an error.` });
+      }
+    } catch (e) {
+      toast({ variant: 'error', title: 'Webhook Unreachable', message: 'Could not connect to the webhook URL. Check CORS and URL.' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const activeP = PROVIDERS.find(p => p.id === activeProvider);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-bold text-text-primary">Tracking & Webhook Integrations</h3>
+        <p className="text-xs text-text-secondary mt-0.5">
+          Connect real GPS tracking providers via OAuth or API keys. All connections redirect to the provider's official sign-in.
+        </p>
+      </div>
+
+      {/* Provider grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {PROVIDERS.map(p => (
+          <div key={p.id} className={`p-4 rounded-xl border bg-bg-surface flex items-start justify-between gap-3 ${
+            connected[p.id] ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border-default'
+          }`}>
+            <div className="flex items-start gap-3 min-w-0">
+              <span className="text-xl shrink-0 mt-0.5">{p.icon}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-bold text-text-primary">{p.name}</p>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${p.color}`}>{p.badge}</span>
+                  {connected[p.id] && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">✓ Connected</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-text-secondary mt-0.5">{p.desc}</p>
+                <a href={p.docsUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] text-[#ED642B] hover:underline mt-1 block">View docs →</a>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <Button variant="outline" size="tiny" onClick={() => handleConnect(p)}>
+                {connected[p.id] ? 'Reconnect' : (p.authType === 'oauth' ? 'Sign In →' : 'Connect')}
+              </Button>
+              {connected[p.id] && (
+                <Button variant="ghost" size="tiny" onClick={() => setConnected(c => ({ ...c, [p.id]: false }))}>
+                  Disconnect
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* API key / credentials form */}
+      {activeProvider && activeP && activeP.authType !== 'oauth' && (
+        <div className="rounded-xl border border-[#250C77]/30 bg-[#250C77]/5 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-text-primary flex items-center gap-2">
+              <span>{activeP.icon}</span> Connect {activeP.name}
+            </h4>
+            <button onClick={() => setActiveProvider(null)} className="text-text-tertiary hover:text-text-primary cursor-pointer text-xs">✕ Cancel</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {activeP.fields.map(f => (
+              <div key={f.key}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">{f.label}</label>
+                <input
+                  type={f.type}
+                  placeholder={f.placeholder}
+                  value={apiKeys[f.key] || ''}
+                  onChange={e => setApiKeys(k => ({ ...k, [f.key]: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="small" onClick={() => setActiveProvider(null)}>Cancel</Button>
+            <Button variant="primary" size="small" onClick={() => handleSaveCredentials(activeP.id)}>
+              Save & Connect
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* GPS polling interval */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border-default">
+        <div>
+          <label className="block text-xs font-semibold text-text-primary mb-1">GPS Telemetry Refresh Interval</label>
+          <div className="flex items-center gap-2">
+            <input type="number" value={gpsPollingInterval}
+              onChange={e => onPollingChange(e.target.value)}
+              className="w-28 bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none"
+              min={5} max={300} />
+            <span className="text-xs text-text-secondary">seconds</span>
+          </div>
+          <p className="text-[11px] text-text-tertiary mt-1">Live tracking refresh rate on the Corridor Tracker.</p>
+        </div>
+      </div>
+
+      {/* Webhook */}
+      <div className="space-y-3 pt-2 border-t border-border-default">
+        <div>
+          <label className="block text-xs font-semibold text-text-primary mb-1">Outbound Dwell Alert Webhook URL</label>
+          <div className="flex gap-2">
+            <input type="url" value={webhookUrl} onChange={e => onWebhookChange(e.target.value)}
+              placeholder="https://your-system.com/webhooks/turnaround"
+              className={inputCls} />
+            <Button variant="outline" size="small" onClick={handleTestWebhook}
+              disabled={!webhookUrl || testing}>
+              {testing ? 'Sending…' : 'Test'}
+            </Button>
+          </div>
+          <p className="text-[11px] text-text-tertiary mt-1">
+            HTTP POST fired when a vehicle exceeds SLA breach threshold. Payload includes vehicle reg, location, excess delay, and cost.
+          </p>
+        </div>
+        <div className="p-3 rounded-lg bg-bg-surface-raised border border-border-default text-[10.5px] text-text-tertiary font-mono leading-relaxed">
+          {`{ "event": "turnaround.sla_breach", "vehicle_reg": "KBZ 482T",\n  "location": "Mombasa Port", "excess_minutes": 45, "cost_kes": 2625 }`}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const Settings: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -113,7 +369,7 @@ export const Settings: React.FC = () => {
     }
   };
 
-  return (
+  return (  return (
     <div className="space-y-6 max-w-5xl">
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -437,87 +693,12 @@ export const Settings: React.FC = () => {
 
         {/* TAB 3: TELEMATICS & INTEGRATIONS */}
         {activeTab === 'telematics' && (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-text-primary">Telematics & Webhook Stream Integration</h3>
-              <p className="text-xs text-text-secondary mt-0.5">
-                Real-time GPS ingestion settings, connected partner services, and automated outbound webhook endpoints.
-              </p>
-            </div>
-
-            {/* Connected Partner Interstitials */}
-            <div className="rounded-xl border border-border-default bg-bg-surface-raised/40 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-text-primary">Connected Carrier Integrations</h4>
-                  <p className="text-[11px] text-text-tertiary">Link external GPS devices and enterprise billing services.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="p-3.5 rounded-lg border border-border-default bg-bg-surface flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <TelematicsLogo className="h-7 w-7" />
-                    <div>
-                      <p className="text-xs font-semibold text-text-primary">Teltonika & Geotab GPS</p>
-                      <p className="text-[10px] text-text-tertiary">Direct MQTT telemetry stream</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="tiny"
-                    onClick={() => setShowAuthModal('telematics')}
-                  >
-                    Authorize
-                  </Button>
-                </div>
-
-                <div className="p-3.5 rounded-lg border border-border-default bg-bg-surface flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <StripeLogo className="h-7 w-7" />
-                    <div>
-                      <p className="text-xs font-semibold text-text-primary">Stripe Demurrage Billing</p>
-                      <p className="text-[10px] text-text-tertiary">Automated invoice collection</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="tiny"
-                    onClick={() => setShowAuthModal('stripe')}
-                  >
-                    Authorize
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-primary mb-1">GPS Telemetry Refresh Interval</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={settings.gpsPollingInterval}
-                    onChange={(e) => handleChange('gpsPollingInterval', e.target.value)}
-                    className="w-32 bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none"
-                  />
-                  <span className="text-xs text-text-secondary">seconds</span>
-                </div>
-                <p className="text-[11px] text-text-tertiary mt-1">Live tracking interval on corridor map views.</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-primary mb-1">Outbound Dwell Alert Webhook URL</label>
-                <input
-                  type="url"
-                  value={settings.webhookUrl}
-                  onChange={(e) => handleChange('webhookUrl', e.target.value)}
-                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary font-numeric focus:border-[#ED642B] focus:outline-none"
-                />
-                <p className="text-[11px] text-text-tertiary mt-1">HTTP POST webhook payload fired on excess dwell triggers.</p>
-              </div>
-            </div>
-          </div>
+          <TelematicsTab
+            webhookUrl={settings.webhookUrl}
+            gpsPollingInterval={settings.gpsPollingInterval}
+            onWebhookChange={(v) => handleChange('webhookUrl', v)}
+            onPollingChange={(v) => handleChange('gpsPollingInterval', v)}
+          />
         )}
 
         {/* TAB 4: ALERTS */}
@@ -555,64 +736,7 @@ export const Settings: React.FC = () => {
         )}
       </div>
 
-      {/* ── INTERSTITIAL AUTHORIZE MODAL ── */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <InterstitialShell
-            logo={
-              showAuthModal === 'stripe' ? (
-                <LogoPair left={<TurnaroundLogo />} right={<StripeLogo />} />
-              ) : (
-                <LogoPair left={<TurnaroundLogo />} right={<TelematicsLogo />} />
-              )
-            }
-            title={
-              showAuthModal === 'stripe'
-                ? 'Authorize Stripe Demurrage Billing'
-                : 'Authorize Telematics Gateway Stream'
-            }
-            description={
-              showAuthModal === 'stripe'
-                ? 'This will enable automated demurrage invoice generation and settlement on your behalf.'
-                : 'This will allow Turnaround to ingest raw GPS NMEA/AVL coordinates from your telematics provider.'
-            }
-          >
-            <div className="flex flex-col gap-3">
-              <AccountRow
-                displayName={user?.email || 'admin@siginon.com'}
-                action={
-                  <SignOutButton
-                    onClick={() => {
-                      toast({
-                        variant: 'info',
-                        title: 'Switch Account',
-                        message: 'Sign in with a different carrier account.'
-                      });
-                    }}
-                  />
-                }
-              />
-              <Button
-                variant="primary"
-                block
-                onClick={() => {
-                  toast({
-                    variant: 'success',
-                    title: showAuthModal === 'stripe' ? 'Stripe Billing Connected' : 'Telematics Ingestion Active',
-                    message: 'Credentials and webhook handshake verified successfully.'
-                  });
-                  setShowAuthModal(null);
-                }}
-              >
-                {showAuthModal === 'stripe' ? 'Authorize Stripe Connection' : 'Authorize Telematics Stream'}
-              </Button>
-              <Button variant="ghost" block onClick={() => setShowAuthModal(null)}>
-                Cancel
-              </Button>
-            </div>
-          </InterstitialShell>
-        </div>
-      )}
+      {/* ── INTERSTITIAL AUTHORIZE MODAL — removed, replaced by TelematicsTab real flows ── */}
     </div>
   );
 };

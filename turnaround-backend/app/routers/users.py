@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.db.models.user import User, UserRole
 from app.deps import get_current_company, get_current_user
 from app.auth.rbac import require_role
+from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/users", tags=["User Management"])
 
@@ -165,7 +166,14 @@ async def create_user(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
-    
+    try:
+        await notif_svc.user_added(
+            db, company_id=company_id, admin_id=current_user.id,
+            new_user_name=new_user.name, new_user_role=new_user.role
+        )
+        await db.commit()
+    except Exception:
+        pass
     return UserResponse.model_validate(new_user)
 
 
@@ -264,10 +272,14 @@ async def suspend_user(
     
     user.status = "suspended"
     user.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(user)
-    
+    try:
+        await notif_svc.user_suspended(db, company_id=company_id, admin_id=current_user.id, suspended_name=user.name)
+        await db.commit()
+    except Exception:
+        pass
     return UserResponse.model_validate(user)
 
 
