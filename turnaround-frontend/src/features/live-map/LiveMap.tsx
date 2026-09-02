@@ -396,7 +396,7 @@ export const LiveMap: React.FC = () => {
 
       const isSelected = selectedVehicleId === vh.id;
       const isDelayed = vh.status === 'delayed';
-      const isMoving = vh.status === 'moving';
+      const isMoving = vh.status === 'in_transit' || (vh.status as string) === 'moving'; // 'moving' kept as legacy shim
 
       const bg = isDelayed ? '#EF4444' : isMoving ? '#10B981' : '#250C77';
       const ring = isSelected ? 'ring-4 ring-[#ED642B]' : '';

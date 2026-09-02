@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     GPS_DEBOUNCE_POINTS: int = 2
     SEVERITY_HIGH_MULTIPLIER: float = 1.5
     SEVERITY_MEDIUM_MULTIPLIER: float = 1.2
+    # Auto-create a FLAGGED DemurrageClaim when a dwell closes with excess >= this many minutes.
+    # Set to 0.0 to flag any excess at all; set higher (e.g. 30.0) for a grace threshold.
+    AUTO_DEMURRAGE_THRESHOLD_MINUTES: float = 0.0
 
 
 settings = Settings()

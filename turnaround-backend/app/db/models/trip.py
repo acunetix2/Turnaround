@@ -2,7 +2,7 @@ import uuid
 import enum
 from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import String, Float, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, utc_now
 
@@ -14,12 +14,12 @@ if TYPE_CHECKING:
 
 
 class TripStatus(str, enum.Enum):
-    PLANNED    = "planned"
-    IN_TRANSIT = "in_transit"
-    DELAYED    = "delayed"
-    COMPLETED  = "completed"
-    CANCELLED  = "cancelled"
-    ARCHIVED   = "archived"
+    PLANNED = "planned"
+    IN_PROGRESS = "in_progress"   # legacy alias kept for backward compat
+    IN_TRANSIT = "in_transit"     # canonical active-movement state
+    DELAYED = "delayed"            # active trip exceeding SLA threshold
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class Trip(Base):
@@ -44,6 +44,8 @@ class Trip(Base):
     customs_seal_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     container_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     cargo_description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    cargo_type: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    cargo_weight_tonnes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationships
