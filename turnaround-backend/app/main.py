@@ -128,9 +128,14 @@ async def log_requests(request: Request, call_next):
 
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
+allowed_cors_origins = list({
+    *settings.CORS_ORIGINS,
+    "https://turnaroundlogistics.vercel.app",
+})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=allowed_cors_origins,
     allow_origin_regex=r"^https://([a-z0-9-]+\.)?vercel\.app$|^https://([a-z0-9-]+\.)?render\.com$",
     allow_credentials=True,
     allow_methods=["*"],
