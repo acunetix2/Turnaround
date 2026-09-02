@@ -85,3 +85,21 @@ async def update_location(
     await db.commit()
     await db.refresh(location)
     return location
+
+
+@router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Decommission or remove location geofence")
+async def delete_location(
+    location_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    _rbac: bool = Depends(WRITE_ROLES),
+):
+    result = await db.execute(select(Location).where(Location.id == location_id, Location.company_id == company_id))
+    location = result.scalar_one_or_none()
+    if not location:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Location not found"}})
+
+    await db.delete(location)
+    await db.commit()
+    return None
+

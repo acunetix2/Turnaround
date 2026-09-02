@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTheme } from '../../lib/ThemeContext';
 
 interface BrandLogoProps {
   size?: number;
@@ -13,9 +14,17 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   showText = true,
   textSize = 'text-base',
 }) => {
+  let isLight = false;
+  try {
+    const { theme } = useTheme();
+    isLight = theme === 'light';
+  } catch {
+    isLight = false;
+  }
+
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
-      {/* Clean, high-contrast geometric vector emblem */}
+      {/* Clean FedEx-inspired geometric vector emblem */}
       <svg
         width={size}
         height={size}
@@ -24,45 +33,41 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         xmlns="http://www.w3.org/2000/svg"
         className="shrink-0 transition-transform duration-150 group-hover:scale-105"
       >
-        {/* Background container */}
-        <rect width="40" height="40" rx="10" fill="#2563EB" />
+        {/* Background container: FedEx Corporate Purple */}
+        <rect width="40" height="40" rx="9" fill="#250C77" />
         
-        {/* Turnaround Route Arrow & Commercial Truck Cab */}
-        {/* Truck Trailer Chassis */}
-        <rect x="8" y="14" width="14" height="12" rx="2" fill="#FFFFFF" fillOpacity="0.95" />
-        {/* Truck Front Cab */}
-        <path d="M22 17H27L30 21V26H22V17Z" fill="#FFFFFF" />
-        {/* Windshield cutout */}
-        <path d="M23 18.5H26.2L28.5 21.5H23V18.5Z" fill="#2563EB" />
-        
-        {/* Wheels */}
-        <circle cx="12" cy="26" r="2.5" fill="#0F172A" />
-        <circle cx="12" cy="26" r="1.2" fill="#FFFFFF" />
-        <circle cx="26" cy="26" r="2.5" fill="#0F172A" />
-        <circle cx="26" cy="26" r="1.2" fill="#FFFFFF" />
+        {/* Dynamic Forward Express Arrow (Orange) */}
+        <path
+          d="M 8 9 L 24 9 C 28 9 30 11 30 14 C 30 17 28 19 24 19 L 14 19"
+          stroke="#ED642B"
+          strokeWidth="3.2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 22 5.5 L 30 9 L 22 12.5"
+          fill="#ED642B"
+        />
 
-        {/* Turnaround Dynamic Arrow Curve on top */}
-        <path
-          d="M 9 10 C 9 7.5 11 6 14 6 L 27 6"
-          stroke="#FFFFFF"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M 25 3.5 L 29.5 6 L 25 8.5"
-          stroke="#FFFFFF"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {/* Commercial Truck Silhouette (White) */}
+        <rect x="7" y="21" width="15" height="11" rx="1.5" fill="#FFFFFF" />
+        <path d="M22 23H28L31.5 27V32H22V23Z" fill="#FFFFFF" />
+        <path d="M23.5 24.5H27.5L29.8 27.5H23.5V24.5Z" fill="#250C77" />
+        
+        {/* Wheels with orange hubs */}
+        <circle cx="11" cy="32" r="2.8" fill="#16074A" />
+        <circle cx="11" cy="32" r="1.3" fill="#ED642B" />
+        <circle cx="27" cy="32" r="2.8" fill="#16074A" />
+        <circle cx="27" cy="32" r="1.3" fill="#ED642B" />
       </svg>
 
       {showText && (
-        <div className="flex flex-col">
-          <span className={`${textSize} font-bold tracking-tight text-white leading-none`}>
-            Turnaround
-          </span>
-          <span className="text-[10px] text-[#60A5FA] font-medium tracking-wide mt-0.5">
+        <div className="flex flex-col leading-tight">
+          <div className="flex items-center">
+            <span className={`${textSize} font-extrabold tracking-tight ${isLight ? 'text-blue-600' : 'text-white'}`}>
+              Turn<span className="text-[#ED642B]">around</span>
+            </span>
+          </div>
+          <span className="text-[9.5px] text-[#ED642B] font-bold tracking-widest uppercase mt-0.5">
             Fleet Operations
           </span>
         </div>

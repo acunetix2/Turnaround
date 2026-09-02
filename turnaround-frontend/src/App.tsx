@@ -1,8 +1,10 @@
-import React from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthProvider';
+import { Toaster } from './components/ui/Sonner';
 import { ToastProvider } from './components/ui/Toast';
+import { ThemeProvider } from './lib/ThemeContext';
+import { CompanyProvider } from './lib/CompanyContext';
 import { router } from './app/routes';
 
 const queryClient = new QueryClient({
@@ -17,13 +19,18 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <CompanyProvider>
+            <ToastProvider>
+              <RouterProvider router={router} />
+              <Toaster />
+            </ToastProvider>
+          </CompanyProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

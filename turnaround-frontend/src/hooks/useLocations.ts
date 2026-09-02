@@ -48,3 +48,15 @@ export function useUpdateLocation(id: string) {
     },
   });
 }
+
+export function useDeleteLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.deleteLocation(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.locations.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard() });
+    },
+  });
+}
+

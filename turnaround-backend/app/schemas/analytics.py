@@ -46,3 +46,16 @@ class TrendPoint(BaseModel):
 class TrendAnalytics(BaseModel):
     timeframe: str
     points: List[TrendPoint]
+
+
+class FleetProductivity(BaseModel):
+    """Fleet efficiency score and visit breakdown for the given timeframe (D-004)."""
+    score: float = Field(..., description="Productivity score 0–100. 100 = all visits on time.")
+    total_visits: int = Field(..., description="Total completed dwell events in the period")
+    on_time_visits: int = Field(..., description="Visits where actual dwell <= expected dwell")
+    delayed_visits: int = Field(..., description="Visits where actual dwell exceeded expected dwell")
+    total_expected_dwell_minutes: float = Field(..., description="Sum of expected dwell across all visits")
+    total_actual_dwell_minutes: float = Field(..., description="Sum of actual dwell across all visits")
+    total_excess_minutes: float = Field(..., description="Total excess delay minutes in period")
+    total_financial_waste_kes: float = Field(..., description="Total KES lost to excess dwell")
+    timeframe_days: int = Field(..., description="Number of days covered by the analysis")

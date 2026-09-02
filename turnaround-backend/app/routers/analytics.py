@@ -9,7 +9,7 @@ from app.db.models.dwell_event import DwellEvent
 from app.db.models.vehicle import Vehicle, VehicleStatus
 from app.db.models.location import Location
 from app.deps import get_current_company
-from app.schemas.analytics import DashboardMetrics, LocationPerformance, VehiclePerformance, TrendAnalytics, TrendPoint
+from app.schemas.analytics import DashboardMetrics, LocationPerformance, VehiclePerformance, TrendAnalytics, TrendPoint, FleetProductivity
 from app.engines.analytics import compute_dashboard_metrics, compute_location_analytics, DwellRecord
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -157,3 +157,48 @@ async def get_trends(
         for day, v in sorted(day_map.items())
     ]
     return TrendAnalytics(timeframe=f"last_{days}_days", points=points)
+
+
+@router.get("/fleet-productivity", response_model=FleetProductivity,
+            summary="Fleet productivity score and efficiency metrics (D-004)")
+async def get_fleet_productivity(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+    days: int = 30,
+):
+    """
+    Fleet productivity score: ratio of expected dwell to actual dwell expressed as a percentage.
+    A score of 100% means every vehicle finished exactly on time; > 100% means ahead of SLA;
+    < 100% means the fleet is experiencing excess delays.
+
+    Also returns the number of on-time vs delayed visits and total financial waste.
+    """
+    from datetime import timedelta
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    records = await _load_dwell_records(db, company_id, since=since)
+
+    total_expected = sum(r.expected_minutes for r in records)
+    total_actual = sum(r.dwell_minutes for r in records)
+    total_excess = sum(r.excess_minutes for r in records)
+    total_cost = sum(r.estimated_cost for r in records)
+
+    on_time = sum(1 for r in records if r.excess_minutes <= 0)
+    delayed = len(records) - on_time
+
+    # Score: (expected / actual) * 100. Higher is better. Cap at 100 to avoid misleading >100 display.
+    if total_actual > 0:
+        score = round(min((total_expected / total_actual) * 100, 100.0), 1)
+    else:
+        score = 100.0
+
+    return FleetProductivity(
+        score=score,
+        total_visits=len(records),
+        on_time_visits=on_time,
+        delayed_visits=delayed,
+        total_expected_dwell_minutes=round(total_expected, 1),
+        total_actual_dwell_minutes=round(total_actual, 1),
+        total_excess_minutes=round(total_excess, 1),
+        total_financial_waste_kes=round(total_cost, 2),
+        timeframe_days=days,
+    )

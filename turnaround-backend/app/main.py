@@ -1,3 +1,4 @@
+import asyncio
 import time
 import logging
 from contextlib import asynccontextmanager
@@ -11,20 +12,39 @@ from app.db.session import engine
 from app.db.base import Base
 # Import all models so SQLAlchemy registers them against Base metadata
 from app.db.models import (  # noqa: F401
-    Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight
+    Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight,
+    DemurrageClaim, GatePass, Notification
 )
+from app.middleware.database import DatabaseMiddleware, QueryTimeoutMiddleware
 from app.routers import (
     health, vehicles, locations, trips,
-    gps_events, dwell_events, analytics, insights, predictions
+    gps_events, dwell_events, analytics, insights, predictions, ai,
+    demurrage, gate_passes, users, account, notifications, company
 )
+from app.tasks.expiry_sweep import start_expiry_sweep_loop
 
 # ── Structured Logging ──────────────────────────────────────────────────────
 logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.DEBUG),
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("turnaround")
+
+# Silence noisy third-party libraries unless they produce errors
+for lib in ("asyncpg", "sqlalchemy.engine", "httpcore", "httpx", "urllib3", "watchfiles"):
+    logging.getLogger(lib).setLevel(logging.WARNING)
+
+# Endpoints that are polled frequently or trivial — silenced from routine INFO logging
+QUIET_ROUTES = {
+    "/health",
+    "/api/v1/health",
+    "/api/v1/gps/live",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/favicon.ico",
+}
 
 
 # ── Lifespan ────────────────────────────────────────────────────────────────
@@ -32,13 +52,22 @@ logger = logging.getLogger("turnaround")
 async def lifespan(app: FastAPI):
     logger.info("Starting Turnaround API — connecting to Supabase PostgreSQL")
     try:
-        # Create all tables if they don't exist (Supabase already has them after migrations)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database schema verified & connected successfully")
     except Exception as e:
         logger.error(f"DB startup error: {str(e)}")
+
+    # Start background gate pass expiry sweep
+    sweep_task = asyncio.create_task(start_expiry_sweep_loop())
+
     yield
+
+    sweep_task.cancel()
+    try:
+        await sweep_task
+    except asyncio.CancelledError:
+        pass
     logger.info("Shutting down Turnaround API")
     await engine.dispose()
 
@@ -61,26 +90,35 @@ app = FastAPI(
 # ── Request / Access Logging Middleware ────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    if not settings.LOG_REQUESTS:
+        return await call_next(request)
+
     start_time = time.time()
     path = request.url.path
     method = request.method
-    query = request.url.query
-    
-    # Log incoming request
-    logger.info(f"--> {method} {path}{'?' + query if query else ''}")
-    
+    is_quiet = settings.QUIET_POLLING_LOGS and path in QUIET_ROUTES
+
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000
         status_code = response.status_code
-        
-        # Color/severity indicator based on status
-        level = logger.info if status_code < 400 else (logger.warning if status_code < 500 else logger.error)
-        level(f"<-- {method} {path} | Status: {status_code} | Duration: {process_time:.2f}ms")
+
+        # For quiet polling routes, only log on errors (>= 400) or slow responses (> 2000ms)
+        if is_quiet and status_code < 400 and process_time < 2000:
+            return response
+
+        # Format single clean line
+        if status_code < 400:
+            logger.info(f"{method} {path} -> {status_code} ({process_time:.1f}ms)")
+        elif status_code < 500:
+            logger.warning(f"{method} {path} -> {status_code} ({process_time:.1f}ms)")
+        else:
+            logger.error(f"{method} {path} -> {status_code} ({process_time:.1f}ms)")
+
         return response
     except Exception as e:
         process_time = (time.time() - start_time) * 1000
-        logger.error(f"<-- {method} {path} | ERROR: {str(e)} | Duration: {process_time:.2f}ms")
+        logger.error(f"{method} {path} -> ERROR: {str(e)} ({process_time:.1f}ms)")
         raise e
 
 
@@ -92,6 +130,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Database Connection Middleware ──────────────────────────────────────────
+# NOTE: Pure-ASGI middleware classes are registered directly on the ASGI stack,
+# not via add_middleware (which wraps them in BaseHTTPMiddleware and breaks them).
+# Connection health is handled by pool_pre_ping=True in session.py.
+# These are intentionally left out of add_middleware to avoid 503 crashes.
 
 
 # ── Global Exception Handler ────────────────────────────────────────────────
@@ -116,6 +160,13 @@ app.include_router(dwell_events.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(predictions.router, prefix=API_PREFIX)
+app.include_router(ai.router, prefix=API_PREFIX)
+app.include_router(demurrage.router, prefix=API_PREFIX)
+app.include_router(gate_passes.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(account.router, prefix=API_PREFIX)
+app.include_router(notifications.router, prefix=API_PREFIX)
+app.include_router(company.router, prefix=API_PREFIX)
 
 
 @app.get("/", tags=["Root"], summary="API root redirect")

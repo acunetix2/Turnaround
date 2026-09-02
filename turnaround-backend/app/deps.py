@@ -24,7 +24,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = authorization.split(" ")[1]
+    token = authorization.removeprefix("Bearer ").strip()
     try:
         payload = decode_supabase_jwt(token)
     except JWTValidationError as e:

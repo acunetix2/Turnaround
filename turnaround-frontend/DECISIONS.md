@@ -14,10 +14,9 @@ This file logs every assumption, deviation, or gap that needs confirmation once 
 
 ## D-002 — Live GPS Aggregate Endpoint
 
-**Status**: Open — backend decision needed  
+**Status**: Resolved  
 **Context**: The spec notes vehicles may have per-vehicle GPS history at `GET /gps/events/{vehicle_id}`. A per-vehicle N+1 fetch for every truck on the live map is unacceptable at fleet sizes >50.  
-**Assumed**: A single `GET /gps/events` aggregate endpoint exists that returns `Record<vehicle_id, GPSEvent>` (latest position per vehicle). The mock layer implements this assumption.  
-**Action required**: Confirm or add a `/vehicles/live` aggregate endpoint on the backend. If not available, the frontend will need server-side pagination or a WebSocket subscription.
+**Implemented**: `GET /vehicles/live` endpoint added to the backend (`app/routers/vehicles.py`). Returns `Record<vehicle_id, LiveVehiclePosition>` with the latest GPS fix, vehicle metadata, and active dwell state in a single query (window-function subquery for latest-per-vehicle GPS, one bulk active-dwell fetch). Frontend `useLiveMap.ts` hook and `apiClient.getLiveGPSEvents` now call this endpoint directly.
 
 ---
 

@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     PORT: int = 8000
     HOST: str = "0.0.0.0"
     LOG_LEVEL: str = "INFO"
+    LOG_REQUESTS: bool = True
+    QUIET_POLLING_LOGS: bool = True
+
+    # Database Connection Settings
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 3600
+    DB_CONNECT_TIMEOUT: int = 30
+    DB_COMMAND_TIMEOUT: int = 30
 
     # CORS
     CORS_ORIGINS: List[str] = [
@@ -41,12 +51,19 @@ class Settings(BaseSettings):
     # JWT secret — used only as dev fallback when SUPABASE_URL is not set
     SUPABASE_JWT_SECRET: Optional[str] = "dev-secret-key-for-local-testing-turnaround"
 
-    # Engines Configuration
+    # AI / LLM Engine (Groq)
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+
+    # Engine Configuration
     DEFAULT_EXPECTED_DWELL_MINUTES: float = 120.0
     HISTORICAL_VISITS_THRESHOLD: int = 10
     GPS_DEBOUNCE_POINTS: int = 2
     SEVERITY_HIGH_MULTIPLIER: float = 1.5
     SEVERITY_MEDIUM_MULTIPLIER: float = 1.2
+    # Auto-create a FLAGGED DemurrageClaim when a dwell closes with excess >= this many minutes.
+    # Set to 0.0 to flag any excess at all; set higher (e.g. 30.0) for a grace threshold.
+    AUTO_DEMURRAGE_THRESHOLD_MINUTES: float = 0.0
 
 
 settings = Settings()

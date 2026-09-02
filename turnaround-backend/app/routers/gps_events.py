@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -13,6 +13,9 @@ from app.db.models.gps_event import GPSEvent
 from app.db.models.vehicle import Vehicle
 from app.db.models.location import Location
 from app.db.models.dwell_event import DwellEvent
+from app.db.models.trip import Trip, TripStatus
+from app.db.models.demurrage_claim import DemurrageClaim, ClaimStatus, ResponsibleParty
+from app.db.models.company import Company
 from app.deps import get_current_company
 from app.schemas.gps_event import GPSEventCreate, GPSBatchIngest, GPSEventResponse, IngestionResult
 from app.schemas.common import PaginatedResponse
@@ -23,6 +26,103 @@ from app.config import settings
 
 router = APIRouter(prefix="/gps", tags=["GPS Ingestion"])
 logger = logging.getLogger("turnaround.gps")
+
+
+async def _get_active_trip_id(db: AsyncSession, vehicle_id: str) -> Optional[str]:
+    """
+    Returns the ID of the vehicle's currently active trip, if any.
+    Active = status is in_transit, in_progress (legacy), or delayed.
+    Returns the most-recently-planned trip to handle edge cases.
+    """
+    result = await db.execute(
+        select(Trip.id)
+        .where(
+            Trip.vehicle_id == vehicle_id,
+            Trip.status.in_([
+                TripStatus.IN_TRANSIT,
+                TripStatus.IN_PROGRESS,   # legacy alias
+                TripStatus.DELAYED,
+            ])
+        )
+        .order_by(Trip.planned_departure.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row
+
+
+def _make_claim_number(location_name: str) -> str:
+    """Generate a unique demurrage claim number from the location name prefix."""
+    from datetime import timezone as _tz
+    prefix = (location_name[:3]).upper().replace(" ", "")
+    year = datetime.now(timezone.utc).year
+    suffix = str(uuid.uuid4().int)[:4].zfill(4)
+    return f"CLM-{prefix}-{year}-{suffix}"
+
+
+async def _auto_create_demurrage_claim(
+    db: AsyncSession,
+    vehicle: Vehicle,
+    location: Location,
+    dwell_event: DwellEvent,
+    excess_minutes: float,
+    cost: float,
+) -> Optional[DemurrageClaim]:
+    """
+    Auto-creates a FLAGGED DemurrageClaim when a dwell closes with excess above threshold.
+    Idempotent: skips creation if a claim already exists for this dwell_event_id.
+    """
+    if excess_minutes < settings.AUTO_DEMURRAGE_THRESHOLD_MINUTES:
+        return None
+
+    # Idempotency check — don't double-create for the same dwell event
+    existing = (await db.execute(
+        select(DemurrageClaim).where(DemurrageClaim.dwell_event_id == dwell_event.id)
+    )).scalar_one_or_none()
+    if existing:
+        return None
+
+    # Resolve carrier name from company
+    company_result = await db.execute(
+        select(Company).where(Company.id == vehicle.company_id)
+    )
+    company = company_result.scalar_one_or_none()
+    carrier_name = company.name if company else "Unknown Carrier"
+
+    claim_number = _make_claim_number(location.name)
+    now = datetime.now(timezone.utc)
+
+    claim = DemurrageClaim(
+        id=str(uuid.uuid4()),
+        claim_number=claim_number,
+        vehicle_id=vehicle.id,
+        location_id=location.id,
+        dwell_event_id=dwell_event.id,
+        # Denormalised display fields
+        vehicle_reg=vehicle.registration_number,
+        location_name=location.name,
+        container_number=vehicle.container_number,
+        driver_name=vehicle.driver_name,
+        carrier_name=carrier_name,
+        # Default responsible party — can be changed by user after review
+        responsible_party=ResponsibleParty.TERMINAL_OPERATOR,
+        arrival_time=dwell_event.arrival_time,
+        departure_time=dwell_event.departure_time,
+        sla_threshold_minutes=int(dwell_event.expected_minutes),
+        total_dwell_minutes=int(dwell_event.dwell_minutes),
+        excess_delay_minutes=int(excess_minutes),
+        hourly_operating_rate=vehicle.hourly_operating_cost,
+        claimed_amount_kes=cost,
+        status=ClaimStatus.FLAGGED,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(claim)
+    logger.info(
+        f"Demurrage FLAGGED: claim={claim_number} vehicle={vehicle.registration_number} "
+        f"location={location.name} excess={excess_minutes:.1f}m cost=KES{cost:.2f}"
+    )
+    return claim
 
 
 async def _process_single_event(db: AsyncSession, event: GPSEventCreate, company_id: str) -> dict:
@@ -79,11 +179,13 @@ async def _process_single_event(db: AsyncSession, event: GPSEventCreate, company
         if location.id in matched_ids:
             # Vehicle is inside geofence
             if not active_dwell:
-                # New arrival — open a dwell event
+                # New arrival — open a dwell event, linking to active trip if one exists
+                active_trip_id = await _get_active_trip_id(db, event.vehicle_id)
                 new_dwell = DwellEvent(
                     id=str(uuid.uuid4()),
                     vehicle_id=event.vehicle_id,
                     location_id=location.id,
+                    trip_id=active_trip_id,          # ← now populated
                     arrival_time=event.recorded_at,
                     dwell_minutes=0.0,
                     expected_minutes=location.expected_dwell_minutes,
@@ -91,7 +193,10 @@ async def _process_single_event(db: AsyncSession, event: GPSEventCreate, company
                     estimated_cost=0.0,
                 )
                 db.add(new_dwell)
-                logger.info(f"Dwell OPENED: vehicle={event.vehicle_id} location={location.name}")
+                logger.info(
+                    f"Dwell OPENED: vehicle={event.vehicle_id} location={location.name}"
+                    f"{' trip=' + active_trip_id if active_trip_id else ''}"
+                )
                 dwell_updates += 1
         else:
             # Vehicle is outside this geofence
@@ -147,6 +252,10 @@ async def _process_single_event(db: AsyncSession, event: GPSEventCreate, company
                     excess = calculate_excess_minutes(dwell_mins, expected)
                     cost = calculate_delay_cost(excess, vehicle.hourly_operating_cost)
 
+                    # Back-fill trip_id if it wasn't set when dwell was opened
+                    if active_dwell.trip_id is None:
+                        active_dwell.trip_id = await _get_active_trip_id(db, event.vehicle_id)
+
                     active_dwell.departure_time = event.recorded_at
                     active_dwell.dwell_minutes = round(dwell_mins, 2)
                     active_dwell.expected_minutes = expected
@@ -157,6 +266,17 @@ async def _process_single_event(db: AsyncSession, event: GPSEventCreate, company
                         f"Dwell CLOSED: vehicle={event.vehicle_id} location={location.name} "
                         f"dwell={dwell_mins:.1f}m expected={expected:.1f}m excess={excess:.1f}m cost=KES{cost:.2f}"
                     )
+
+                    # ── Auto-create demurrage claim if excess exceeds threshold ──
+                    await _auto_create_demurrage_claim(
+                        db=db,
+                        vehicle=vehicle,
+                        location=location,
+                        dwell_event=active_dwell,
+                        excess_minutes=excess,
+                        cost=cost,
+                    )
+
                     dwell_updates += 1
 
     return {"status": "ok", "dwell_updates": dwell_updates}

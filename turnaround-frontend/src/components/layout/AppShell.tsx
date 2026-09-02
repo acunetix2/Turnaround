@@ -1,166 +1,447 @@
-import React, { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthProvider';
-import type { UserRole } from '../../lib/api/types';
+import React, { useState, useEffect } from 'react'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthProvider'
+import { useQuery } from '@tanstack/react-query'
+import { apiClient } from '../../lib/api/client'
+import { useTheme } from '../../lib/ThemeContext'
+import { useCompany } from '../../lib/CompanyContext'
 import {
   LayoutDashboard,
-  Map,
+  Compass,
   Truck,
   MapPin,
-  Brain,
+  AlertOctagon,
   BarChart3,
   LogOut,
-  ChevronLeft,
-  ChevronRight,
-  User,
-  Shield,
-  Sliders
-} from 'lucide-react';
-import { BrandLogo } from '../common/BrandLogo';
+  BrainCircuit,
+  Sliders,
+  Sun,
+  Moon,
+  Search,
+  Plus,
+  Route,
+  DollarSign,
+  FileCheck,
+  Users,
+  UserCircle,
+  Warehouse,
+  BotMessageSquare,
+  Bell,
+  Building2,
+} from 'lucide-react'
+import { BrandLogo } from '../common/BrandLogo'
+import { RouteProgressBar } from '../common/Loader'
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuBadge,
+  SidebarTrigger,
+  SidebarInset,
+  useSidebar,
+} from '../ui/sidebar'
+import {
+  Command,
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+  CommandShortcut,
+} from '../ui/Command'
 
-export const AppShell: React.FC = () => {
-  const { user, role, logout, simulateRole, isMockMode } = useAuth();
-  const navigate = useNavigate();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+interface NavItem {
+  name: string
+  path: string
+  icon: React.ComponentType<{ size?: number; className?: string }>
+  highlight?: boolean
+  badgeCount?: number
+  badgeDanger?: boolean
+}
 
-  const navigationItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Live Fleet Map', path: '/map', icon: Map },
-    { name: 'Vehicles', path: '/vehicles', icon: Truck },
-    { name: 'Locations', path: '/locations', icon: MapPin },
-    { name: 'Insights', path: '/insights', icon: Brain },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-    { name: 'Configuration', path: '/settings', icon: Sliders },
-  ];
+function SidebarNavContent() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { theme, toggleTheme } = useTheme()
+  const isDark = theme === 'dark'
+  const { state } = useSidebar()
+  const isCollapsed = state === 'collapsed'
+  const isAdmin = user?.role === 'admin'
+  const { config: companyConfig } = useCompany()
+
+  const [commandOpen, setCommandOpen] = useState(false)
+
+  // Real backend metrics
+  const { data: dashboardStats } = useQuery({
+    queryKey: ['dashboardStats'],
+    queryFn: apiClient.getDashboardStats,
+    refetchInterval: 30000,
+  })
+
+  const { data: vehiclesData } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: apiClient.getVehicles,
+    staleTime: 30000,
+  })
+
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications', 'unread_count'],
+    queryFn: () => apiClient.getNotifications({ unread_only: true, limit: 1 }),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+  const unreadNotifCount = notifData?.unread ?? 0
+
+  // Deduplicate vehicles by registration_number
+  const uniqueVehicles = React.useMemo(() => {
+    if (!vehiclesData) return []
+    const seen = new Set<string>()
+    return vehiclesData.filter((v) => {
+      const reg = v.registration_number.trim().toUpperCase()
+      if (seen.has(reg)) return false
+      seen.add(reg)
+      return true
+    })
+  }, [vehiclesData])
+
+  const delayedCount = dashboardStats?.trucks_delayed ?? 0
+  const activeTrucks = dashboardStats?.active_trucks ?? 0
+  const totalFleet = uniqueVehicles.length || (dashboardStats?.active_trucks ?? 0)
+  const onTimePct = totalFleet > 0
+    ? Math.round(((totalFleet - delayedCount) / totalFleet) * 100)
+    : 0
+
+  // Global ⌘K / Ctrl+K listener
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setCommandOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', down)
+    return () => window.removeEventListener('keydown', down)
+  }, [])
+
+  const navItems: NavItem[] = [
+    { name: 'Dashboard',        path: '/dashboard',     icon: LayoutDashboard },
+    {
+      name: 'Corridor Tracker',
+      path: '/map',
+      icon: Compass,
+      badgeCount: delayedCount > 0 ? delayedCount : activeTrucks > 0 ? activeTrucks : undefined,
+      badgeDanger: delayedCount > 0,
+    },
+    // ── Operations ──────────────────────────────────────────────────────────
+    { name: 'Trips',            path: '/trips',         icon: Route },
+    { name: 'Gate Passes',      path: '/gate-passes',   icon: FileCheck },
+    { name: 'Delay Charges',    path: '/demurrage',     icon: DollarSign },
+    // ── Fleet (fleet_manager+) ───────────────────────────────────────────
+    ...(['admin','fleet_manager'].includes(user?.role || '') ? [
+      { name: 'Carrier Assets',  path: '/vehicles',     icon: Truck, badgeCount: totalFleet > 0 ? totalFleet : undefined },
+      { name: 'Freight Stations', path: '/locations',   icon: Warehouse },
+    ] : []),
+    // ── Analytics (all staff) ────────────────────────────────────────────
+    { name: 'Delay Alerts',     path: '/insights',      icon: AlertOctagon },
+    { name: 'Analytics',        path: '/analytics',     icon: BarChart3 },
+    { name: 'Fleet AI',         path: '/ai-advisor',    icon: BotMessageSquare },
+    { name: 'Notifications',    path: '/notifications', icon: Bell, badgeCount: unreadNotifCount > 0 ? unreadNotifCount : undefined, badgeDanger: unreadNotifCount > 0 },
+    // ── Settings (fleet_manager+) ────────────────────────────────────────
+    ...(['admin','fleet_manager'].includes(user?.role || '') ? [
+      { name: 'Settings',        path: '/settings',     icon: Sliders },
+    ] : []),
+    // ── /admin/* — admin only ────────────────────────────────────────────
+    ...(isAdmin ? [
+      { name: 'Team',            path: '/admin/team',   icon: Users },
+      { name: 'Configuration',   path: '/admin/config', icon: Building2 },
+    ] : []),
+  ]
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+    await logout()
+    navigate('/login')
+  }
 
-  const getRoleLabel = (r: UserRole | null): string => {
-    if (!r) return '';
-    return r.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  };
+  const handleCommandSelect = (path: string) => {
+    setCommandOpen(false)
+    navigate(path)
+  }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-canvas text-text-primary">
-      {/* Sidebar Nav */}
-      <aside
-        className={`flex flex-col border-r border-border-default bg-bg-surface transition-all duration-200 ${
-          sidebarCollapsed ? 'w-16' : 'w-60'
-        }`}
-      >
-        {/* Logo & Header */}
-        <div className="flex h-16 items-center justify-between border-b border-border-default px-4">
-          <Link to="/" className="flex items-center gap-2.5 overflow-hidden">
-            <BrandLogo size={32} showText={!sidebarCollapsed} textSize="text-base" />
-          </Link>
-          {!sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(true)}
-              className="rounded p-1 hover:bg-bg-surface-raised text-text-secondary hover:text-text-primary"
-            >
-              <ChevronLeft size={16} />
-            </button>
-          )}
+    <>
+      {/* Sidebar Header */}
+      <SidebarHeader>
+        <div className="flex items-center justify-between">
+          <BrandLogo size={26} showText={!isCollapsed} />
+          <SidebarTrigger />
         </div>
-
-        {/* Collapsed expansion button */}
-        {sidebarCollapsed && (
-          <div className="flex justify-center py-2.5">
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              className="rounded p-1 hover:bg-bg-surface-raised text-text-secondary hover:text-text-primary"
-            >
-              <ChevronRight size={16} />
-            </button>
+        {/* Company overview — shown when expanded */}
+        {!isCollapsed && companyConfig && (
+          <div className="mt-2 mx-1 px-2.5 py-2 rounded-lg bg-[#250C77]/8 border border-[#250C77]/15 flex items-center gap-2.5">
+            {companyConfig.logo_url ? (
+              <img src={companyConfig.logo_url} alt="logo" className="h-6 w-6 rounded object-contain shrink-0" />
+            ) : (
+              <div className="h-6 w-6 rounded bg-[#250C77]/20 flex items-center justify-center shrink-0">
+                <Building2 size={12} className="text-[#250C77]" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-text-primary truncate">{companyConfig.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] text-text-tertiary">{companyConfig.currency} · {companyConfig.country || 'Kenya'}</span>
+              </div>
+            </div>
           </div>
         )}
+      </SidebarHeader>
 
-        {/* Navigation Links */}
-        <nav className="flex-1 space-y-1 px-2.5 py-4">
-          {navigationItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-brand-500 text-white font-semibold'
-                    : 'text-text-secondary hover:bg-bg-surface-raised hover:text-text-primary'
-                }`
-              }
-            >
-              <item.icon size={18} className="shrink-0" />
-              {!sidebarCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* User / Org Bottom Indicator */}
-        <div className="border-t border-border-default p-3 bg-bg-surface-raised">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-border-strong text-text-secondary">
-              <User size={18} />
+      {/* Quick Search */}
+      {!isCollapsed && (
+        <div className="px-3 pt-1">
+          <button
+            type="button"
+            onClick={() => setCommandOpen(true)}
+            className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-border-default bg-bg-surface-raised/60 text-xs text-text-tertiary hover:border-text-tertiary hover:bg-bg-surface-raised transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Search size={13} className="text-text-tertiary shrink-0" />
+              <span>Search fleet...</span>
             </div>
-            {!sidebarCollapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-text-primary">
-                  {user?.name || 'Loading user...'}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <Shield size={10} className="text-brand-400" />
-                  <span className="font-numeric text-[10px] text-brand-400 font-medium">
-                    {getRoleLabel(role)}
-                  </span>
-                </div>
+            <span className="text-[10px] font-numeric px-1 py-0.5 rounded bg-bg-surface border border-border-default text-text-tertiary shrink-0">
+              ⌘K
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Nav List */}
+      <SidebarContent>
+        <SidebarMenu>
+          {navItems.map((item) => {
+            const isActive = location.pathname.startsWith(item.path)
+            return (
+              <SidebarMenuItem key={item.path}>
+                <NavLink to={item.path} className="block w-full">
+                  <SidebarMenuButton
+                    isActive={isActive}
+                    variant={item.highlight ? 'highlight' : 'default'}
+                    tooltip={isCollapsed ? item.name : undefined}
+                  >
+                    <item.icon
+                      size={15}
+                      className={
+                        isActive
+                          ? 'text-white shrink-0'
+                          : item.highlight
+                          ? 'text-[#ED642B] shrink-0'
+                          : 'text-text-tertiary shrink-0'
+                      }
+                    />
+                    {!isCollapsed && <span>{item.name}</span>}
+                    {!isCollapsed && item.badgeCount !== undefined && item.badgeCount > 0 && (
+                      <SidebarMenuBadge
+                        className={
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : item.badgeDanger
+                            ? 'bg-status-danger-bg text-status-danger border border-status-danger/30'
+                            : 'bg-bg-surface-raised text-text-tertiary'
+                        }
+                      >
+                        {item.badgeCount}
+                      </SidebarMenuBadge>
+                    )}
+                  </SidebarMenuButton>
+                </NavLink>
+              </SidebarMenuItem>
+            )
+          })}
+        </SidebarMenu>
+      </SidebarContent>
+
+      {/* Operational SLA Meter */}
+      {!isCollapsed && (
+        <div className="mx-3 mb-2 rounded-xl border border-border-default bg-bg-surface-raised/50 p-2.5 space-y-1.5">
+          <div className="flex items-center justify-between text-[10.5px]">
+            <span className="font-medium text-text-secondary">Turnaround Health</span>
+            <span
+              className={`font-numeric font-bold ${
+                onTimePct >= 80
+                  ? 'text-status-good'
+                  : onTimePct >= 60
+                  ? 'text-status-warning'
+                  : 'text-status-danger'
+              }`}
+            >
+              {onTimePct}%
+            </span>
+          </div>
+          <div className="w-full h-1 rounded-full bg-bg-surface overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                onTimePct >= 80
+                  ? 'bg-status-good'
+                  : onTimePct >= 60
+                  ? 'bg-status-warning'
+                  : 'bg-status-danger'
+              }`}
+              style={{ width: `${onTimePct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar Footer */}
+      <SidebarFooter>
+        <div
+          className={`flex items-center gap-2 rounded-xl bg-bg-surface-raised/60 p-2 ${
+            isCollapsed ? 'justify-center' : 'justify-between'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="h-7 w-7 rounded-lg bg-[#250C77] text-white font-semibold flex items-center justify-center text-xs shrink-0 shadow-sm">
+              {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-text-primary truncate">{user?.name || '—'}</p>
+                <p className="text-[9.5px] text-text-tertiary truncate">{companyConfig?.name || user?.company_name || '—'}</p>
               </div>
             )}
           </div>
-          {!sidebarCollapsed && (
-            <button
-              onClick={handleLogout}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded bg-bg-surface border border-border-default py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-canvas hover:text-status-danger hover:border-status-danger/40 transition-colors"
-            >
-              <LogOut size={12} />
-              Sign Out
-            </button>
-          )}
+          {!isCollapsed && (
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="p-1 rounded-md text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
+                  title="Toggle Theme"
+                >
+                  {isDark ? <Sun size={13} /> : <Moon size={13} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/account')}
+                  className="p-1 rounded-md text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
+                  title="Account Settings"
+                >
+                  <UserCircle size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="p-1 rounded-md text-text-tertiary hover:text-status-danger transition-colors cursor-pointer"
+                  title="Sign out"
+                >
+                  <LogOut size={13} />
+                </button>
+              </div>
+            )}
         </div>
-      </aside>
+      </SidebarFooter>
 
-      {/* Main Panel Content Container */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top Header Bar */}
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border-default bg-bg-surface px-6">
-          <div className="flex items-center gap-3">
-            <span className="font-ui text-sm font-semibold tracking-wide text-text-secondary uppercase">
-              Fleet Operations
-            </span>
-            <span className="text-text-tertiary">/</span>
-            <span className="font-numeric text-xs font-semibold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">
-              Turnaround Logistics Ltd
-            </span>
+      {/* Global ⌘K Command Palette */}
+      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
+        <Command className="rounded-2xl border border-border-default shadow-2xl bg-bg-surface overflow-hidden">
+          <CommandInput placeholder="Search fleet assets, stops, or run diagnostics..." />
+          <CommandList>
+            <CommandEmpty>No fleet matches or commands found.</CommandEmpty>
+
+            <CommandGroup heading="Navigation">
+              {navItems.map((item) => (
+                <CommandItem
+                  key={item.path}
+                  value={item.name}
+                  onSelect={() => handleCommandSelect(item.path)}
+                >
+                  <item.icon className="mr-2.5 h-4 w-4 text-[#ED642B]" />
+                  <span>{item.name}</span>
+                  {item.path === '/dashboard' && <CommandShortcut>⌘D</CommandShortcut>}
+                  {item.path === '/map' && <CommandShortcut>⌘M</CommandShortcut>}
+                  {item.path === '/settings' && <CommandShortcut>⌘S</CommandShortcut>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandSeparator />
+
+            <CommandGroup heading="Quick Actions">
+              <CommandItem
+                value="Register Asset Truck"
+                onSelect={() => handleCommandSelect('/vehicles')}
+              >
+                <Plus className="mr-2.5 h-4 w-4 text-[#ED642B]" />
+                <span>Register Fleet Asset</span>
+              </CommandItem>
+              <CommandItem
+                value="AI Diagnostic Advisor"
+                onSelect={() => handleCommandSelect('/ai-advisor')}
+              >
+                <BotMessageSquare className="mr-2.5 h-4 w-4 text-[#250C77]" />
+                <span>Run AI Corridor Performance Diagnostic</span>
+              </CommandItem>
+            </CommandGroup>
+
+            {uniqueVehicles.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Fleet Assets">
+                  {uniqueVehicles.slice(0, 8).map((vh) => (
+                    <CommandItem
+                      key={vh.id}
+                      value={`${vh.registration_number} ${vh.vehicle_type} ${vh.driver_name || ''}`}
+                      onSelect={() => handleCommandSelect(`/vehicles/${vh.id}`)}
+                    >
+                      <Truck className="mr-2.5 h-4 w-4 text-[#250C77]" />
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-numeric font-medium">{vh.registration_number}</span>
+                        <span className="text-[10px] text-text-tertiary">{vh.vehicle_type}</span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </CommandDialog>
+    </>
+  )
+}
+
+export const AppShell: React.FC = () => {
+  const [isNavigating, setIsNavigating] = useState(false)
+  const location = useLocation()
+
+  useEffect(() => {
+    setIsNavigating(true)
+    const t = setTimeout(() => setIsNavigating(false), 300)
+    return () => clearTimeout(t)
+  }, [location.pathname])
+
+  return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex h-screen w-screen overflow-hidden text-text-primary bg-bg-canvas">
+        <RouteProgressBar isLoading={isNavigating} />
+        <Sidebar collapsible="icon">
+          <SidebarNavContent />
+        </Sidebar>
+        <SidebarInset>
+          <div className={`flex-1 min-w-0 overflow-y-auto bg-bg-canvas ${
+            location.pathname === '/map' ? 'p-0 overflow-hidden' : 'p-4 sm:p-6'
+          }`}>
+            <Outlet />
           </div>
-
-          <div className="flex items-center gap-4">
-            {/* Real-time system telemetry status */}
-            <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-              </span>
-              <span className="font-['IBM_Plex_Mono'] text-[11px] font-semibold text-emerald-400">TELEMETRY LIVE</span>
-            </div>
-          </div>
-        </header>
-
-        {/* Content Outlet Box */}
-        <main className="flex-1 overflow-y-auto bg-bg-canvas p-6">
-          <Outlet />
-        </main>
+        </SidebarInset>
       </div>
-    </div>
-  );
-};
+    </SidebarProvider>
+  )
+}

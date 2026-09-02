@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd turnaround-frontend && npm install && npm run build",
+  "outputDirectory": "turnaround-frontend/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

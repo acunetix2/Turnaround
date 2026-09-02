@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.db.models.trip import Trip
     from app.db.models.dwell_event import DwellEvent
     from app.db.models.insight import Insight
+    from app.db.models.demurrage_claim import DemurrageClaim
 
 
 class LocationType(str, enum.Enum):
@@ -29,7 +30,11 @@ class Location(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     company_id: Mapped[str] = mapped_column(String(36), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    location_type: Mapped[LocationType] = mapped_column(SQLEnum(LocationType), default=LocationType.WAREHOUSE, nullable=False)
+    location_type: Mapped[LocationType] = mapped_column(
+        SQLEnum(LocationType, values_callable=lambda obj: [e.value for e in obj], name="locationtype"),
+        default=LocationType.WAREHOUSE,
+        nullable=False
+    )
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     geofence_radius: Mapped[float] = mapped_column(Float, default=250.0, nullable=False)  # in meters
@@ -43,3 +48,4 @@ class Location(Base):
     destination_trips: Mapped[List["Trip"]] = relationship("Trip", foreign_keys="Trip.destination_id", back_populates="destination")
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="location")
     insights: Mapped[List["Insight"]] = relationship("Insight", back_populates="location")
+    demurrage_claims: Mapped[List["DemurrageClaim"]] = relationship("DemurrageClaim", back_populates="location")

@@ -34,7 +34,11 @@ class Insight(Base):
     location_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     
     type: Mapped[str] = mapped_column(String(100), default=InsightType.EXCESSIVE_DWELL.value, nullable=False)
-    severity: Mapped[InsightSeverity] = mapped_column(SQLEnum(InsightSeverity), default=InsightSeverity.MEDIUM, nullable=False)
+    severity: Mapped[InsightSeverity] = mapped_column(
+        SQLEnum(InsightSeverity, values_callable=lambda obj: [e.value for e in obj], name="insightseverity"),
+        default=InsightSeverity.MEDIUM,
+        nullable=False
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     financial_impact: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # in KES

@@ -30,15 +30,38 @@ def _demo_token_claims(token: str) -> Optional[Dict[str, Any]]:
     """Parse a demo bypass token. Only active in development mode."""
     if settings.ENVIRONMENT != "development":
         return None
-    if not token.startswith("demo-token-"):
+    if not (token.startswith("demo-token-") or token.startswith("demo-token:") or token == "demo-token"):
         return None
-    # Format: demo-token-{user_id}-{company_id}-{role}
-    parts = token.split("-")
+    
+    # Defaults mapped to seeded demo company
+    user_id = "seed-user-admin-001"
+    company_id = "seed-company-siginon-001"
+    role = "fleet_manager"
+
+    if ":" in token:
+        parts = token.split(":")
+        if len(parts) >= 2 and parts[1]:
+            user_id = parts[1]
+        if len(parts) >= 3 and parts[2]:
+            company_id = parts[2]
+        if len(parts) >= 4 and parts[3]:
+            role = parts[3]
+    elif token.startswith("demo-token-"):
+        suffix = token[len("demo-token-"):]
+        if suffix:
+            # If user passed custom string, check if it matches known seed entities
+            if "siginon" in suffix or "seed" in suffix:
+                company_id = "seed-company-siginon-001"
+            parts = suffix.split("_")
+            if len(parts) >= 2:
+                user_id = parts[0]
+                role = parts[1]
+
     return {
-        "sub": parts[2] if len(parts) > 2 else "demo-user-1",
-        "email": f"{parts[4] if len(parts) > 4 else 'admin'}@turnaround.io",
-        "company_id": parts[3] if len(parts) > 3 else "demo-company-1",
-        "role": parts[4] if len(parts) > 4 else "admin",
+        "sub": user_id,
+        "email": f"{user_id}@siginon.com",
+        "company_id": company_id,
+        "role": role,
     }
 
 

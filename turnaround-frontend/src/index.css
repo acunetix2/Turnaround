@@ -1,227 +1,246 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
-@theme {
-  /* Colors mapping to design spec Section 2 */
-  --color-bg-canvas: #0A0B0D;
-  --color-bg-surface: #121317;
-  --color-bg-surface-raised: #1A1C21;
-  --color-border-default: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
+@theme inline {
+  /* ── TYPOGRAPHY ────────────────────────────────────────────────── */
+  --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-ui: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", "Fira Code", monospace;
+  --font-numeric: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  --color-text-primary: #F4F5F7;
-  --color-text-secondary: #9CA3AF;
-  --color-text-tertiary: #6B7280;
-
-  --color-brand-500: #4F7CFF;
-  --color-brand-400: #6E92FF;
-
-  --color-status-good: #22C55E;
-  --color-status-good-bg: rgba(34, 197, 94, 0.12);
-  --color-status-warning: #F5A524;
-  --color-status-warning-bg: rgba(245, 165, 36, 0.12);
-  --color-status-danger: #F0464C;
-  --color-status-danger-bg: rgba(240, 70, 76, 0.14);
-
-  --color-money-accent: #FFB020;
-
-  --color-chart-1: #4F7CFF;
-  --color-chart-2: #22C55E;
-  --color-chart-3: #F5A524;
-  --color-chart-4: #F0464C;
-  --color-chart-5: #9C6ADE;
-
-  /* Typography mapping to design spec Section 3 */
-  --font-ui: "Inter", -apple-system, sans-serif;
-  --font-numeric: "IBM Plex Mono", "JetBrains Mono", monospace;
-
-  --text-xs: 12px;
+  /* ── TYPE SCALE ────────────────────────────────────────────────── */
+  --text-xs: 11.5px;
   --text-xs-line-height: 16px;
   --text-sm: 13px;
   --text-sm-line-height: 18px;
   --text-base: 14px;
   --text-base-line-height: 20px;
   --text-lg: 16px;
-  --text-lg-line-height: 24px;
-  --text-xl: 20px;
-  --text-xl-line-height: 28px;
-  --text-2xl: 28px;
-  --text-2xl-line-height: 34px;
-  --text-3xl: 36px;
-  --text-3xl-line-height: 42px;
+  --text-lg-line-height: 22px;
+  --text-xl: 19px;
+  --text-xl-line-height: 26px;
+  --text-2xl: 24px;
+  --text-2xl-line-height: 30px;
+  --text-3xl: 30px;
+  --text-3xl-line-height: 36px;
 
-  /* Spacing & Radius mapping to design spec Section 4 */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-full: 999px;
+
+  /* ── DESIGN TOKENS — inline means utilities emit var() references, not static values ── */
+  --color-bg-canvas:         var(--color-bg-canvas);
+  --color-bg-surface:        var(--color-bg-surface);
+  --color-bg-surface-raised: var(--color-bg-surface-raised);
+  --color-bg-surface-hover:  var(--color-bg-surface-hover);
+
+  --color-border-default:    var(--color-border-default);
+  --color-border-strong:     var(--color-border-strong);
+
+  --color-text-primary:      var(--color-text-primary);
+  --color-text-secondary:    var(--color-text-secondary);
+  --color-text-tertiary:     var(--color-text-tertiary);
+
+  --color-brand-500:         var(--color-brand-500);
+  --color-brand-600:         var(--color-brand-600);
+  --color-brand-400:         var(--color-brand-400);
+  --color-brand-100:         var(--color-brand-100);
+
+  --color-status-good:        #10B981;
+  --color-status-good-bg:     var(--color-status-good-bg);
+  --color-status-warning:     #F59E0B;
+  --color-status-warning-bg:  var(--color-status-warning-bg);
+  --color-status-danger:      #EF4444;
+  --color-status-danger-bg:   var(--color-status-danger-bg);
+
+  /* ── STATIC BRAND TOKENS ────────────────────────────────────────── */
+  --color-fedex-purple:        #250C77;
+  --color-fedex-purple-light:  #3D1BA8;
+  --color-fedex-purple-dark:   #16074A;
+  --color-fedex-orange:        #ED642B;
+  --color-fedex-orange-hover:  #D4521D;
+  --color-money-accent:        #FBBF24;
+
+  --color-chart-1: #ED642B;
+  --color-chart-2: #8B5CF6;
+  --color-chart-3: #10B981;
+  --color-chart-4: #EF4444;
+  --color-chart-5: #F59E0B;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK THEME
+   ═══════════════════════════════════════════════════════════════════ */
+:root,
+[data-theme="dark"],
+html.dark {
+  --color-bg-canvas:         #0B0524;
+  --color-bg-surface:        #180B4A;
+  --color-bg-surface-raised: #250C77;
+  --color-bg-surface-hover:  #321296;
+
+  --color-border-default:    rgba(255, 255, 255, 0.10);
+  --color-border-strong:     rgba(237, 100, 43, 0.35);
+
+  --color-text-primary:      #FFFFFF;
+  --color-text-secondary:    #BDB6DE;
+  --color-text-tertiary:     #7D73A8;
+
+  --color-brand-500:         #ED642B;
+  --color-brand-600:         #D4521D;
+  --color-brand-400:         #F27E4E;
+  --color-brand-100:         rgba(237, 100, 43, 0.15);
+
+  --color-status-good-bg:    rgba(16, 185, 129, 0.12);
+  --color-status-warning-bg: rgba(245, 158, 11, 0.12);
+  --color-status-danger-bg:  rgba(239, 68, 68, 0.14);
+
+  --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.50);
+  --shadow-md:         0 4px 16px rgba(0, 0, 0, 0.60);
+  --shadow-lg:         0 12px 40px rgba(0, 0, 0, 0.75);
+
+  --sidebar-bg-top:    #250C77;
+  --sidebar-bg-bottom: #0E0530;
+  --header-bg:         rgba(24, 11, 74, 0.96);
+  --toast-bg:          #1E0C5E;
+
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT THEME
+   ═══════════════════════════════════════════════════════════════════ */
+[data-theme="light"],
+html.light {
+  --color-bg-canvas:         #F5F3FB;
+  --color-bg-surface:        #FFFFFF;
+  --color-bg-surface-raised: #ECE8F8;
+  --color-bg-surface-hover:  #E2DCF4;
+
+  --color-border-default:    rgba(37, 12, 119, 0.12);
+  --color-border-strong:     rgba(237, 100, 43, 0.40);
+
+  --color-text-primary:      #250C77;
+  --color-text-secondary:    #55488A;
+  --color-text-tertiary:     #8F84BE;
+
+  --color-brand-500:         #ED642B;
+  --color-brand-600:         #D4521D;
+  --color-brand-400:         #ED642B;
+  --color-brand-100:         rgba(237, 100, 43, 0.10);
+
+  --color-status-good-bg:    rgba(16, 185, 129, 0.10);
+  --color-status-warning-bg: rgba(245, 158, 11, 0.10);
+  --color-status-danger-bg:  rgba(239, 68, 68, 0.10);
+
+  --shadow-sm:         0 1px 3px rgba(37, 12, 119, 0.08);
+  --shadow-md:         0 4px 16px rgba(37, 12, 119, 0.12);
+  --shadow-lg:         0 12px 40px rgba(37, 12, 119, 0.16);
+
+  --sidebar-bg-top:    #250C77;
+  --sidebar-bg-bottom: #16074A;
+  --header-bg:         rgba(255, 255, 255, 0.97);
+  --toast-bg:          #FFFFFF;
+
+  color-scheme: light;
 }
 
 :root {
-  /* Set these as variables so they can be read by pure CSS custom classes if needed */
-  --bg-canvas: #0A0B0D;
-  --bg-surface: #121317;
-  --bg-surface-raised: #1A1C21;
-  --border-default: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.40);
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-full: 999px;
-
-  color-scheme: dark;
-  background-color: var(--bg-canvas);
-  color: #F4F5F7;
-  font-family: "Inter", -apple-system, sans-serif;
+  background-color: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+  font-feature-settings: "rlig" 1, "calt" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
+  font-weight: 400;
 }
 
 body {
   margin: 0;
-  background-color: var(--bg-canvas);
-  color: #F4F5F7;
+  background-color: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.015em;
   overflow-x: hidden;
+  font-weight: 400;
 }
 
-/* Elevated Panel Component Spec (Section 5) */
-.panel-elevated {
-  background-color: var(--bg-surface-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-}
-
-/* Scrollbar customization (Section 2, User Experience) */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-canvas);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* Utility classes for desaturated dark maps */
-.dark-map-grid {
-  background-size: 40px 40px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+button, input, optgroup, select, textarea {
+  font-family: inherit;
+  letter-spacing: inherit;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   CINEMATIC CAMERA MOVEMENT & OPTICAL EFFECTS (True Drone/Gimbal Motion)
+   LEAFLET MAP — Purple/Express-orange tinted tile filter
    ═══════════════════════════════════════════════════════════════════ */
-
-/* 1. Ultra-Smooth Drone Aerial Crane & Gimbal Sweep (40s majestic loop) */
-@keyframes cinematicDroneCrane {
-  0% {
-    transform: scale(1.05) translate3d(0, 0, 0) rotate(0deg);
-  }
-  25% {
-    transform: scale(1.13) translate3d(-22px, -12px, 0) rotate(-0.35deg);
-  }
-  55% {
-    transform: scale(1.17) translate3d(-34px, 10px, 0) rotate(0.25deg);
-  }
-  80% {
-    transform: scale(1.09) translate3d(18px, -8px, 0) rotate(0.40deg);
-  }
-  100% {
-    transform: scale(1.05) translate3d(0, 0, 0) rotate(0deg);
-  }
+.leaflet-container {
+  background-color: var(--color-bg-canvas) !important;
 }
 
-/* 2. Horizontal Highway Dolly Track (36s sweeping tracking shot) */
-@keyframes cinematicDollyTrack {
-  0% {
-    transform: scale(1.08) translate3d(24px, 0, 0) rotate(0deg);
-  }
-  30% {
-    transform: scale(1.15) translate3d(-18px, -10px, 0) rotate(0.3deg);
-  }
-  65% {
-    transform: scale(1.11) translate3d(-32px, 8px, 0) rotate(-0.25deg);
-  }
-  100% {
-    transform: scale(1.08) translate3d(24px, 0, 0) rotate(0deg);
-  }
+[data-theme="dark"] .leaflet-dark-tiles .leaflet-tile,
+[data-theme="dark"] .leaflet-tile-pane .leaflet-tile {
+  filter: brightness(0.60) invert(1) contrast(1.9) hue-rotate(240deg) saturate(0.40) !important;
 }
 
-/* 3. Forward Telephoto Push-In Shot (30s slow focal zoom) */
-@keyframes cinematicPushIn {
-  0% {
-    transform: scale(1.04) translate3d(0, 0, 0);
-  }
-  50% {
-    transform: scale(1.18) translate3d(0, -18px, 0);
-  }
-  100% {
-    transform: scale(1.04) translate3d(0, 0, 0);
-  }
+/* ═══════════════════════════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-
-/* 4. Anamorphic Lens Flare Shimmer Sweep (18s periodic optical flare) */
-@keyframes anamorphicFlare {
-  0% {
-    transform: translateX(-100%) skewX(-25deg);
-    opacity: 0;
-  }
-  35% {
-    opacity: 0;
-  }
-  42% {
-    opacity: 0.35;
-  }
-  50% {
-    transform: translateX(120%) skewX(-25deg);
-    opacity: 0;
-  }
-  100% {
-    transform: translateX(120%) skewX(-25deg);
-    opacity: 0;
-  }
+::-webkit-scrollbar-track {
+  background: var(--color-bg-canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(237, 100, 43, 0.25);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(237, 100, 43, 0.50);
 }
 
 /* Utility classes */
-.animate-cinematic-crane {
-  animation: cinematicDroneCrane 16s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-  will-change: transform;
-  transform-origin: center center;
+.table-dense th {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  border-bottom: 1px solid var(--color-border-default);
 }
 
-.animate-cinematic-dolly {
-  animation: cinematicDollyTrack 18s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-  will-change: transform;
-  transform-origin: center center;
+.table-dense td {
+  padding: 9px 12px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--color-border-default);
 }
 
-.animate-cinematic-push {
-  animation: cinematicPushIn 14s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-  will-change: transform;
-  transform-origin: center center;
+.font-mono-num {
+  font-family: var(--font-numeric);
+  font-feature-settings: "tnum" 1, "zero" 1;
 }
 
-.animate-anamorphic-flare {
-  animation: anamorphicFlare 12s ease-in-out infinite;
-  will-change: transform, opacity;
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
 }
 
+.status-dot-pulse {
+  animation: statusPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 
-/* Vignette mask for depth of field */
-.cinematic-vignette {
-  background: radial-gradient(circle at center, transparent 40%, rgba(7, 8, 10, 0.75) 100%);
-  pointer-events: none;
+@keyframes routeProgress {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(-20%); }
+  100% { transform: translateX(0%); }
+}
+
+.animate-route-progress {
+  animation: routeProgress 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
