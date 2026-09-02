@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, extractErrorMessage } from '../../lib/api/client';
+import { apiClient } from '../../lib/api/client';
 import { formatCurrency } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
 import { Link } from 'react-router-dom';
@@ -77,13 +77,6 @@ const vehicleSchema = zod.object({
 type VehicleFormValues = zod.infer<typeof vehicleSchema>;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const normalizeFormStatus = (s?: string): 'moving' | 'stationary' | 'delayed' => {
-  if (!s) return 'stationary';
-  if (s === 'moving' || s === 'in_transit' || s === 'active') return 'moving';
-  if (s === 'delayed') return 'delayed';
-  return 'stationary';
-};
 
 const statusLabel = (s: string) =>
   s === 'moving' || s === 'in_transit' || s === 'active' ? 'In Transit' : s === 'delayed' ? 'Delayed' : 'Stationary';
@@ -381,7 +374,7 @@ export const Vehicles: React.FC = () => {
 
   // ── DERIVED COUNTS ──
   const totalFleet      = vehicles.length;
-  const activeCount     = vehicles.filter(v => v.status === 'moving').length;
+  const activeCount     = vehicles.filter(v => v.status === 'in_transit' || v.status === 'active').length;
   const delayedCount    = vehicles.filter(v => v.status === 'delayed').length;
 
   // Vehicle type breakdown

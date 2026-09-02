@@ -37,7 +37,7 @@ export interface Vehicle {
   capacity: number; // in tonnes/kg or volume
   hourly_operating_cost: number; // in KES
   status: VehicleStatus;
-  created_at: string;
+  created_at?: string;
   // Extended Tracking, Driver & Asset Details
   image_url?: string;
   driver_name?: string;
@@ -96,6 +96,8 @@ export interface Trip {
   planned_arrival: string;
   actual_departure?: string;
   actual_arrival?: string;
+  departure_time?: string;
+  arrival_time?: string;
   status?: 'planned' | 'in_transit' | 'in_progress' | 'delayed' | 'completed' | 'cancelled';
   corridor_name?: string;
   customs_seal_number?: string;

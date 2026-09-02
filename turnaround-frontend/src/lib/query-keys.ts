@@ -29,7 +29,8 @@ export const queryKeys = {
 
   // Analytics / trends
   analytics: {
-    trends: () => ['analytics', 'trends'] as const,
+    trends: (days?: number) => ['analytics', 'trends', days] as const,
+    productivity: (days?: number) => ['analytics', 'productivity', days] as const,
   },
 
   // Live map

@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd turnaround-frontend && npm install && npm run build",
-  "outputDirectory": "turnaround-frontend/dist",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/(.*)",
