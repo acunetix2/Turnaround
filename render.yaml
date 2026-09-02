@@ -5,7 +5,7 @@ services:
     rootDir: turnaround-backend
     buildCommand: pip install -r requirements.txt
     startCommand: python run.py
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
         value: production
