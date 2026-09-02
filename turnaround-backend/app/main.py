@@ -126,6 +126,7 @@ async def log_requests(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https://([a-z0-9-]+\.)?vercel\.app$|^https://([a-z0-9-]+\.)?render\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
