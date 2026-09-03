@@ -11,11 +11,9 @@ import {
   LayoutDashboard,
   Compass,
   Truck,
-  MapPin,
   AlertOctagon,
   BarChart3,
   LogOut,
-  BrainCircuit,
   Sliders,
   Sun,
   Moon,
@@ -78,7 +76,7 @@ const TopAppBar: React.FC = () => {
   const pageTitle = location.pathname === '/ai-advisor' ? 'AI Analyst' : 'Turnaround Operations'
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[72px] items-center gap-4 border-b border-border-default bg-bg-canvas/95 px-4 backdrop-blur-md sm:px-6">
+    <header className="sticky top-0 z-0 flex min-h-[72px] items-center gap-4 border-b border-border-default/80 bg-bg-surface/90 px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-md sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         {companyConfig?.logo_url ? (
           <div className="hidden h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border-default bg-white sm:flex">
@@ -532,8 +530,8 @@ export const AppShell: React.FC = () => {
         <Sidebar collapsible="icon">
           <SidebarNavContent />
         </Sidebar>
-        <SidebarInset>
-          <TopAppBar />
+        <SidebarInset className="bg-bg-canvas">
+          {location.pathname !== '/map' && <TopAppBar />}
           <div className={`flex-1 min-w-0 overflow-y-auto bg-bg-canvas ${
             location.pathname === '/map' ? 'p-0 overflow-hidden' : 'p-4 sm:p-6'
           }`}>

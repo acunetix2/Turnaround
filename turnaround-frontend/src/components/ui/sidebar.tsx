@@ -192,7 +192,7 @@ export function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          'fixed inset-y-0 z-10 hidden h-svh transition-[width] duration-300 ease-in-out md:flex border-r border-border-default bg-bg-surface overflow-hidden',
+          'fixed inset-y-0 z-0 hidden h-svh transition-[width] duration-300 ease-in-out md:flex border-r border-border-default bg-bg-surface overflow-hidden',
           isCollapsed ? 'w-[var(--sidebar-width-icon)]' : 'w-[var(--sidebar-width)]',
           className
         )}
