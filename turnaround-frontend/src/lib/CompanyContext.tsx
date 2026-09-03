@@ -34,8 +34,8 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const data = await apiClient.getCompanyConfig();
       setConfig(data);
-    } catch {
-      // non-critical — fall back to null
+    } catch (error) {
+      console.error('[CompanyConfig] Failed to load company configuration', error);
     } finally {
       setIsLoading(false);
     }
