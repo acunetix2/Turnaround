@@ -39,6 +39,18 @@ let memoryLocations = [...mockLocations];
 let memoryDwellEvents = [...mockDwellEvents];
 let memoryInsights = [...mockInsights];
 let memoryTrips = [...mockTrips];
+let memoryUsers: import('./types').User[] = [
+  {
+    id: 'user_demo_admin',
+    company_id: 'seed-company-siginon-001',
+    name: 'Demo Administrator',
+    email: 'admin@siginon.com',
+    role: 'admin',
+    phone: '+254 700 000 001',
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+];
 let memoryDemurrageClaims = [...mockDemurrageClaims];
 let memoryDashboardStats = { ...mockDashboardStats };
 let memoryGatePasses: import('./types').GatePassData[] = [];
@@ -344,7 +356,12 @@ export const apiClient = {
 
     if (USE_MOCKS) {
       await sleep(150);
-      return { items: [], total: 0, page: params.page ?? 1, page_size: params.page_size ?? 50 };
+      const filtered = memoryUsers.filter((user) => {
+        const matchesSearch = !params.search || `${user.name} ${user.email} ${user.phone ?? ''}`
+          .toLowerCase().includes(params.search.toLowerCase());
+        return matchesSearch && (!params.role || user.role === params.role) && (!params.status || user.status === params.status);
+      });
+      return { items: filtered, total: filtered.length, page: params.page ?? 1, page_size: params.page_size ?? 50 };
     }
 
     const res = await fetch(`${API_BASE_URL}/users?${query.toString()}`, { headers: getHeaders() });
