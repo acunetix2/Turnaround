@@ -33,7 +33,7 @@ import type {
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
 const configuredApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 const localApiUrl = 'http://localhost:8000/api/v1';
-const productionApiUrl = 'https://turnaround-backend.onrender.com/api/v1';
+const productionApiUrl = 'https://turnaround-99kc.onrender.com/api/v1';
 const API_BASE_URL = configuredApiUrl || (
   typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
     ? localApiUrl
