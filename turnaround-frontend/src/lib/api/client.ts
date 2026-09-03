@@ -51,6 +51,23 @@ let memoryUsers: import('./types').User[] = [
     created_at: new Date().toISOString(),
   },
 ];
+let memoryCompanyConfig: import('./types').CompanyConfig = {
+  id: 'seed-company-siginon-001',
+  name: 'Siginon Global Logistics',
+  created_at: new Date().toISOString(),
+  country: 'Kenya',
+  currency: 'KES',
+  timezone: 'Africa/Nairobi',
+  sla_warning_threshold_minutes: 30,
+  sla_breach_threshold_minutes: 60,
+  hourly_operating_rate: 7500,
+  demurrage_rate_multiplier: 1.5,
+  gps_polling_interval_seconds: 30,
+  geofence_buffer_meters: 100,
+  auto_revoke_expired_passes: true,
+  notify_on_delay: true,
+  notify_on_gate_pass: true,
+};
 let memoryDemurrageClaims = [...mockDemurrageClaims];
 let memoryDashboardStats = { ...mockDashboardStats };
 let memoryGatePasses: import('./types').GatePassData[] = [];
@@ -337,6 +354,30 @@ export const apiClient = {
     });
     if (!res.ok) throw new Error('Failed to delete location');
     return true;
+  },
+
+  // --- Company configuration ---
+  async getCompanyConfig(): Promise<import('./types').CompanyConfig> {
+    if (USE_MOCKS) {
+      await sleep(150);
+      return memoryCompanyConfig;
+    }
+    const res = await fetch(`${API_BASE_URL}/company`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch company configuration');
+    return res.json();
+  },
+
+  async updateCompanyConfig(data: Partial<import('./types').CompanyConfig>): Promise<import('./types').CompanyConfig> {
+    if (USE_MOCKS) {
+      await sleep(200);
+      memoryCompanyConfig = { ...memoryCompanyConfig, ...data };
+      return memoryCompanyConfig;
+    }
+    const res = await fetch(`${API_BASE_URL}/company`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update company configuration');
+    return res.json();
   },
 
   // --- Users / Team ---

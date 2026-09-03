@@ -19,6 +19,31 @@ export interface Company {
   created_at: string;
 }
 
+export interface CompanyConfig extends Company {
+  registration_number?: string;
+  industry?: string;
+  logo_url?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  currency: string;
+  timezone: string;
+  default_corridor?: string;
+  sla_warning_threshold_minutes: number;
+  sla_breach_threshold_minutes: number;
+  hourly_operating_rate: number;
+  demurrage_rate_multiplier: number;
+  gps_polling_interval_seconds: number;
+  geofence_buffer_meters: number;
+  auto_revoke_expired_passes: boolean;
+  notify_on_delay: boolean;
+  notify_on_gate_pass: boolean;
+  integrations?: Record<string, unknown>;
+}
+
 export interface User {
   id: string;
   company_id: string;
