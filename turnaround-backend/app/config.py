@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # App
     PROJECT_NAME: str = "Turnaround API"
     VERSION: str = "1.0.0"
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = "production"  # "development" | "staging" | "production"
     PORT: int = 8000
     HOST: str = "0.0.0.0"
     LOG_LEVEL: str = "INFO"

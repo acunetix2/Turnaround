@@ -4,6 +4,7 @@ services:
     runtime: python
     rootDir: turnaround-backend
     buildCommand: pip install -r requirements.txt
+    releaseCommand: alembic upgrade heads
     startCommand: python run.py
     healthCheckPath: /health
     envVars:
