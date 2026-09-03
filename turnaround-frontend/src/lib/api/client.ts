@@ -387,6 +387,56 @@ export const apiClient = {
     return res.json();
   },
 
+  // --- Account profile ---
+  async getProfile(): Promise<import('./types').User> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      return memoryUsers[0];
+    }
+    const res = await fetch(`${API_BASE_URL}/account/profile`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch account profile');
+    return res.json();
+  },
+
+  async updateProfile(data: { name?: string; phone?: string }): Promise<import('./types').User> {
+    if (USE_MOCKS) {
+      await sleep(150);
+      memoryUsers[0] = { ...memoryUsers[0], ...data };
+      return memoryUsers[0];
+    }
+    const res = await fetch(`${API_BASE_URL}/account/profile`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update account profile');
+    return res.json();
+  },
+
+  async getNotificationPreferences(): Promise<Record<string, boolean>> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      return {
+        email_notifications: true, sms_notifications: false, push_notifications: true,
+        notify_on_delay: true, notify_on_arrival: true, notify_on_gate_pass: true,
+        notify_on_demurrage: true,
+      };
+    }
+    const res = await fetch(`${API_BASE_URL}/account/notifications`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch notification preferences');
+    return res.json();
+  },
+
+  async updateNotificationPreferences(data: Record<string, boolean>): Promise<Record<string, boolean>> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      return data;
+    }
+    const res = await fetch(`${API_BASE_URL}/account/notifications`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update notification preferences');
+    return res.json();
+  },
+
   // --- Users / Team ---
   async getUsers(params: {
     page?: number;
