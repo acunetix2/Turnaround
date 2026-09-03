@@ -327,6 +327,65 @@ export const apiClient = {
     return true;
   },
 
+  // --- Users / Team ---
+  async getUsers(params: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+    role?: string;
+    status?: string;
+  } = {}): Promise<{ items: import('./types').User[]; total: number; page: number; page_size: number }> {
+    const query = new URLSearchParams();
+    if (params.page !== undefined) query.set('page', String(params.page));
+    if (params.page_size !== undefined) query.set('page_size', String(params.page_size));
+    if (params.search) query.set('search', params.search);
+    if (params.role) query.set('role', params.role);
+    if (params.status) query.set('status', params.status);
+
+    if (USE_MOCKS) {
+      await sleep(150);
+      return { items: [], total: 0, page: params.page ?? 1, page_size: params.page_size ?? 50 };
+    }
+
+    const res = await fetch(`${API_BASE_URL}/users?${query.toString()}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch team users');
+    return res.json();
+  },
+
+  async createUser(data: { email: string; name: string; role: string; phone?: string; status?: string }): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create user');
+    return res.json();
+  },
+
+  async updateUser(id: string, data: { name?: string; role?: string; phone?: string; status?: string }): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update user');
+    return res.json();
+  },
+
+  async suspendUser(id: string): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/suspend`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to suspend user');
+    return res.json();
+  },
+
+  async activateUser(id: string): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/activate`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to activate user');
+    return res.json();
+  },
+
+  async deleteUser(id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to delete user');
+    return true;
+  },
+
   // --- GPS Events / Live positions ---
   async getLiveGPSEvents(): Promise<Record<string, GPSEvent>> {
     if (USE_MOCKS) {

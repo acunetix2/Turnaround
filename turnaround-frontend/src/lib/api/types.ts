@@ -25,7 +25,11 @@ export interface User {
   company_name?: string;
   name: string;
   email: string;
-  role: UserRole;
+  role: UserRole | 'driver' | 'viewer';
+  phone?: string;
+  status: 'active' | 'inactive' | 'suspended';
+  last_login?: string;
+  updated_at?: string;
   created_at: string;
 }
 
