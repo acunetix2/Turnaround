@@ -3,6 +3,7 @@ User Management Router - Admin control for company users
 """
 from typing import Annotated, List, Optional
 from datetime import datetime
+import logging
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from app.auth.rbac import require_role
 from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/users", tags=["User Management"])
+logger = logging.getLogger(__name__)
 
 ADMIN_ONLY    = require_role(UserRole.ADMIN)
 MANAGE_ROLES  = require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER)
@@ -136,6 +138,7 @@ async def create_user(
     payload: UserCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     company_id: Annotated[str, Depends(get_current_company)],
+    current_user: Annotated[User, Depends(get_current_user)],
     _check: Annotated[None, Depends(ADMIN_ONLY)],
 ):
     """
@@ -173,7 +176,7 @@ async def create_user(
         )
         await db.commit()
     except Exception:
-        pass
+        logger.exception("User creation notification failed")
     return UserResponse.model_validate(new_user)
 
 
@@ -288,6 +291,7 @@ async def activate_user(
     user_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     company_id: Annotated[str, Depends(get_current_company)],
+    current_user: Annotated[User, Depends(get_current_user)],
     _check: Annotated[None, Depends(ADMIN_ONLY)],
 ):
     """Activate a suspended/inactive user account. Admin only."""
@@ -304,5 +308,13 @@ async def activate_user(
     
     await db.commit()
     await db.refresh(user)
+    try:
+        await notif_svc.user_activated(
+            db, company_id=company_id, admin_id=current_user.id,
+            activated_name=user.name,
+        )
+        await db.commit()
+    except Exception:
+        logger.exception("User activation notification failed")
     
     return UserResponse.model_validate(user)

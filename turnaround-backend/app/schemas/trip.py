@@ -3,6 +3,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from app.db.models.trip import TripStatus
 from app.schemas.location import LocationResponse
+from app.schemas.vehicle import VehicleResponse
 
 
 class TripCheckpoint(BaseModel):
@@ -62,6 +63,7 @@ class TripResponse(TripBase):
     created_at: datetime
     origin: Optional[LocationResponse] = None
     destination: Optional[LocationResponse] = None
+    vehicle: Optional[VehicleResponse] = None
     # Computed from real DwellEvent records — empty list when no dwell data exists yet
     checkpoints: List[TripCheckpoint] = []
 

@@ -13,11 +13,21 @@ import {
   Package, Settings, AlertCircle, Navigation2
 } from 'lucide-react';
 import type { Vehicle } from '../../lib/api/types';
+import { ASSET_TYPE_OPTIONS } from '../../lib/api/types';
 import { Select } from '../../components/ui/Select';
+import {
+  DatePicker,
+  DatePickerTrigger,
+  DatePickerButton,
+  DatePickerContent,
+} from '../../components/ui/DatePicker';
+import { Calendar } from '../../components/ui/Calendar';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
+import { CarrierAssetsReference } from './CarrierAssetsReference';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { EmptyStatePresentational } from '../../components/ui/EmptyStatePresentational';
+import { LoadingStatus } from '../../components/common/Loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import {
   MetricCard,
@@ -95,6 +105,20 @@ const maintenanceBadge = (m?: string) => {
 const driverStatusColor = (s?: string) =>
   s === 'driving' ? 'text-status-good' :
   s === 'resting' ? 'text-yellow-500'  : 'text-text-tertiary';
+
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const fromDateInputValue = (value?: string) => {
+  if (!value) return undefined;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+};
 
 // ── Image Upload component ──────────────────────────────────────────────────
 
@@ -215,7 +239,7 @@ export const Vehicles: React.FC = () => {
   });
 
   const {
-    register, handleSubmit, reset, setValue,
+    register, handleSubmit, reset, setValue, watch,
     formState: { errors, isSubmitting },
   } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
@@ -349,13 +373,16 @@ export const Vehicles: React.FC = () => {
   // ── LOADING / ERROR ──
   if (isLoading) {
     return (
-      <div className="space-y-4 animate-pulse">
+      <div className="space-y-4">
+        <LoadingStatus messages={['Please wait while we load your fleet', 'Checking vehicle telemetry', 'Almost there', 'Preparing fleet overview']} centered />
+        <div className="space-y-4 animate-pulse">
         <div className="h-10 w-full bg-bg-surface-raised rounded-xl" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-bg-surface-raised rounded-xl" />)}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-64 bg-bg-surface-raised rounded-xl" />)}
+        </div>
         </div>
       </div>
     );
@@ -411,6 +438,16 @@ export const Vehicles: React.FC = () => {
   const inputCls = "w-full bg-bg-surface-raised border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none";
 
   return (
+    <>
+      <CarrierAssetsReference
+        vehicles={vehicles}
+        gpsData={gpsData}
+        canMutate={canMutate}
+        onAdd={handleOpenAdd}
+        onEdit={handleOpenEdit}
+        onDelete={handleDelete}
+      />
+      <div className="hidden">
     <div className="space-y-6">
 
       {/* ── HEADER ── */}
@@ -964,6 +1001,9 @@ export const Vehicles: React.FC = () => {
         </div>
       )}
 
+      </div>
+      </div>
+
       {/* ── ADD / EDIT MODAL ── */}
       {(showAddModal || editingVehicle) && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4 overflow-y-auto">
@@ -1040,7 +1080,15 @@ export const Vehicles: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Vehicle Classification *</label>
-                      <input {...register('vehicle_type')} placeholder="e.g. Semi-Trailer (28T)" className={inputCls} />
+                      <Select
+                        value={watch('vehicle_type') ?? ''}
+                        onValueChange={(value) => setValue('vehicle_type', value, { shouldValidate: true })}
+                        options={[
+                          { value: '', label: 'Select asset type' },
+                          ...ASSET_TYPE_OPTIONS.map(option => ({ value: option.value, label: option.label })),
+                        ]}
+                        placeholder="Select asset type"
+                      />
                       {errors.vehicle_type && <p className="text-[11px] text-red-500 mt-1">{errors.vehicle_type.message}</p>}
                     </div>
                     <div>
@@ -1055,21 +1103,31 @@ export const Vehicles: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Current Status *</label>
-                      <select {...register('status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="active">Active</option>
-                        <option value="in_transit">In Transit</option>
-                        <option value="idle">Stationary / Idle</option>
-                        <option value="delayed">Delayed</option>
-                        <option value="maintenance">Under Maintenance</option>
-                      </select>
+                      <Select
+                        value={watch('status') ?? 'idle'}
+                        onValueChange={(value) => setValue('status', value as VehicleFormValues['status'], { shouldValidate: true })}
+                        options={[
+                          { value: 'active', label: 'Active' },
+                          { value: 'in_transit', label: 'In Transit' },
+                          { value: 'idle', label: 'Stationary / Idle' },
+                          { value: 'delayed', label: 'Delayed' },
+                          { value: 'maintenance', label: 'Under Maintenance' },
+                        ]}
+                        placeholder="Select status"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Maintenance Status</label>
-                      <select {...register('maintenance_status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="good">Good</option>
-                        <option value="due_soon">Due Soon</option>
-                        <option value="in_service">In Service</option>
-                      </select>
+                      <Select
+                        value={watch('maintenance_status') ?? 'good'}
+                        onValueChange={(value) => setValue('maintenance_status', value as VehicleFormValues['maintenance_status'], { shouldValidate: true })}
+                        options={[
+                          { value: 'good', label: 'Good' },
+                          { value: 'due_soon', label: 'Due Soon' },
+                          { value: 'in_service', label: 'In Service' },
+                        ]}
+                        placeholder="Select maintenance status"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Odometer (km)</label>
@@ -1077,7 +1135,30 @@ export const Vehicles: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Next Inspection Date</label>
-                      <input type="date" {...register('next_inspection_date')} className={inputCls} />
+                      <DatePicker>
+                        <DatePickerTrigger asChild>
+                          <DatePickerButton
+                            variant="outline"
+                            className="w-full h-9 justify-start px-3"
+                          >
+                            {watch('next_inspection_date')
+                              ? watch('next_inspection_date')
+                              : 'Select inspection date'}
+                          </DatePickerButton>
+                        </DatePickerTrigger>
+                        <DatePickerContent align="left">
+                          <Calendar
+                            mode="single"
+                            selected={fromDateInputValue(watch('next_inspection_date'))}
+                            onSelect={(date) =>
+                              setValue('next_inspection_date', date ? toDateInputValue(date) : '', {
+                                shouldValidate: true,
+                              })
+                            }
+                            initialFocus
+                          />
+                        </DatePickerContent>
+                      </DatePicker>
                     </div>
                   </div>
                 </div>
@@ -1101,11 +1182,16 @@ export const Vehicles: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Driver Status</label>
-                      <select {...register('driver_status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="on_duty">On Duty</option>
-                        <option value="driving">Driving</option>
-                        <option value="resting">Resting</option>
-                      </select>
+                      <Select
+                        value={watch('driver_status') ?? 'on_duty'}
+                        onValueChange={(value) => setValue('driver_status', value as VehicleFormValues['driver_status'], { shouldValidate: true })}
+                        options={[
+                          { value: 'on_duty', label: 'On Duty' },
+                          { value: 'driving', label: 'Driving' },
+                          { value: 'resting', label: 'Resting' },
+                        ]}
+                        placeholder="Select driver status"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1121,17 +1207,22 @@ export const Vehicles: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Container Type</label>
-                      <select {...register('container_type')} className={`${inputCls} cursor-pointer`}>
-                        <option value="">— Select type —</option>
-                        <option value="20ft Dry">20ft Dry</option>
-                        <option value="40ft Dry">40ft Dry</option>
-                        <option value="40ft HC">40ft High Cube</option>
-                        <option value="20ft Reefer">20ft Reefer</option>
-                        <option value="40ft Reefer">40ft Reefer</option>
-                        <option value="Open Top">Open Top</option>
-                        <option value="Flat Rack">Flat Rack</option>
-                        <option value="Tank Container">Tank Container</option>
-                      </select>
+                      <Select
+                        value={watch('container_type') ?? ''}
+                        onValueChange={(value) => setValue('container_type', value || undefined, { shouldValidate: true })}
+                        options={[
+                          { value: '', label: '— Select type —' },
+                          { value: '20ft Dry', label: '20ft Dry' },
+                          { value: '40ft Dry', label: '40ft Dry' },
+                          { value: '40ft HC', label: '40ft High Cube' },
+                          { value: '20ft Reefer', label: '20ft Reefer' },
+                          { value: '40ft Reefer', label: '40ft Reefer' },
+                          { value: 'Open Top', label: 'Open Top' },
+                          { value: 'Flat Rack', label: 'Flat Rack' },
+                          { value: 'Tank Container', label: 'Tank Container' },
+                        ]}
+                        placeholder="Select container type"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Trailer / Chassis Number</label>
@@ -1151,10 +1242,15 @@ export const Vehicles: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Tracker Model / Provider</label>
-                      <select {...register('telematics_provider')} className={`${inputCls} cursor-pointer`}>
-                        <option value="">— Select tracker —</option>
-                        {TRACKER_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                      </select>
+                      <Select
+                        value={watch('telematics_provider') ?? ''}
+                        onValueChange={(value) => setValue('telematics_provider', value || undefined, { shouldValidate: true })}
+                        options={[
+                          { value: '', label: '— Select tracker —' },
+                          ...TRACKER_MODELS.map(m => ({ value: m.id, label: m.name })),
+                        ]}
+                        placeholder="Select tracker"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Device IMEI / Serial</label>
@@ -1189,6 +1285,6 @@ export const Vehicles: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

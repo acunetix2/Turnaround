@@ -68,7 +68,8 @@ export const Demurrage: React.FC = () => {
   const { data: claimsData, isLoading: loadingClaims, isError: claimsError } = useQuery({
     queryKey: ['demurrageClaims'],
     queryFn: () => apiClient.getDemurrageClaims(),
-    refetchInterval: 20000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   const updateClaimMutation = useMutation({

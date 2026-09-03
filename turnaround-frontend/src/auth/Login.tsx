@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
-import { Eye, EyeOff, ArrowRight, ShieldCheck, TrendingDown, Lock, Mail, Clock } from 'lucide-react';
-import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
+import { useToast } from '../components/ui/Toast';
+import { Eye, EyeOff, ArrowRight, ShieldCheck, TrendingUp, Lock, Mail, Moon, Sun, Truck } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { useTheme } from '../lib/ThemeContext';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const fromPath = (location.state as any)?.from?.pathname || '/dashboard';
@@ -15,27 +18,38 @@ export const Login: React.FC = () => {
   const [password, setPassword]         = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError]               = useState('');
+  const [fieldErrors, setFieldErrors]   = useState<{ email?: string; password?: string }>({});
   const [submitting, setSubmitting]     = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const nextErrors: typeof fieldErrors = {};
+    if (!email.trim()) nextErrors.email = 'Email is required.';
+    if (!password) nextErrors.password = 'Password is required.';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     setSubmitting(true);
     try {
       await login(email, password);
+      sessionStorage.setItem('turnaround:show-welcome-on-login', '1');
+      toast({ variant: 'success', title: 'Login successful', message: 'Welcome back to your Turnaround workspace.' });
       navigate(fromPath, { replace: true });
     } catch (err: any) {
-      setError(err?.message || 'Invalid email or password. Please try again.');
+      const message = err?.message || '';
+      setError(message.includes('fetch') || message.includes('NetworkError') || message.includes('getaddrinfo')
+        ? 'Unable to connect to the authentication service. Check your internet connection and Supabase URL, then try again.'
+        : message || 'Invalid email or password. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A051B] text-[#F4F5F7]">
+    <div className="flex min-h-screen w-screen overflow-hidden bg-[#08051C] text-[#F4F5F7]">
 
       {/* ── LEFT PANEL: Hero photography + animated moving fleet ── */}
-      <div className="relative hidden lg:flex lg:w-[55%] flex-col overflow-hidden">
+      <div className="relative hidden lg:flex lg:w-1/2 flex-col overflow-hidden border-r border-white/10">
         <img
           src="/hero-fleet.jpg"
           alt="Turnaround fleet logistics distribution center at dusk"
@@ -45,16 +59,8 @@ export const Login: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-[#0A051B]/95 via-[#180B4A]/60 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A051B]/90 via-transparent to-[#0A051B]/30" />
 
-        {/* Subtle Anamorphic Optical Flare Sweep in Express Orange */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="w-[45%] h-full bg-gradient-to-r from-transparent via-[#ED642B]/10 to-transparent animate-anamorphic-flare blur-xl" />
-        </div>
-
-        {/* Live animated fleet background */}
-        <AnimatedFleetBackground />
-
         {/* Content over image */}
-        <div className="relative z-10 flex h-full flex-col justify-between p-12">
+        <div className="relative z-10 flex h-full flex-col justify-between p-8 xl:p-11">
           {/* Brand Logo */}
           <Link to="/" className="group w-fit">
             <BrandLogo size={38} showText={true} textSize="text-lg" />
@@ -62,56 +68,48 @@ export const Login: React.FC = () => {
 
           {/* Headline */}
           <div className="space-y-6">
-            <div>
-              <h1 className="text-4xl font-extrabold text-white leading-tight tracking-tight">
-                Stop losing margins<br />
-                <span className="text-[#ED642B]">at every loading dock.</span>
+            <div className="max-w-xl">
+              <span className="inline-flex items-center gap-2 rounded-lg border border-[#ED642B]/30 bg-[#250C77]/60 px-3 py-1.5 text-[11px] font-semibold text-white/90"><span className="h-1.5 w-1.5 rounded-full bg-[#ED642B]" /> Logistics. Optimized.</span>
+              <h1 className="mt-5 text-4xl xl:text-[42px] font-extrabold text-white leading-tight tracking-tight">
+                Delivering Excellence.<br />
+                <span className="text-[#ED642B]">Connecting East Africa.</span>
               </h1>
-              <p className="mt-4 text-base text-white/75 max-w-md leading-relaxed">
-                Real-time fleet operational intelligence that turns dwell and turnaround bottlenecks into cost-saving decisions.
+              <p className="mt-4 text-sm xl:text-base text-white/75 max-w-md leading-relaxed">
+                Real-time visibility, intelligent analytics, and seamless operations across every corridor.
               </p>
             </div>
 
-            {/* Floating metric cards */}
-            <div className="grid grid-cols-2 gap-3 max-w-sm">
+            {/* Product capabilities */}
+            <div className="space-y-3 max-w-sm">
               {[
-                { icon: TrendingDown, label: 'Average excess dwell cut', value: '2h 14m', color: '#10B981' },
-                { icon: Clock,        label: 'Bottleneck response',      value: '4× faster', color: '#ED642B' },
-                { icon: ShieldCheck,  label: 'Geofence accuracy',        value: '99.4%',   color: '#ED642B' },
-                { icon: TrendingDown, label: 'Weekly cost recovered',    value: 'KES 84K',  color: '#10B981' },
-              ].map(({ icon: Icon, label, value, color }) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-white/15 bg-[#180B4A]/60 backdrop-blur-md p-4 shadow-lg"
-                >
-                  <Icon size={15} style={{ color }} className="mb-2" />
-                  <div className="font-numeric text-lg font-extrabold text-white">{value}</div>
-                  <div className="mt-0.5 text-xs text-white/70 leading-tight">{label}</div>
+                { icon: Truck, title: 'Real-time Fleet Tracking', detail: 'Monitor fleet across all corridors' },
+                { icon: TrendingUp, title: 'Intelligent Analytics', detail: 'Data-driven insights for better decisions' },
+                { icon: ShieldCheck, title: 'Secure & Reliable', detail: 'Enterprise-grade security for your data' },
+              ].map(({ icon: Icon, title, detail }) => (
+                <div key={title} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#180B4A]/55 p-3 backdrop-blur-md">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#250C77] text-[#C084FC]"><Icon size={18} /></div>
+                  <div><p className="text-xs font-semibold text-white">{title}</p><p className="mt-0.5 text-[11px] text-white/60">{detail}</p></div>
                 </div>
               ))}
             </div>
           </div>
 
           <p className="text-xs text-white/50">
-            Trusted by commercial fleet operators across East Africa
+            © 2025 Turnaround Logistics. All rights reserved.
           </p>
         </div>
       </div>
 
       {/* ── RIGHT PANEL: Sign in form ── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto bg-[#0E0724]/90">
+      <div className="relative flex flex-1 flex-col items-center justify-center px-5 py-8 sm:px-10 overflow-y-auto bg-[#08051C]">
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
         {/* Mobile logo */}
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
           <BrandLogo size={34} showText={true} />
         </Link>
 
-        <div className="w-full max-w-[400px]">
-          <div className="mb-8">
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Sign in to your account</h2>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Enter your credentials to access your fleet operations dashboard
-            </p>
-          </div>
+        <div className="w-full max-w-[458px] rounded-xl border border-white/10 bg-[#0B0928]/80 p-6 shadow-2xl backdrop-blur-md sm:p-7">
+          <div className="mb-7 text-center"><div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#250C77] ring-8 ring-[#250C77]/20"><Lock size={23} className="text-white" /></div><h2 className="text-2xl font-extrabold text-white tracking-tight">Welcome back</h2><p className="mt-1.5 text-sm text-text-secondary">Sign in to your Turnaround account</p></div>
 
           {/* Error */}
           {error && (
@@ -120,11 +118,11 @@ export const Login: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
-                Work email address
+                <label className="block text-xs font-semibold text-white mb-1.5">
+                Email Address
               </label>
               <div className="relative">
                 <input
@@ -133,16 +131,17 @@ export const Login: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="operations@siginon.com"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
                 />
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
               </div>
+              {fieldErrors.email && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.email}</p>}
             </div>
 
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-text-secondary">Password</label>
+                <label className="text-xs font-semibold text-white">Password</label>
                 <Link
                   to="/forgot-password"
                   className="text-xs font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors cursor-pointer"
@@ -157,7 +156,7 @@ export const Login: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 pr-11 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 pl-10 pr-11 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
                 />
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
                 <button
@@ -169,13 +168,14 @@ export const Login: React.FC = () => {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {fieldErrors.password && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.password}</p>}
             </div>
 
-            {/* Submit in FedEx Express Orange */}
+            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer"><input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-white/5 accent-[#ED642B]" /> Remember me <span className="ml-auto">Keep me signed in</span></label>
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 focus:outline-none focus:ring-2 focus:ring-[#ED642B]/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 focus:outline-none focus:ring-2 focus:ring-[#ED642B]/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
             >
               {submitting ? (
                 <>
@@ -183,7 +183,7 @@ export const Login: React.FC = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
                   </svg>
-                  Signing in…
+                  Logging you in…
                 </>
               ) : (
                 <>
@@ -194,11 +194,14 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-text-tertiary">
-            Don't have an account yet?{' '}
-            <Link to="/signup" className="font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors">
-              Register now
-            </Link>
+          <div className="my-6 flex items-center gap-3 text-[11px] text-text-tertiary"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div>
+          <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] py-3 text-sm font-semibold text-white hover:bg-white/[0.07] cursor-pointer"><span className="font-bold text-[#4285F4]">G</span> Sign in with Google</button>
+          <p className="mt-6 text-center text-sm text-text-tertiary">Don't have an account? <Link to="/signup" className="font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors">Contact your administrator</Link>
+          </p>
+          <p className="mt-5 text-center text-[11px] text-text-tertiary">
+            <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <span className="mx-2">·</span>
+            <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
           </p>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { apiClient } from '../lib/api/client';
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -19,8 +20,13 @@ export const ForgotPassword: React.FC = () => {
     setError('');
     setSubmitting(true);
 
-    // Simulate password recovery dispatch
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    try {
+      await apiClient.requestPasswordReset(email);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send reset instructions.');
+      setSubmitting(false);
+      return;
+    }
     setSubmitting(false);
     setSent(true);
   };
@@ -115,13 +121,7 @@ export const ForgotPassword: React.FC = () => {
                 </p>
               </div>
 
-              {error && (
-                <div className="mb-5 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-xs text-[#EF4444]">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1.5">
                     Work email address
@@ -137,6 +137,7 @@ export const ForgotPassword: React.FC = () => {
                     />
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
                   </div>
+                  {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}
                 </div>
 
                 <button

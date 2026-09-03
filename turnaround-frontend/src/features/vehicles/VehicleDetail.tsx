@@ -14,6 +14,7 @@ import {
   Sparkles, Ticket
 } from 'lucide-react';
 import type { Vehicle } from '../../lib/api/types';
+import { ASSET_TYPE_OPTIONS } from '../../lib/api/types';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
@@ -397,7 +398,10 @@ export const VehicleDetail: React.FC = () => {
                   <input type="text" {...register('registration_number')} className={`${inputCls} uppercase font-mono`} placeholder="e.g. KDG 123A" />
                 </FormField>
                 <FormField label="Vehicle Classification *" error={errors.vehicle_type?.message}>
-                  <input type="text" {...register('vehicle_type')} className={inputCls} placeholder="e.g. Semi-Trailer (28T)" />
+                  <input type="text" list="asset-type-options" {...register('vehicle_type')} className={inputCls} placeholder="e.g. Semi-Trailer (28T)" />
+                  <datalist id="asset-type-options">
+                    {ASSET_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </datalist>
                 </FormField>
                 <FormField label="Payload Capacity (Tonnes)" error={errors.capacity?.message}>
                   <input type="number" step="0.1" {...register('capacity', { valueAsNumber: true })} className={inputCls} />

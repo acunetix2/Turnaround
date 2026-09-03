@@ -14,6 +14,7 @@ from app.deps import get_current_company
 from app.schemas.trip import TripCreate, TripUpdate, TripResponse, TripCheckpoint
 from app.schemas.common import PaginatedResponse
 from app.auth.rbac import require_role
+from app.services import notifications as notif_svc
 import uuid
 
 router = APIRouter(prefix="/trips", tags=["Trips"])
@@ -121,6 +122,7 @@ def _trip_query(company_id: str):
         .join(Vehicle, Trip.vehicle_id == Vehicle.id)
         .where(Vehicle.company_id == company_id)
         .options(
+            selectinload(Trip.vehicle),
             selectinload(Trip.origin),
             selectinload(Trip.destination),
             selectinload(Trip.dwell_events).selectinload(DwellEvent.location),
@@ -195,6 +197,13 @@ async def create_trip(
     # Re-fetch with full eager loads so checkpoints can be built
     result = await db.execute(_trip_query(company_id).where(Trip.id == trip.id))
     trip = result.scalar_one()
+    await notif_svc.trip_created(
+        db, company_id=company_id, trip_id=trip.id,
+        vehicle_reg=trip.vehicle.registration_number,
+        origin=trip.origin.name if trip.origin else "origin",
+        dest=trip.destination.name if trip.destination else "destination",
+    )
+    await db.commit()
     return _attach_checkpoints(trip)
 
 
@@ -211,6 +220,7 @@ async def update_trip(
     if not trip:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Trip not found"}})
 
+    previous_status = trip.status
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(trip, key, value)
@@ -220,6 +230,13 @@ async def update_trip(
     # Re-fetch to get fresh eager-loaded relations
     result = await db.execute(_trip_query(company_id).where(Trip.id == trip_id))
     trip = result.scalar_one()
+    if "status" in update_data and trip.status != previous_status:
+        await notif_svc.trip_status_changed(
+            db, company_id=company_id, trip_id=trip.id,
+            vehicle_reg=trip.vehicle.registration_number,
+            new_status=trip.status.value if hasattr(trip.status, "value") else str(trip.status),
+        )
+        await db.commit()
     return _attach_checkpoints(trip)
 
 

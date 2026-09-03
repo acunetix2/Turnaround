@@ -2,7 +2,6 @@ from typing import Annotated, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.db.models.vehicle import Vehicle
@@ -145,11 +144,6 @@ async def list_vehicles(
 ):
     base_q = (
         select(Vehicle)
-        .options(
-            selectinload(Vehicle.company),
-            selectinload(Vehicle.trips),
-            selectinload(Vehicle.gate_passes)
-        )
         .where(Vehicle.company_id == company_id)
     )
     if status_filter:
@@ -173,11 +167,6 @@ async def get_vehicle(
 ):
     result = await db.execute(
         select(Vehicle)
-        .options(
-            selectinload(Vehicle.company),
-            selectinload(Vehicle.trips),
-            selectinload(Vehicle.gate_passes)
-        )
         .where(Vehicle.id == vehicle_id, Vehicle.company_id == company_id)
     )
     vehicle = result.scalar_one_or_none()
@@ -211,11 +200,6 @@ async def update_vehicle(
 ):
     result = await db.execute(
         select(Vehicle)
-        .options(
-            selectinload(Vehicle.company),
-            selectinload(Vehicle.trips),
-            selectinload(Vehicle.gate_passes)
-        )
         .where(Vehicle.id == vehicle_id, Vehicle.company_id == company_id)
     )
     vehicle = result.scalar_one_or_none()

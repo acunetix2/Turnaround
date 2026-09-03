@@ -794,9 +794,9 @@ export const Landing: React.FC = () => {
           <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B7280]">
             <p>© 2026 Turnaround Logistics Systems. All rights reserved.</p>
             <div className="flex items-center gap-6">
-              <a href="#" className="hover:text-[#9CA3AF] transition-colors">Privacy policy</a>
-              <a href="#" className="hover:text-[#9CA3AF] transition-colors">Terms of service</a>
-              <a href="#" className="hover:text-[#9CA3AF] transition-colors">Security & SLA</a>
+              <Link to="/privacy" className="hover:text-[#9CA3AF] transition-colors">Privacy policy</Link>
+              <Link to="/terms" className="hover:text-[#9CA3AF] transition-colors">Terms of service</Link>
+              <Link to="/terms#security" className="hover:text-[#9CA3AF] transition-colors">Security & SLA</Link>
             </div>
           </div>
 

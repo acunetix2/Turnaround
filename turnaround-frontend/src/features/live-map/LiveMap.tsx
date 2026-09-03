@@ -9,10 +9,9 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 import { formatMinutes } from '../../lib/format';
 import type { Vehicle, VehicleStatus } from '../../lib/api/types';
-import { useTheme } from '../../lib/ThemeContext';
 import {
-  Search, Layers, X,
-  Truck, ChevronLeft, ChevronRight,
+  Search, X,
+  Truck, ChevronLeft, ChevronDown,
   Compass, MapPin, Route, ArrowRight
 } from 'lucide-react';
 
@@ -86,6 +85,17 @@ const MAP_STYLES = [
   },
 ];
 
+function terminalIcon(locationType: string): string {
+  const common = 'width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ED642B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  if (locationType === 'port') {
+    return `<svg ${common}><path d="M3 20h18M5 17h14M7 17V7h10v10M9 7V4h6v3M12 10v4"/></svg>`;
+  }
+  if (locationType === 'border_crossing') {
+    return `<svg ${common}><path d="M3 20h18M5 20V8l7-4 7 4v12M9 20v-5h6v5M3 10h18"/></svg>`;
+  }
+  return `<svg ${common}><path d="M3 21h18M5 21V10l7-6 7 6v11M8 21v-6h3v6M13 15h3v6M8 11h8"/></svg>`;
+}
+
 
 // East Africa Major Commercial Logistics Corridors GeoJSON
 const CORRIDOR_ROUTES_GEOJSON: GeoJSON.FeatureCollection = {
@@ -147,9 +157,6 @@ export const LiveMap: React.FC = () => {
   const vehicleMarkersRef = useRef<Record<string, maplibregl.Marker>>({});
   const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
 
-  // Theme available for future use
-  useTheme();
-
   // Read URL params — ?focus=vehicleId&origin_lat=...&dest_lat=... etc.
   const [searchParams] = useSearchParams();
   const focusVehicleId = searchParams.get('focus');
@@ -173,20 +180,19 @@ export const LiveMap: React.FC = () => {
   const [showDirections, setShowDirections] = useState(hasRoute);
 
   // State
-  const [selectedStyleId, setSelectedStyleId] = useState<string>('osm');
-  const [showRoutes, setShowRoutes] = useState<boolean>(true);
-  const [showStops, setShowStops] = useState<boolean>(true);
+  const [showRoutes] = useState<boolean>(true);
+  const [showStops] = useState<boolean>(true);
   const [statusFilter, setStatusFilter] = useState<'all' | VehicleStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
   const [vehicleCardExpanded, setVehicleCardExpanded] = useState<boolean>(false);
 
   // Queries
   const { data: vehicles } = useVehicles();
   const { data: locations } = useLocations();
   const { data: gpsPositions } = useLiveGPSEvents(8000);
+  const { data: trips = [] } = useQuery({ queryKey: ['trips', 'corridor-tracker'], queryFn: apiClient.getTrips, staleTime: 30_000 });
   const { data: dwells } = useQuery({
     queryKey: ['dwellEvents', 'map'],
     queryFn: () => apiClient.getDwellEvents(),
@@ -274,42 +280,7 @@ export const LiveMap: React.FC = () => {
     };
   }, []);
 
-  // 2. Change style when user selects a layer
-  const handleStyleChange = (styleId: string) => {
-    setSelectedStyleId(styleId);
-    setShowLayerMenu(false);
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    const chosen = MAP_STYLES.find(s => s.id === styleId) || MAP_STYLES[0];
-    map.setStyle(chosen.style as any);
-
-    // Re-attach corridor lines after style reload
-    map.once('style.load', () => {
-      if (!map.getSource('corridor-routes')) {
-        map.addSource('corridor-routes', {
-          type: 'geojson',
-          data: CORRIDOR_ROUTES_GEOJSON,
-        });
-        map.addLayer({
-          id: 'corridor-routes-casing',
-          type: 'line',
-          source: 'corridor-routes',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#250C77', 'line-width': 7, 'line-opacity': 0.8 },
-        });
-        map.addLayer({
-          id: 'corridor-routes-core',
-          type: 'line',
-          source: 'corridor-routes',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#ED642B', 'line-width': 3.2, 'line-dasharray': [2, 2], 'line-opacity': 0.95 },
-        });
-      }
-    });
-  };
-
-  // 3. Toggle corridor routes visibility
+  // Toggle corridor routes visibility
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -326,15 +297,20 @@ export const LiveMap: React.FC = () => {
   // Filtered vehicles
   const filteredVehicles = useMemo(() => {
     return (vehicles || []).filter((v) => {
-      const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch = !q ||
         v.registration_number.toLowerCase().includes(q) ||
         (v.current_location_name && v.current_location_name.toLowerCase().includes(q)) ||
         v.vehicle_type.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
       return matchesStatus && matchesSearch;
     });
   }, [vehicles, statusFilter, searchQuery]);
+
+  const filteredLocations = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return (locations || []).filter(location => !q || location.name.toLowerCase().includes(q) || location.location_type.toLowerCase().includes(q));
+  }, [locations, searchQuery]);
 
   // 4. Render Terminal & Stop Markers
   useEffect(() => {
@@ -352,7 +328,7 @@ export const LiveMap: React.FC = () => {
       el.className = 'group cursor-pointer flex flex-col items-center';
       el.innerHTML = `
         <div class="h-6 w-6 rounded-full bg-[#250C77] text-white border-2 border-white shadow-lg flex items-center justify-center transition-transform group-hover:scale-110">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ED642B" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          ${terminalIcon(loc.location_type)}
         </div>
         <div class="mt-0.5 px-1.5 py-0.5 rounded bg-[#180B4A]/90 text-white text-[9.5px] font-bold border border-white/20 whitespace-nowrap shadow-md">
           ${loc.name}
@@ -441,6 +417,15 @@ export const LiveMap: React.FC = () => {
       });
     }
   }, [gpsPositions]);
+
+  const handleFocusLocation = useCallback((location: { latitude: number; longitude: number }) => {
+    mapInstanceRef.current?.flyTo({
+      center: [location.longitude, location.latitude],
+      zoom: 12,
+      pitch: 20,
+      duration: 1000,
+    });
+  }, []);
 
   // Reset to East Africa overview
   const handleResetView = useCallback(() => {
@@ -536,121 +521,85 @@ export const LiveMap: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasRoute, originLat, originLng, destLat, destLng]);
 
-  return (
-    <div className="relative h-screen w-full overflow-hidden bg-bg-surface flex">
+  const activeVehicleCount = (vehicles || []).filter(vehicle => ['active', 'in_transit', 'delayed'].includes(vehicle.status)).length;
+  const movingVehicleCount = (vehicles || []).filter(vehicle => vehicle.status === 'in_transit').length;
+  const completedShipmentCount = trips.filter(trip => trip.status === 'completed').length;
+  const onTimeShipmentCount = trips.filter(trip => trip.status !== 'delayed').length;
+  const onTimeShipmentRate = trips.length ? Math.round((onTimeShipmentCount / trips.length) * 1000) / 10 : 100;
+  const activeCorridorCount = CORRIDOR_ROUTES_GEOJSON.features.length;
+  const dashboardMetrics: Array<{ label: string; value: string | number; detail: string; icon: React.ElementType }> = [
+    { label: 'Active Corridors', value: activeCorridorCount, detail: 'All major routes operational', icon: Route },
+    { label: 'Active Vehicles', value: activeVehicleCount, detail: `${movingVehicleCount} currently moving`, icon: Truck },
+    { label: 'Avg. Transit Time', value: '—', detail: 'Live route estimate pending', icon: Compass },
+    { label: 'Total Shipments', value: trips.length, detail: `${completedShipmentCount} completed`, icon: MapPin },
+    { label: 'On-Time Delivery', value: `${onTimeShipmentRate}%`, detail: `${onTimeShipmentCount} on time`, icon: Route },
+  ];
 
+  return (
+    <div className="relative min-h-screen w-full overflow-hidden bg-bg-canvas flex flex-col">
+      <header className="flex flex-col gap-4 border-b border-border-default bg-bg-surface px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#250C77]/20 text-[#8B5CF6]"><Route size={22} /></div><div><h1 className="text-xl font-bold tracking-tight text-text-primary">Corridor Tracker</h1><p className="text-xs text-text-secondary">Real-time monitoring of key logistics corridors across East Africa</p></div></div>
+        <div className="flex items-center gap-2"><button className="h-9 rounded-lg border border-border-default bg-bg-surface-raised px-3 text-xs font-medium text-text-primary cursor-pointer">All Corridors <ChevronDown size={13} className="ml-2 inline" /></button><button className="h-9 rounded-lg border border-border-default bg-bg-surface-raised px-3 text-xs font-medium text-text-primary cursor-pointer">Filters</button><button onClick={handleResetView} className="h-9 rounded-lg bg-[#ED642B] px-3 text-xs font-bold text-white cursor-pointer">Live Map <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-300" /></button></div>
+      </header>
+      <div className="grid grid-cols-1 gap-3 bg-bg-canvas p-4 sm:grid-cols-2 xl:grid-cols-5">
+        {dashboardMetrics.map(({ label, value, detail, icon: Icon }) => <div key={label} className="min-w-0 rounded-xl border border-border-default bg-bg-surface p-3 shadow-sm"><div className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#250C77] text-white"><Icon size={17} /></div><div className="min-w-0"><p className="truncate text-[11px] text-text-secondary">{label}</p><p className="text-xl font-bold text-text-primary">{value}</p><p className="truncate text-[10px] text-text-tertiary">{detail}</p></div></div></div>)}
+      </div>
+
+      <div className="relative flex min-h-[620px] flex-1 w-full">
       {/* ── MAP CONTAINER (Direct MapLibre GL canvas) ── */}
-      <div className="relative flex-1 h-full w-full min-h-[550px]">
+      <div className="relative flex-1 h-full w-full min-h-[620px]">
         <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '550px' }} />
 
-        {/* ── TOP MAP CONTROLS OVERLAY BAR ── */}
-        <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between pointer-events-none z-10">
-          {/* Left Controls */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-xl bg-bg-surface/95 backdrop-blur-md border border-border-default text-text-primary hover:bg-bg-surface-raised shadow-md transition-colors cursor-pointer"
-              title="Toggle Directory"
-            >
-              {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-            </button>
-
-            <button
-              onClick={handleResetView}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-bg-surface/95 backdrop-blur-md border border-border-default text-xs font-bold text-text-primary hover:bg-bg-surface-raised shadow-md transition-colors cursor-pointer"
-            >
-              <Compass size={14} className="text-[#ED642B]" />
-              <span>Reset Overview</span>
-            </button>
+        {/* Unified full-width search and filter bar */}
+        <div className="absolute top-3.5 left-3.5 right-3.5 z-20 rounded-2xl border border-border-default bg-bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+            <input
+              value={searchQuery}
+              onChange={event => setSearchQuery(event.target.value)}
+              placeholder="Search fleet or location"
+              className="w-full rounded-xl border border-border-default bg-bg-surface-raised py-2.5 pl-9 pr-3 text-xs font-semibold text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
+            />
           </div>
-
-          {/* Right Controls */}
-          <div className="flex items-center gap-2 pointer-events-auto flex-wrap justify-end">
-
-            {/* ── Fleet Status Filter Pills ── */}
-            <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-lg bg-bg-surface/95 backdrop-blur-md border border-border-default shadow-md">
-              {([
-                { value: 'all',         label: 'All',        dot: 'bg-text-tertiary' },
-                { value: 'moving',      label: 'Transit',    dot: 'bg-emerald-500'  },
-                { value: 'in_transit',  label: 'Dispatch',   dot: 'bg-[#250C77]'    },
-                { value: 'stationary',  label: 'Stationary', dot: 'bg-amber-400'    },
-                { value: 'delayed',     label: 'Delayed',    dot: 'bg-red-500'      },
-                { value: 'idle',        label: 'Idle',       dot: 'bg-gray-400'     },
-                { value: 'maintenance', label: 'Maint.',     dot: 'bg-yellow-500'   },
-              ] as const).map(({ value, label, dot }) => {
-                const count = value === 'all'
-                  ? (vehicles || []).length
-                  : (vehicles || []).filter(v => v.status === value).length;
-                if (count === 0 && value !== 'all') return null;
-                const isActive = statusFilter === value;
-                return (
-                  <button key={value} onClick={() => setStatusFilter(value as any)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer whitespace-nowrap leading-none ${
-                      isActive ? 'bg-[#250C77] text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-surface-raised'
-                    }`}>
-                    <span className={`h-1 w-1 rounded-full ${dot}`} />
-                    {label}
-                    <span className={`font-numeric text-[9px] ${isActive ? 'opacity-60' : 'text-text-tertiary'}`}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Toggle Transit Nodes */}
-            <button
-              onClick={() => setShowStops(!showStops)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold shadow-md transition-colors cursor-pointer backdrop-blur-md ${
-                showStops
-                  ? 'bg-[#250C77] text-white border-[#250C77]'
-                  : 'bg-bg-surface/95 text-text-secondary border-border-default hover:text-text-primary'
-              }`}
-            >
-              <MapPin size={14} className={showStops ? 'text-[#ED642B]' : ''} />
-              <span>Transit Nodes</span>
-            </button>
-
-            {/* Toggle Delivery Routes */}
-            <button
-              onClick={() => setShowRoutes(!showRoutes)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold shadow-md transition-colors cursor-pointer backdrop-blur-md ${
-                showRoutes
-                  ? 'bg-[#ED642B] text-white border-[#ED642B]'
-                  : 'bg-bg-surface/95 text-text-secondary border-border-default hover:text-text-primary'
-              }`}
-            >
-              <Route size={14} />
-              <span>Corridors</span>
-            </button>
-
-            {/* Style Selector */}
-            <div className="relative">
-              <button
-                onClick={() => setShowLayerMenu(!showLayerMenu)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-bg-surface/95 backdrop-blur-md border border-border-default text-xs font-bold text-text-primary hover:bg-bg-surface-raised shadow-md transition-colors cursor-pointer"
-              >
-                <Layers size={14} className="text-[#250C77]" />
-                <span>Theme</span>
+          <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-0.5">
+            {([
+              ['all', 'All'], ['in_transit', 'Transit'], ['active', 'Active'],
+              ['idle', 'Idle'], ['delayed', 'Delayed'], ['maintenance', 'Service'],
+            ] as const).map(([value, label]) => (
+              <button key={value} type="button" onClick={() => setStatusFilter(value)}
+                className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors ${statusFilter === value ? 'bg-[#250C77] text-white' : 'bg-bg-surface-raised text-text-secondary hover:text-text-primary'}`}>
+                {label}
               </button>
-
-              {showLayerMenu && (
-                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-bg-surface border border-border-strong p-1.5 shadow-2xl space-y-1 z-50">
-                  {MAP_STYLES.map((style) => (
-                    <button
-                      key={style.id}
-                      onClick={() => handleStyleChange(style.id)}
-                      className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                        selectedStyleId === style.id
-                          ? 'bg-[#ED642B] text-white'
-                          : 'text-text-secondary hover:bg-bg-surface-raised hover:text-text-primary'
-                      }`}
-                    >
-                      {style.name}
+            ))}
+          </div>
+          {(searchQuery || statusFilter !== 'all') && (
+            <div className="mt-2 grid gap-3 border-t border-border-default pt-2 md:grid-cols-2">
+              <div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-tertiary">{filteredVehicles.length} matching vehicles</p>
+              <div className="space-y-1">
+                {filteredVehicles.slice(0, 5).map(vehicle => (
+                  <button key={vehicle.id} type="button" onClick={() => handleFocusVehicle(vehicle)} className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left hover:bg-bg-surface-raised">
+                    <span className="min-w-0"><strong className="block truncate text-xs text-text-primary">{vehicle.registration_number}</strong><span className="block truncate text-[10px] text-text-tertiary">{vehicle.current_location_name || vehicle.vehicle_type}</span></span>
+                    <span className="ml-2 shrink-0 text-[9px] font-bold uppercase text-text-tertiary">{vehicle.status.replace('_', ' ')}</span>
+                  </button>
+                ))}
+                {!filteredVehicles.length && <p className="px-2.5 py-2 text-[11px] text-text-tertiary">No matching vehicles found.</p>}
+              </div>
+              </div>
+              <div>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-tertiary">{filteredLocations.length} matching terminal nodes</p>
+                <div className="space-y-1">
+                  {filteredLocations.slice(0, 5).map(location => (
+                    <button key={location.id} type="button" onClick={() => handleFocusLocation(location)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-bg-surface-raised">
+                      <MapPin size={13} className="shrink-0 text-[#ED642B]" />
+                      <span className="min-w-0"><strong className="block truncate text-xs text-text-primary">{location.name}</strong><span className="block truncate text-[10px] capitalize text-text-tertiary">{location.location_type.replace('_', ' ')}</span></span>
                     </button>
                   ))}
+                  {!filteredLocations.length && <p className="px-2.5 py-2 text-[11px] text-text-tertiary">No matching terminal nodes found.</p>}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* ── TRIP ROUTE PANEL (shown when navigating from TripDetail) ── */}
@@ -813,7 +762,7 @@ export const LiveMap: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-[10px] text-text-tertiary">Heading</p>
-                    <p className="font-numeric font-bold text-text-primary">{Math.round(activeVehicleGps.heading ?? 0)}°</p>
+                    <p className="font-numeric font-bold text-text-primary">{Math.round((activeVehicleGps as any).heading ?? 0)}°</p>
                   </div>
                   {activeVehicle.fuel_level != null && (
                     <div>
@@ -874,7 +823,7 @@ export const LiveMap: React.FC = () => {
               {(['all', 'moving', 'delayed', 'stationary'] as const).map((s) => (
                 <button
                   key={s}
-                  onClick={() => setStatusFilter(s)}
+                  onClick={() => setStatusFilter(s === 'moving' ? 'in_transit' : s === 'stationary' ? 'idle' : s)}
                   className={`flex-1 py-1 rounded-lg text-[10.5px] font-bold capitalize transition-colors cursor-pointer ${
                     statusFilter === s
                       ? 'bg-[#250C77] text-white'
@@ -916,13 +865,13 @@ export const LiveMap: React.FC = () => {
                         </span>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${
-                        vh.status === 'moving'
+                        vh.status === 'in_transit'
                           ? 'bg-status-good/15 text-status-good'
                           : vh.status === 'delayed'
                           ? 'bg-status-danger-bg text-status-danger'
                           : 'bg-bg-surface-raised text-text-tertiary'
                       }`}>
-                        {vh.status === 'moving' ? 'In Transit' : vh.status === 'delayed' ? 'Delayed' : 'Stationary'}
+                        {vh.status === 'in_transit' ? 'In Transit' : vh.status === 'delayed' ? 'Delayed' : 'Stationary'}
                       </span>
                     </div>
 
@@ -941,6 +890,7 @@ export const LiveMap: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

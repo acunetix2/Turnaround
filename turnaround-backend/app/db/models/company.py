@@ -23,6 +23,11 @@ class Company(Base):
     registration_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     industry: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    welcome_media_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    welcome_media_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    welcome_motto: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    privacy_policy: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    terms_of_service: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     website: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
 
     # ── Contact ───────────────────────────────────────────────────────────

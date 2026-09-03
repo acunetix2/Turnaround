@@ -12,6 +12,7 @@ import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/ui/Button';
 import type { GatePassData } from '../../lib/api/types';
+import { GatePassReference } from './GatePassReference';
 
 // ── Smart status ──────────────────────────────────────────────────────────────
 
@@ -173,6 +174,10 @@ export const GatePassList: React.FC = () => {
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
+  const { data: trips = [] } = useQuery({
+    queryKey: ['trips'],
+    queryFn: apiClient.getTrips,
+  });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: queryKeys.gatePasses.all() });
 
@@ -206,6 +211,28 @@ export const GatePassList: React.FC = () => {
     onSuccess: () => { invalidate(); toast({ variant: 'success', title: 'Pass Deleted' }); },
     onError: (e: any) => toast({ variant: 'error', title: 'Failed', message: e?.message }),
   });
+
+  const clearArchivedMutation = useMutation({
+    mutationFn: async () => {
+      const ids = passes
+        .filter((p: GatePassData) => ARCHIVED.includes(resolvePassStatus(p)))
+        .map((p: GatePassData) => p.id)
+        .filter(Boolean) as string[]
+
+      if (!ids.length) return 0
+      await Promise.all(ids.map((id) => apiClient.deleteGatePass(id)))
+      return ids.length
+    },
+    onSuccess: (count) => {
+      invalidate()
+      toast({
+        variant: 'success',
+        title: 'Archived Passes Cleared',
+        message: count ? `${count} archived pass${count === 1 ? '' : 'es'} removed.` : 'No archived passes to remove.',
+      })
+    },
+    onError: (e: any) => toast({ variant: 'error', title: 'Clear Failed', message: e?.message }),
+  })
 
   const runConfirm = () => {
     if (!confirm) return;
@@ -256,6 +283,16 @@ export const GatePassList: React.FC = () => {
   );
 
   return (
+    <>
+      <GatePassReference
+        passes={passes}
+        trips={trips}
+        canMutate={canMutate}
+        onNew={() => navigate('/trips')}
+        onView={openPass}
+        actionMenu={actionMenu}
+      />
+      <div className="hidden">
     <div className="space-y-5 max-w-7xl">
 
       {/* Header */}
@@ -315,9 +352,23 @@ export const GatePassList: React.FC = () => {
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-700 font-semibold">
           <Archive size={13} />
           Archived passes ({filtered.length}) — used, expired &amp; revoked
-          <button onClick={() => setShowArchived(false)} className="ml-auto underline cursor-pointer font-semibold">
-            Back to active
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {filtered.length > 0 && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Clear all archived gate passes? This cannot be undone.')) {
+                    clearArchivedMutation.mutate()
+                  }
+                }}
+                className="rounded-lg border border-amber-500/30 bg-white/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 hover:bg-white/80 transition-colors cursor-pointer"
+              >
+                Clear Archived
+              </button>
+            )}
+            <button onClick={() => setShowArchived(false)} className="underline cursor-pointer font-semibold">
+              Back to active
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col sm:flex-row items-center gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-default">
@@ -487,6 +538,9 @@ export const GatePassList: React.FC = () => {
 
       )}
 
+      </div>
+      </div>
+
       {/* Confirm dialog */}
       {confirm && (
         <ConfirmDialog
@@ -502,6 +556,6 @@ export const GatePassList: React.FC = () => {
           onCancel={() => setConfirm(null)}
         />
       )}
-    </div>
+    </>
   );
 };

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Settings, User, Bell, Shield, Eye, EyeOff,
   Save, Lock, Phone, Mail, Building2, CheckCircle2,
-  AlertTriangle, Sun, Moon, Monitor,
+  AlertTriangle, Sun, Moon, Monitor, SlidersHorizontal, History, KeyRound,
 } from 'lucide-react';
 import { apiClient } from '../../lib/api/client';
 import { useAuth } from '../../auth/AuthProvider';
@@ -12,17 +12,18 @@ import { useTheme } from '../../lib/ThemeContext';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import { formatDateTime } from '../../lib/format';
-import type { NotificationPreferences } from '../../lib/api/types';
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'security' | 'notifications' | 'appearance';
+type Tab = 'profile' | 'security' | 'notifications' | 'preferences' | 'sessions' | 'api';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile',       label: 'Profile',       icon: <User size={14} /> },
   { id: 'security',      label: 'Security',      icon: <Shield size={14} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
-  { id: 'appearance',    label: 'Appearance',    icon: <Sun size={14} /> },
+  { id: 'preferences',   label: 'Preferences',   icon: <SlidersHorizontal size={14} /> },
+  { id: 'sessions',      label: 'Sessions',      icon: <History size={14} /> },
+  { id: 'api',           label: 'API Access',    icon: <KeyRound size={14} /> },
 ];
 
 // ── Toggle Switch ─────────────────────────────────────────────────────────────
@@ -300,21 +301,21 @@ const NotificationsTab: React.FC = () => {
     staleTime: 60_000,
   });
 
-  const [local, setLocal] = useState<NotificationPreferences | null>(null);
+  const [local, setLocal] = useState<Record<string, boolean> | null>(null);
 
   React.useEffect(() => {
     if (prefs) setLocal(prefs);
   }, [prefs]);
 
   const updateMutation = useMutation({
-    mutationFn: (p: NotificationPreferences) => apiClient.updateNotificationPreferences(p),
+    mutationFn: (p: Record<string, boolean>) => apiClient.updateNotificationPreferences(p),
     onSuccess: () => toast({ variant: 'success', title: 'Preferences Saved' }),
     onError: (e: any) => toast({ variant: 'error', title: 'Failed', message: e?.message }),
   });
 
   if (!local) return <div className="animate-pulse space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-bg-surface-raised rounded-lg" />)}</div>;
 
-  const set = (k: keyof NotificationPreferences, v: boolean) => setLocal(p => p ? { ...p, [k]: v } : p);
+  const set = (k: string, v: boolean) => setLocal(p => p ? { ...p, [k]: v } : p);
 
   return (
     <div className="space-y-5">
@@ -396,22 +397,54 @@ const AppearanceTab: React.FC = () => {
   );
 };
 
+const AccountSummaryRail: React.FC = () => {
+  const { user } = useAuth();
+  const { data: sessions = [] } = useQuery({ queryKey: ['account', 'sessions'], queryFn: apiClient.getSessions, staleTime: 30_000 });
+  const roleLabel = user?.role?.replace('_', ' ') || '—';
+  return (
+    <aside className="space-y-4">
+      <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
+        <div className="flex items-center gap-2 mb-3"><div className="h-7 w-7 rounded-lg bg-[#250C77]/20 flex items-center justify-center"><User size={14} className="text-[#8B5CF6]" /></div><h2 className="text-xs font-bold text-text-primary">Account Summary</h2></div>
+        <div className="space-y-3 text-[11px]"><div className="flex justify-between gap-3"><span className="text-text-tertiary">Account ID</span><span className="font-mono text-text-secondary truncate">{user?.id || '—'}</span></div><div className="flex justify-between gap-3"><span className="text-text-tertiary">Role</span><span className="capitalize text-text-primary">{roleLabel}</span></div><div className="flex justify-between gap-3"><span className="text-text-tertiary">Member Since</span><span className="text-text-primary">{user?.created_at ? formatDateTime(user.created_at) : '—'}</span></div><div className="flex justify-between gap-3"><span className="text-text-tertiary">Last Sign In</span><span className="text-text-primary">{user?.last_login ? formatDateTime(user.last_login) : '—'}</span></div><div className="flex justify-between border-t border-border-default pt-3"><span className="text-text-tertiary">Account Status</span><span className="rounded-md bg-emerald-500/15 px-2 py-1 font-semibold text-emerald-500">{user?.status || '—'}</span></div></div>
+      </div>
+      <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm"><div className="flex items-center gap-2 mb-3"><Shield size={14} className="text-[#8B5CF6]" /><h2 className="text-xs font-bold text-text-primary">Security Status</h2></div><div className="space-y-3 text-[11px]"><div className="flex justify-between"><span className="text-text-secondary">Password</span><span className="text-emerald-500">Strong <CheckCircle2 size={12} className="inline ml-1" /></span></div><div className="flex justify-between"><span className="text-text-secondary">Two-Factor Authentication</span><span className="text-text-tertiary">Not configured</span></div><div className="flex justify-between"><span className="text-text-secondary">Active Sessions</span><span className="text-text-primary">{sessions.length}</span></div><div className="flex justify-between"><span className="text-text-secondary">Recovery Email</span><span className="text-emerald-500">Verified <CheckCircle2 size={12} className="inline ml-1" /></span></div></div></div>
+      <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4"><div className="flex items-center gap-2 mb-1"><AlertTriangle size={14} className="text-red-500" /><h2 className="text-xs font-bold text-red-500">Danger Zone</h2></div><p className="text-[10px] text-text-secondary mb-3">Irreversible and permanent actions.</p><button type="button" className="w-full rounded-lg border border-red-500/30 px-3 py-2 text-left text-[11px] text-red-500 hover:bg-red-500/10 cursor-pointer"><Lock size={12} className="inline mr-2" />Change Password <span className="float-right">›</span></button><button type="button" className="mt-2 w-full rounded-lg border border-red-500/30 px-3 py-2 text-left text-[11px] text-red-500 hover:bg-red-500/10 cursor-pointer"><AlertTriangle size={12} className="inline mr-2" />Deactivate Account <span className="float-right">›</span></button></div>
+    </aside>
+  );
+};
+
+const SimpleAccountTab: React.FC<{ title: string; description: string; icon: React.ReactNode }> = ({ title, description, icon }) => (
+  <div className="rounded-xl border border-border-default bg-bg-surface-raised/40 p-5"><div className="flex items-center gap-2 text-text-primary">{icon}<h2 className="text-sm font-bold">{title}</h2></div><p className="mt-2 text-xs text-text-secondary">{description}</p><div className="mt-5 rounded-lg border border-dashed border-border-default p-6 text-center text-xs text-text-tertiary">No additional settings are configured for this account.</div></div>
+);
+
+const SessionsTab: React.FC = () => {
+  const { data: sessions = [], isLoading } = useQuery({ queryKey: ['account', 'sessions'], queryFn: apiClient.getSessions, staleTime: 30_000 });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const revokeMutation = useMutation({ mutationFn: apiClient.revokeSession, onSuccess: () => { qc.invalidateQueries({ queryKey: ['account', 'sessions'] }); toast({ variant: 'success', title: 'Session Revoked' }); }, onError: (error: any) => toast({ variant: 'error', title: 'Could not revoke session', message: error?.message }) });
+  return <div className="space-y-4"><div><h2 className="text-sm font-bold text-text-primary">Active Sessions</h2><p className="mt-1 text-xs text-text-secondary">Manage devices currently signed in to your account.</p></div>{isLoading ? <div className="h-20 animate-pulse rounded-xl bg-bg-surface-raised" /> : sessions.length === 0 ? <div className="rounded-xl border border-border-default p-6 text-center text-xs text-text-tertiary">No active sessions found.</div> : <div className="divide-y divide-border-default rounded-xl border border-border-default">{sessions.map(session => <div key={session.id} className="flex items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="text-xs font-semibold text-text-primary">{session.current ? 'Current browser session' : 'Other active session'}</p><p className="mt-1 text-[10px] text-text-secondary">Last active {formatDateTime(session.last_used_at)} · Created {formatDateTime(session.created_at)}</p><p className="mt-1 text-[10px] text-text-tertiary">Expires {formatDateTime(session.expires_at)}</p></div>{session.current ? <span className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-500">Current</span> : <Button variant="outline" size="tiny" loading={revokeMutation.isPending && revokeMutation.variables === session.id} onClick={() => revokeMutation.mutate(session.id)}>Revoke</Button>}</div>)}</div>}</div>;
+};
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export const AccountSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const { user } = useAuth();
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-5 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <div className="h-9 w-9 rounded-xl bg-[#250C77] flex items-center justify-center shadow-md">
-          <Settings size={18} className="text-[#ED642B]" />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+        <div className="h-10 w-10 rounded-xl bg-[#250C77]/20 flex items-center justify-center shadow-md">
+          <Settings size={20} className="text-[#8B5CF6]" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-text-primary tracking-tight">Account Settings</h1>
-          <p className="text-xs text-text-secondary mt-0.5">Manage your profile, security, and preferences</p>
+          <h1 className="text-xl font-bold text-text-primary tracking-tight">Account Settings</h1>
+          <p className="text-xs text-text-secondary mt-0.5">Manage your account preferences, security, and notification settings</p>
         </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border border-border-default bg-bg-surface px-3 py-2"><div className="h-8 w-8 rounded-full bg-[#5B2BD8] flex items-center justify-center text-xs font-bold text-white">{(user?.name || 'U').slice(0, 2).toUpperCase()}</div><div><p className="text-xs font-semibold text-text-primary">{user?.name || 'Account'}</p><p className="text-[10px] text-text-secondary capitalize">{user?.role?.replace('_', ' ') || 'Member'}</p></div></div>
       </div>
 
       {/* Tab bar */}
@@ -422,11 +455,16 @@ export const AccountSettings: React.FC = () => {
       />
 
       {/* Tab content */}
+      <div className={activeTab === 'profile' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)] gap-4 items-start' : ''}>
       <div className="bg-bg-surface border border-border-default rounded-2xl p-6 shadow-sm">
         {activeTab === 'profile'       && <ProfileTab />}
         {activeTab === 'security'      && <SecurityTab />}
         {activeTab === 'notifications' && <NotificationsTab />}
-        {activeTab === 'appearance'    && <AppearanceTab />}
+        {activeTab === 'preferences'   && <AppearanceTab />}
+        {activeTab === 'sessions'      && <SessionsTab />}
+        {activeTab === 'api'           && <SimpleAccountTab title="API Access" description="Manage programmatic access for integrations connected to your workspace." icon={<KeyRound size={15} />} />}
+      </div>
+      {activeTab === 'profile' && <AccountSummaryRail />}
       </div>
     </div>
   );

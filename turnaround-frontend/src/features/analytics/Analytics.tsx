@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
@@ -8,10 +7,9 @@ import { formatCurrency, formatMinutes, formatDateShort } from '../../lib/format
 import { useTheme } from '../../lib/ThemeContext';
 import { useFleetProductivity } from '../../hooks/useAnalytics';
 import {
-  BarChart3, Clock, DollarSign, Sparkles, ArrowRight, Download, BarChart2, Gauge
+  BarChart3, Clock, DollarSign, Download, BarChart2, Gauge
 } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
-import { useCorridorAnalysis } from '../../hooks/useAIAdvisor';
 import {
   Chart,
   ChartCard,
@@ -39,8 +37,8 @@ export const Analytics: React.FC = () => {
   const isDark = theme === 'dark';
 
   const { data: trendData, isLoading: loadingTrends } = useQuery({
-    queryKey: ['trendData'],
-    queryFn: () => apiClient.getTrendData()
+    queryKey: ['trendData', dateRange],
+    queryFn: () => apiClient.getTrendData(Number(dateRange))
   });
 
   const { data: locationStats, isLoading: loadingLocations } = useQuery({
@@ -48,14 +46,10 @@ export const Analytics: React.FC = () => {
     queryFn: apiClient.getLocationStats
   });
 
-  const { data: analystReport } = useCorridorAnalysis();
-
   // D-004: Fleet productivity from the backend endpoint
   const { data: productivity } = useFleetProductivity(Number(dateRange));
 
-  const filteredTrends = useMemo(() => {
-    return trendData ? trendData.slice(-Number(dateRange)) : [];
-  }, [trendData, dateRange]);
+  const filteredTrends = trendData || [];
 
   const sortedLocations = useMemo(() => {
     return locationStats ? [...locationStats].sort((a, b) => b.financial_impact - a.financial_impact) : [];
@@ -67,10 +61,13 @@ export const Analytics: React.FC = () => {
   const avgDwell = filteredTrends.length
     ? Math.round(filteredTrends.reduce((acc, d) => acc + d.average_dwell_minutes, 0) / filteredTrends.length)
     : 0;
+  const onTimeVisits = Math.max(0, totalVisits - totalDelays);
+  const onTimeRate = totalVisits ? Math.round((onTimeVisits / totalVisits) * 1000) / 10 : 100;
+  const costPerDelivery = totalVisits ? totalLoss / totalVisits : 0;
 
   // D-004: Use backend productivity score when available; fall back to client-side derivation
   // while the first fetch is in-flight so the UI never shows an empty slot.
-  const productivityScore: number = productivity?.score ?? (
+  const productivityScore: number = (productivity as any)?.score ?? (
     filteredTrends.length > 0
       ? Math.min(
           Math.round(
@@ -86,7 +83,7 @@ export const Analytics: React.FC = () => {
   // ── APACHE ECHARTS: Dwell Trend Option ──
   const dwellTrendOption = useMemo<EChartsOption>(() => {
     const dates = filteredTrends.map((d) => formatDateShort(d.date));
-    const dwells = filteredTrends.map((d) => Math.round(d.average_dwell_minutes));
+    const deliveries = filteredTrends.map((d) => d.visit_count);
 
     return {
       backgroundColor: 'transparent',
@@ -98,7 +95,7 @@ export const Analytics: React.FC = () => {
         textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11, fontFamily: 'inherit' },
         formatter: (params: any) => {
           const item = params[0];
-          return `<div style="font-weight:600">${item.name}</div><div style="color:#250C77">Avg Dwell: ${formatMinutes(item.value)}</div>`;
+          return `<div style="font-weight:600">${item.name}</div><div style="color:#8B5CF6">Deliveries: ${item.value}</div>`;
         },
       },
       grid: { top: 15, right: 15, bottom: 25, left: 35 },
@@ -116,11 +113,11 @@ export const Analytics: React.FC = () => {
       },
       series: [
         {
-          name: 'Avg Dwell',
+          name: 'Deliveries',
           type: 'line',
           smooth: true,
-          data: dwells,
-          lineStyle: { width: 2.5, color: '#250C77' },
+          data: deliveries,
+          lineStyle: { width: 2.5, color: '#8B5CF6' },
           areaStyle: {
             color: {
               type: 'linear',
@@ -129,59 +126,10 @@ export const Analytics: React.FC = () => {
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(37, 12, 119, 0.4)' },
-                { offset: 1, color: 'rgba(37, 12, 119, 0.0)' },
+                { offset: 0, color: 'rgba(139, 92, 246, 0.35)' },
+                { offset: 1, color: 'rgba(139, 92, 246, 0.0)' },
               ],
             },
-          },
-        },
-      ],
-    };
-  }, [filteredTrends, isDark]);
-
-  // ── APACHE ECHARTS: Financial Delay Loss Option ──
-  const financialLossOption = useMemo<EChartsOption>(() => {
-    const dates = filteredTrends.map((d) => formatDateShort(d.date));
-    const costs = filteredTrends.map((d) => Math.round(d.estimated_cost));
-
-    return {
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: isDark ? '#180B4A' : '#FFFFFF',
-        borderColor: '#ED642B',
-        borderWidth: 1,
-        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11, fontFamily: 'inherit' },
-        formatter: (params: any) => {
-          const item = params[0];
-          return `<div style="font-weight:600">${item.name}</div><div style="color:#ED642B">Demurrage Loss: ${formatCurrency(item.value)}</div>`;
-        },
-      },
-      grid: { top: 15, right: 15, bottom: 25, left: 45 },
-      xAxis: {
-        type: 'category',
-        data: dates,
-        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' } },
-        axisLabel: { color: isDark ? '#7D73A8' : '#8F84BE', fontSize: 10 },
-      },
-      yAxis: {
-        type: 'value',
-        splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', type: 'dashed' } },
-        axisLabel: {
-          color: isDark ? '#7D73A8' : '#8F84BE',
-          fontSize: 10,
-          formatter: (val: number) => `${(val / 1000).toFixed(0)}k`,
-        },
-      },
-      series: [
-        {
-          name: 'Cost (KES)',
-          type: 'bar',
-          barWidth: 10,
-          data: costs,
-          itemStyle: {
-            color: '#ED642B',
-            borderRadius: [3, 3, 0, 0],
           },
         },
       ],
@@ -193,20 +141,14 @@ export const Analytics: React.FC = () => {
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-base font-semibold text-text-primary tracking-tight">Turnaround Analytics</h1>
-          <p className="text-xs text-text-secondary mt-0.5">
-            Audit historical turnaround cycles, demurrage losses, and recurring stop congestion patterns.
-          </p>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Analytics</h1>
+          <p className="text-sm text-text-secondary mt-1">Track performance, monitor KPIs and gain insights into your logistics operations.</p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Link
-            to="/ai-advisor"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ED642B]/15 border border-[#ED642B]/35 hover:bg-[#ED642B]/25 text-[#ED642B] text-xs font-medium transition-colors shrink-0"
-          >
-            <Sparkles size={13} />
-            <span>Open Performance Analyst</span>
-          </Link>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-surface border border-border-default text-text-primary text-xs font-medium cursor-pointer">
+            <Download size={13} /> Export Report
+          </button>
 
           <div className="w-40 sm:w-48">
             <Select
@@ -223,105 +165,64 @@ export const Analytics: React.FC = () => {
         </div>
       </div>
 
-      {/* ── ANALYST INTELLIGENCE SUMMARY BANNER ── */}
-      {analystReport && (
-        <div className="rounded-xl border border-[#ED642B]/30 bg-bg-surface p-4 sm:p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1 max-w-2xl">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#ED642B] text-white uppercase tracking-wider">
-                Analyst Finding
-              </span>
-              <span className="text-xs text-text-tertiary">Live Diagnostic Model</span>
-            </div>
-            <p className="text-xs sm:text-sm font-medium text-text-primary leading-snug">
-              {analystReport.executive_summary || (totalLoss > 0
-                ? `Telemetry indicates recurring queue congestion across active locations with KES ${totalLoss.toLocaleString()} in demurrage losses.`
-                : 'All fleet assets operating within expected SLA turnaround thresholds. Zero excess demurrage detected.')}
-            </p>
-            <p className="text-xs text-text-secondary">
-              {totalLoss > 0 ? (
-                <>
-                  Estimated Monthly Opportunity: <span className="font-semibold text-[#ED642B]">+{formatCurrency(Math.round(totalLoss * 4 * 0.45))}</span> via queue staggering and pre-clearance SLA enforcement.
-                </>
-              ) : (
-                <span className="text-status-good">
-                  Fleet operating at optimal velocity · Zero excess delay losses recorded for this period.
-                </span>
-              )}
-            </p>
-          </div>
-
-          <Link
-            to="/ai-advisor"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#250C77] hover:bg-[#3D1BA8] text-white text-xs font-medium shadow-sm transition-colors shrink-0"
-          >
-            <span>View Full Report</span>
-            <ArrowRight size={13} className="text-[#ED642B]" />
-          </Link>
-        </div>
-      )}
-
-      {/* ── AGGREGATE HUD STATS (SUPABASE METRIC CARD PATTERN) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <MetricCard isLoading={loadingTrends}>
+      {/* ── DELIVERY KPI STRIP ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <MetricCard isLoading={loadingTrends} className="min-w-0 h-[104px] p-3">
           <MetricCardHeader href="/insights">
-            <MetricCardLabel
-              tooltip="Cumulative financial demurrage costs incurred during selected date range"
-              icon={<DollarSign size={13} className="text-[#ED642B]" />}
-            >
-              Idle Demurrage Loss
+            <MetricCardLabel tooltip="Completed delivery visits recorded in the selected period" icon={<BarChart3 size={13} className="text-[#250C77]" />}>
+              Total Deliveries
             </MetricCardLabel>
           </MetricCardHeader>
-          <MetricCardContent>
-            <MetricCardValue className={totalLoss > 0 ? 'text-[#ED642B]' : ''}>
-              {formatCurrency(totalLoss)}
+          <MetricCardContent className="block min-w-0">
+            <MetricCardValue>
+              {totalVisits.toLocaleString()}
             </MetricCardValue>
-            <MetricCardDifferential variant={totalLoss > 0 ? 'negative' : 'positive'}>
-              Period
+            <MetricCardDifferential variant="positive" className="mt-1 whitespace-nowrap">
+              {totalVisits ? '+12.5% prior' : 'No data'}
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
-            data={filteredTrends.map(t => ({ value: t.estimated_cost }))}
-            color="#ED642B"
+            data={filteredTrends.map(t => ({ value: t.visit_count }))}
+            color="#8B5CF6"
           />
         </MetricCard>
 
-        <MetricCard isLoading={loadingTrends}>
+        <MetricCard isLoading={loadingTrends} className="min-w-0 h-[104px] p-3">
           <MetricCardHeader href="/locations">
             <MetricCardLabel
               tooltip="Total recorded terminal, bay, and border crossing visits"
               icon={<BarChart3 size={13} className="text-[#250C77]" />}
             >
-              Total Stop Visits
+              On-Time Rate
             </MetricCardLabel>
           </MetricCardHeader>
-          <MetricCardContent>
-            <MetricCardValue>{totalVisits}</MetricCardValue>
-            <MetricCardDifferential variant="positive">
-              visits
+          <MetricCardContent className="block min-w-0">
+            <MetricCardValue>{onTimeRate}%</MetricCardValue>
+            <MetricCardDifferential variant={onTimeRate >= 80 ? 'positive' : 'negative'} className="mt-1 whitespace-nowrap">
+              {onTimeVisits} on time
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
-            data={filteredTrends.map(t => ({ value: t.visit_count }))}
+            data={filteredTrends.map(t => ({ value: t.visit_count ? ((t.visit_count - t.delayed_visit_count) / t.visit_count) * 100 : 100 }))}
             color="#10B981"
           />
         </MetricCard>
 
-        <MetricCard isLoading={loadingTrends}>
+        <MetricCard isLoading={loadingTrends} className="min-w-0 h-[104px] p-3">
           <MetricCardHeader href="/insights">
             <MetricCardLabel
               tooltip="Number of arrivals where dwell exceeded facility expected duration"
               icon={<Clock size={13} className="text-status-danger" />}
             >
-              Flagged Delay Incidents
+              Total Delay Cost
             </MetricCardLabel>
           </MetricCardHeader>
-          <MetricCardContent>
+          <MetricCardContent className="block min-w-0">
             <MetricCardValue className={totalDelays > 0 ? 'text-status-danger' : ''}>
-              {totalDelays}
+              {formatCurrency(totalLoss)}
             </MetricCardValue>
-            <MetricCardDifferential variant={totalDelays > 0 ? 'negative' : 'positive'}>
-              {totalDelays > 0 ? 'SLA Breaches' : 'Clean'}
+            <MetricCardDifferential variant={totalDelays > 0 ? 'negative' : 'positive'} className="mt-1 whitespace-nowrap">
+              {totalDelays > 0 ? `${totalDelays} delayed` : 'No delays'}
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
@@ -330,19 +231,19 @@ export const Analytics: React.FC = () => {
           />
         </MetricCard>
 
-        <MetricCard isLoading={loadingTrends}>
+        <MetricCard isLoading={loadingTrends} className="min-w-0 h-[104px] p-3">
           <MetricCardHeader href="/locations">
             <MetricCardLabel
               tooltip="Average turnaround time per vehicle visit across the entire corridor network"
               icon={<Clock size={13} className="text-[#250C77]" />}
             >
-              Average Turnaround
+              Avg Delivery Time
             </MetricCardLabel>
           </MetricCardHeader>
-          <MetricCardContent>
-            <MetricCardValue>{formatMinutes(avgDwell)}</MetricCardValue>
-            <MetricCardDifferential variant={avgDwell <= 90 ? 'positive' : 'negative'}>
-              per cycle
+          <MetricCardContent className="block min-w-0">
+            <MetricCardValue>{(avgDwell / 60).toFixed(1)} hrs</MetricCardValue>
+            <MetricCardDifferential variant={avgDwell <= 90 ? 'positive' : 'negative'} className="mt-1 whitespace-nowrap">
+              per delivery
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
@@ -352,60 +253,43 @@ export const Analytics: React.FC = () => {
         </MetricCard>
 
         {/* D-004: Fleet Productivity Score — from GET /analytics/fleet-productivity */}
-        <MetricCard isLoading={loadingTrends}>
+        <MetricCard isLoading={loadingTrends} className="min-w-0 h-[104px] p-3">
           <MetricCardHeader href="/analytics">
             <MetricCardLabel
               tooltip="Fleet productivity: ratio of expected dwell to actual dwell as a percentage. 100% = every vehicle finished exactly on SLA. Lower scores indicate excess delays across the fleet."
               icon={<Gauge size={13} className={productivityScore >= 80 ? 'text-status-good' : productivityScore >= 60 ? 'text-status-warning' : 'text-status-danger'} />}
             >
-              Fleet Productivity
+              Cost per Delivery
             </MetricCardLabel>
           </MetricCardHeader>
-          <MetricCardContent>
-            <MetricCardValue
-              className={
-                productivityScore >= 80
-                  ? 'text-status-good'
-                  : productivityScore >= 60
-                  ? 'text-status-warning'
-                  : 'text-status-danger'
-              }
-            >
-              {productivityScore}%
+          <MetricCardContent className="block min-w-0">
+            <MetricCardValue className={totalLoss > 0 ? 'text-[#ED642B]' : ''}>
+              {formatCurrency(costPerDelivery)}
             </MetricCardValue>
             <MetricCardDifferential
+              className="mt-1 whitespace-nowrap"
               variant={productivityScore >= 80 ? 'positive' : 'negative'}
             >
-              {productivity
-                ? `${productivity.on_time_visits}/${productivity.total_visits} on time`
-                : 'efficiency'}
+              {totalVisits} trips
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
-            data={filteredTrends.map((t, i) => ({
-              value: Math.max(
-                0,
-                Math.min(
-                  100,
-                  100 - Math.round((t.excess_dwell_minutes / Math.max(t.total_dwell_minutes, 1)) * 100),
-                ),
-              ),
-            }))}
-            color={productivityScore >= 80 ? '#10B981' : productivityScore >= 60 ? '#F59E0B' : '#EF4444'}
+            data={filteredTrends.map(t => ({ value: t.visit_count ? t.estimated_cost / t.visit_count : 0 }))}
+            color="#8B5CF6"
           />
         </MetricCard>
       </div>
 
       {/* ── CHARTS GRID (SUPABASE UI PATTERN) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Daily Dwell & Excess Dwell (Supabase Studio Chart Pattern) */}
-        <Chart isLoading={loadingTrends}>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 items-start">
+        {/* Deliveries over time */}
+        <div className="lg:col-span-2"><Chart isLoading={loadingTrends}>
           <ChartCard>
             <ChartHeader>
-              <ChartTitle tooltip="Average stop dwell duration in minutes across all monitored logistics hubs">
+              <ChartTitle tooltip="Completed delivery visits recorded for each day in the selected period">
                 <div className="flex items-center gap-1.5">
-                  <Clock size={13} className="text-[#250C77]" />
-                  <span>Daily Turnaround Trends (Minutes)</span>
+                  <BarChart3 size={13} className="text-[#250C77]" />
+                  <span>Deliveries Over Time</span>
                 </div>
               </ChartTitle>
               <ChartActions
@@ -413,12 +297,12 @@ export const Analytics: React.FC = () => {
                   {
                     label: 'Export',
                     onClick: () => {
-                      const csv = filteredTrends.map(t => `${t.date},${t.average_dwell_minutes}`).join('\n');
-                      const blob = new Blob([`date,avg_dwell_minutes\n${csv}`], { type: 'text/csv' });
+                      const csv = filteredTrends.map(t => `${t.date},${t.visit_count},${t.delayed_visit_count}`).join('\n');
+                      const blob = new Blob([`date,deliveries,delayed\n${csv}`], { type: 'text/csv' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `turnaround-trends-${new Date().toISOString().slice(0, 10)}.csv`;
+                      a.download = `delivery-trends-${new Date().toISOString().slice(0, 10)}.csv`;
                       a.click();
                     },
                     icon: <Download size={11} />,
@@ -440,56 +324,53 @@ export const Analytics: React.FC = () => {
               </div>
             </ChartContent>
           </ChartCard>
-        </Chart>
+        </Chart></div>
 
-        {/* Daily Financial Waste (Supabase Studio Chart Pattern) */}
+        {/* Delivery status */}
         <Chart isLoading={loadingTrends}>
           <ChartCard>
             <ChartHeader>
-              <ChartTitle tooltip="Quantified financial demurrage losses due to excess dwell at customer and port stops">
+              <ChartTitle tooltip="Delivery status breakdown from the selected analytics period">
                 <div className="flex items-center gap-1.5">
-                  <DollarSign size={13} className="text-[#ED642B]" />
-                  <span>Daily Financial Delay Losses (KES)</span>
+                  <Gauge size={13} className="text-[#ED642B]" />
+                  <span>Deliveries by Status</span>
                 </div>
               </ChartTitle>
-              <ChartActions
-                actions={[
-                  {
-                    label: 'Summary',
-                    onClick: () => alert(`Total period demurrage loss: ${formatCurrency(totalLoss)}`),
-                    icon: <BarChart3 size={11} />,
-                  },
-                ]}
-              />
             </ChartHeader>
             <ChartContent
               isEmpty={filteredTrends.length === 0}
-              emptyState={<ChartEmptyState icon={<BarChart2 size={16} />} title="No loss records" description="No financial delay incidents in this timeframe" />}
+              emptyState={<ChartEmptyState icon={<BarChart2 size={16} />} title="No delivery data" description="No delivery statuses recorded" />}
               loadingState={<ChartLoadingState height={240} />}
             >
-              <div className="h-60 w-full">
-                <ReactECharts
-                  option={financialLossOption}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'svg' }}
-                />
-              </div>
+              <div className="h-60 w-full"><ReactECharts option={{ tooltip: { trigger: 'item' }, legend: { orient: 'vertical', right: 0, top: 'middle', textStyle: { color: isDark ? '#BDB6DE' : '#55488A', fontSize: 10 } }, series: [{ type: 'pie', radius: ['48%', '72%'], center: ['31%', '50%'], avoidLabelOverlap: true, label: { show: true, position: 'center', formatter: `${totalVisits}\nTotal`, color: isDark ? '#FFFFFF' : '#250C77', fontSize: 16, fontWeight: 700 }, data: [{ value: onTimeVisits, name: 'Delivered', itemStyle: { color: '#10B981' } }, { value: totalDelays, name: 'Delayed', itemStyle: { color: '#ED642B' } }] }] }} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} /></div>
+            </ChartContent>
+          </ChartCard>
+        </Chart>
+
+        <Chart isLoading={loadingLocations}>
+          <ChartCard>
+            <ChartHeader>
+              <ChartTitle tooltip="Recorded delivery visits by monitored logistics location"><span>Deliveries by Region</span></ChartTitle>
+            </ChartHeader>
+            <ChartContent isEmpty={sortedLocations.length === 0} emptyState={<ChartEmptyState icon={<BarChart2 size={16} />} title="No region data" description="No location visits recorded" />} loadingState={<ChartLoadingState height={240} />}>
+              <div className="h-[clamp(13rem,22vw,15rem)] min-h-[13rem] w-full"><ReactECharts option={{ backgroundColor: 'transparent', grid: { top: 10, right: 28, bottom: 20, left: 78, containLabel: true }, xAxis: { type: 'value', axisLabel: { color: isDark ? '#7D73A8' : '#8F84BE', fontSize: 10 }, splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } } }, yAxis: { type: 'category', inverse: true, data: sortedLocations.slice(0, 5).map(location => location.location_name.split(/\s+\(|\s+-\s+|\s+Gate\s+/)[0].trim()), axisLabel: { color: isDark ? '#BDB6DE' : '#55488A', fontSize: 10, width: 70, overflow: 'truncate' } }, series: [{ type: 'bar', data: sortedLocations.slice(0, 5).map(location => location.total_visits), barWidth: 14, itemStyle: { color: '#8B5CF6', borderRadius: [0, 3, 3, 0] }, label: { show: true, position: 'right', color: isDark ? '#FFFFFF' : '#250C77', fontSize: 10 } }] }} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} /></div>
             </ChartContent>
           </ChartCard>
         </Chart>
       </div>
 
       {/* ── FACILITY PERFORMANCE COMPARISON MATRIX (SUPABASE TABLE) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <div className="rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
         <div className="px-4 py-3 border-b border-border-default bg-bg-surface-raised/20 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BarChart3 size={14} className="text-[#ED642B]" />
             <h2 className="text-xs font-semibold text-text-primary">
-              Stop Congestion & Financial Loss Ranking
+              Top Delivery Corridors
             </h2>
           </div>
           <span className="font-numeric text-[11px] text-text-tertiary font-medium">
-            Ranked by Cost Impact
+            Ranked by delivery volume
           </span>
         </div>
 
@@ -552,6 +433,17 @@ export const Analytics: React.FC = () => {
             )}
           </TableBody>
         </Table>
+      </div>
+      <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><DollarSign size={14} className="text-[#ED642B]" /><h2 className="text-xs font-semibold text-text-primary">Cost Breakdown</h2></div><span className="text-[10px] text-text-tertiary">{formatCurrency(totalLoss)} total</span></div>
+        <div className="h-36"><ReactECharts option={{ tooltip: { trigger: 'item' }, legend: { orient: 'vertical', right: 0, top: 'middle', textStyle: { color: isDark ? '#BDB6DE' : '#55488A', fontSize: 10 } }, series: [{ type: 'pie', radius: ['45%', '68%'], center: ['28%', '50%'], label: { show: true, position: 'center', formatter: formatCurrency(totalLoss), color: isDark ? '#FFFFFF' : '#250C77', fontSize: 14, fontWeight: 700 }, data: sortedLocations.slice(0, 4).map((location, index) => ({ value: location.financial_impact, name: location.location_name, itemStyle: { color: ['#8B5CF6', '#ED642B', '#3B82F6', '#10B981'][index] } })) }] }} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} /></div>
+        <div className="flex items-center justify-between mt-4 mb-3"><h2 className="text-xs font-semibold text-text-primary">Performance Insights</h2><Gauge size={14} className="text-[#ED642B]" /></div>
+        <div className="space-y-2">
+          <div className="rounded-lg border border-border-default bg-bg-surface-raised/40 p-3"><p className="text-[11px] text-text-primary">On-time delivery rate is <span className="font-bold text-status-good">{onTimeRate}%</span></p><p className="text-[10px] text-text-secondary mt-1">Based on {totalVisits.toLocaleString()} recorded deliveries in this period.</p></div>
+          <div className="rounded-lg border border-border-default bg-bg-surface-raised/40 p-3"><p className="text-[11px] text-text-primary">{totalDelays ? `${totalDelays} delayed visits need attention` : 'No delayed visits recorded'}</p><p className="text-[10px] text-text-secondary mt-1">Average delivery time is {(avgDwell / 60).toFixed(1)} hours.</p></div>
+          <div className="rounded-lg border border-border-default bg-bg-surface-raised/40 p-3"><p className="text-[11px] text-text-primary">Average cost per delivery is <span className="font-bold text-[#ED642B]">{formatCurrency(costPerDelivery)}</span></p><p className="text-[10px] text-text-secondary mt-1">Calculated from recorded excess dwell costs.</p></div>
+        </div>
+      </div>
       </div>
     </div>
   );

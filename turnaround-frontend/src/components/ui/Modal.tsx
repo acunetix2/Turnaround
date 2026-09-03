@@ -56,23 +56,23 @@ export const Modal: React.FC<ModalProps> = ({
         className={[
           'relative w-full',
           widthClass[width],
-          'bg-[#1A1C21] border border-white/[0.14] rounded-[20px]',
-          'shadow-[0_24px_48px_rgba(0,0,0,0.60)]',
+          'bg-bg-surface border border-border-default rounded-[20px]',
+          'shadow-[0_24px_48px_rgba(0,0,0,0.18)]',
         ].join(' ')}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-white/[0.08]">
+        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-border-default">
           <div>
-            <h2 id="modal-title" className="text-base font-semibold text-[#F4F5F7]">
+            <h2 id="modal-title" className="text-base font-semibold text-text-primary">
               {title}
             </h2>
             {subtitle && (
-              <p className="text-xs text-[#6B7280] mt-1">{subtitle}</p>
+              <p className="text-xs text-text-secondary mt-1">{subtitle}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[#6B7280] hover:text-[#F4F5F7] hover:bg-white/[0.06] transition-colors"
+            className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised transition-colors"
             aria-label="Close modal"
           >
             <X size={16} />

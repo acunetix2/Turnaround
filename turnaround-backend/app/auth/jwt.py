@@ -13,6 +13,7 @@ Architecture:
 
 import logging
 from typing import Any, Dict, Optional
+import httpx
 
 import jwt
 from gotrue.errors import AuthApiError
@@ -123,6 +124,9 @@ def decode_supabase_jwt(token: str) -> Dict[str, Any]:
                 "user_metadata": meta,
                 "app_metadata": app_meta,
             }
+        except httpx.RequestError as exc:
+            logger.error("Supabase auth service is unreachable: %s", exc)
+            raise JWTValidationError("Authentication service is temporarily unreachable")
         except AuthApiError as exc:
             logger.warning(f"Supabase auth.get_user rejected token: {exc}")
             raise JWTValidationError(f"Supabase auth rejected token: {exc}")

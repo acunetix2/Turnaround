@@ -14,7 +14,7 @@ const variantStyles: Record<string, string> = {
   warning:
     'border-status-warning/30 bg-status-warning-bg text-status-warning [&>svg]:text-status-warning',
   info:
-    'border-[#250C77]/40 bg-[#250C77]/10 text-text-primary [&>svg]:text-[#250C77]',
+    'border-[#250C77]/40 bg-[#250C77]/10 text-text-primary [&>svg]:text-text-primary',
   success:
     'border-status-good/30 bg-status-good-bg text-status-good [&>svg]:text-status-good',
 }

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
 import { useToast } from '../../components/ui/Toast';
+import { LoadingStatus } from '../../components/common/Loader';
 
 export const Insights: React.FC = () => {
   const queryClient = useQueryClient();
@@ -53,7 +54,9 @@ export const Insights: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-4 animate-pulse">
+      <div className="space-y-4">
+        <LoadingStatus messages={['Please wait while we read your operations', 'Finding delay patterns', 'Almost there', 'Preparing your insights']} centered />
+        <div className="space-y-4 animate-pulse">
         <div className="h-10 w-full bg-bg-surface-raised rounded-xl" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -63,6 +66,7 @@ export const Insights: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="h-64 bg-bg-surface-raised rounded-xl" />
           <div className="h-64 bg-bg-surface-raised rounded-xl" />
+        </div>
         </div>
       </div>
     );

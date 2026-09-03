@@ -2,7 +2,7 @@ import uuid
 import enum
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLEnum, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, utc_now
 
@@ -42,6 +42,13 @@ class User(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sms_notifications: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    push_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_on_delay: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_on_arrival: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_on_gate_pass: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_on_demurrage: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relationships
     company: Mapped["Company"] = relationship("Company", back_populates="users")

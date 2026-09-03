@@ -140,11 +140,12 @@ async def get_trends(
     for r in records:
         day_key = r.arrival_time.date().isoformat()
         if day_key not in day_map:
-            day_map[day_key] = {"dwell": 0.0, "excess": 0.0, "cost": 0.0, "visits": 0}
+            day_map[day_key] = {"dwell": 0.0, "excess": 0.0, "cost": 0.0, "visits": 0, "delayed": 0}
         day_map[day_key]["dwell"] += r.dwell_minutes
         day_map[day_key]["excess"] += r.excess_minutes
         day_map[day_key]["cost"] += r.estimated_cost
         day_map[day_key]["visits"] += 1
+        day_map[day_key]["delayed"] += 1 if r.excess_minutes > 0 else 0
 
     points = [
         TrendPoint(
@@ -153,6 +154,7 @@ async def get_trends(
             excess_dwell_minutes=round(v["excess"], 1),
             financial_impact_kes=round(v["cost"], 2),
             visit_count=v["visits"],
+            delayed_visit_count=v["delayed"],
         )
         for day, v in sorted(day_map.items())
     ]

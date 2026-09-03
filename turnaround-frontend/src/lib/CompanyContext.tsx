@@ -16,6 +16,25 @@ interface CompanyContextType {
   update: (data: Partial<CompanyConfig>) => Promise<void>;
 }
 
+const companyCacheKey = (companyId: string) => `turnaround:company-config:${companyId}`;
+
+function readCachedConfig(companyId: string): CompanyConfig | null {
+  try {
+    const cached = sessionStorage.getItem(companyCacheKey(companyId));
+    return cached ? JSON.parse(cached) as CompanyConfig : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheConfig(config: CompanyConfig) {
+  try {
+    sessionStorage.setItem(companyCacheKey(config.id), JSON.stringify(config));
+  } catch {
+    // Storage can be unavailable in private browsing or during SSR.
+  }
+}
+
 const CompanyContext = createContext<CompanyContextType>({
   config: null,
   isLoading: false,
@@ -25,30 +44,40 @@ const CompanyContext = createContext<CompanyContextType>({
 
 export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const companyId = user?.company_id;
   const [config, setConfig] = useState<CompanyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!user) return;
-    setIsLoading(true);
+    if (!companyId) return;
     try {
       const data = await apiClient.getCompanyConfig();
       setConfig(data);
+      cacheConfig(data);
     } catch (error) {
       console.error('[CompanyConfig] Failed to load company configuration', error);
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [companyId]);
 
   const update = useCallback(async (data: Partial<CompanyConfig>) => {
     const updated = await apiClient.updateCompanyConfig(data);
     setConfig(updated);
+    cacheConfig(updated);
   }, []);
 
   useEffect(() => {
+    if (!companyId) {
+      setConfig(null);
+      setIsLoading(false);
+      return;
+    }
+    const cached = readCachedConfig(companyId);
+    setConfig(cached);
+    setIsLoading(!cached);
     refresh();
-  }, [refresh]);
+  }, [refresh, companyId]);
 
   return (
     <CompanyContext.Provider value={{ config, isLoading, refresh, update }}>

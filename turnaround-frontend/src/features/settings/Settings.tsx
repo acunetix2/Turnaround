@@ -31,9 +31,8 @@ const inputCls = "w-full bg-bg-surface-raised border border-border-default round
 const TRACCAR_URL   = 'https://www.traccar.org/demo/';
 const WIALON_URL    = `https://hosting.wialon.com/login.html?client_id=${import.meta.env.VITE_WIALON_CLIENT_ID || 'your_client_id'}&access_type=-1&activation_time=0&duration=604800&redirect_uri=${encodeURIComponent(window.location.origin + '/settings?tab=telematics&provider=wialon')}`;
 const GEOTAB_URL    = 'https://my.geotab.com/apidocs/';
-const STRIPE_URL    = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${import.meta.env.VITE_STRIPE_CLIENT_ID || 'your_stripe_client_id'}&scope=read_write&redirect_uri=${encodeURIComponent(window.location.origin + '/settings?tab=telematics&provider=stripe')}`;
 
-type Provider = 'traccar' | 'wialon' | 'geotab' | 'stripe' | null;
+type Provider = 'traccar' | 'wialon' | 'geotab' | null;
 
 const PROVIDERS = [
   {
@@ -77,18 +76,6 @@ const PROVIDERS = [
       { key: 'geotab_user',     label: 'Username',  placeholder: 'admin@company.com',  type: 'email' },
       { key: 'geotab_password', label: 'Password',  placeholder: '••••••••',           type: 'password' },
     ],
-  },
-  {
-    id: 'stripe' as const,
-    name: 'Stripe Billing',
-    desc: 'Automated demurrage invoicing — connect via OAuth',
-    badge: 'OAuth 2.0',
-    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
-    icon: '💳',
-    authType: 'oauth' as const,
-    docsUrl: 'https://stripe.com/docs/connect',
-    oauthUrl: STRIPE_URL,
-    fields: [],
   },
 ];
 
@@ -678,14 +665,14 @@ export const Settings: React.FC = () => {
               </div>
 
               <div className="p-4 rounded-xl bg-bg-surface-raised border border-border-default space-y-2">
-                <label className="text-xs font-semibold text-text-primary block">Operating Currency</label>
+                <label className="text-xs font-semibold text-text-primary block">Reporting Currency</label>
                 <input
                   type="text"
                   value={settings.operatingCurrency}
                   disabled
                   className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-xs text-text-tertiary font-numeric"
                 />
-                <p className="text-[11px] text-text-tertiary">Kenya Shilling (KES) - Standard corridor billing unit.</p>
+                <p className="text-[11px] text-text-tertiary">Used for operational cost and demurrage reporting.</p>
               </div>
             </div>
           </div>

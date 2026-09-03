@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../lib/api/client'
 import { useTheme } from '../../lib/ThemeContext'
 import { useCompany } from '../../lib/CompanyContext'
+import { useToast } from '../ui/Toast'
+import { Modal } from '../ui/Modal'
 import {
   LayoutDashboard,
   Compass,
@@ -28,9 +30,11 @@ import {
   BotMessageSquare,
   Bell,
   Building2,
+  Download,
 } from 'lucide-react'
 import { BrandLogo } from '../common/BrandLogo'
 import { RouteProgressBar } from '../common/Loader'
+import { CompanyWelcome } from '../common/CompanyWelcome'
 import {
   SidebarProvider,
   Sidebar,
@@ -66,6 +70,65 @@ interface NavItem {
   badgeDanger?: boolean
 }
 
+const TopAppBar: React.FC = () => {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { user } = useAuth()
+  const { config: companyConfig } = useCompany()
+  const pageTitle = location.pathname === '/ai-advisor' ? 'AI Analyst' : 'Turnaround Operations'
+
+  return (
+    <header className="sticky top-0 z-30 flex min-h-[72px] items-center gap-4 border-b border-border-default bg-bg-canvas/95 px-4 backdrop-blur-md sm:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        {companyConfig?.logo_url ? (
+          <div className="hidden h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border-default bg-white sm:flex">
+            <img src={companyConfig.logo_url} alt="company logo" className="h-full w-full object-contain p-1" />
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          <p className="truncate text-base font-bold tracking-tight text-text-primary">{pageTitle}</p>
+          <p className="hidden truncate text-[11px] text-text-secondary sm:block">Smart insights. Smarter logistics.</p>
+        </div>
+      </div>
+
+      <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        <label className="hidden items-center gap-2 rounded-lg border border-border-default bg-bg-surface px-3 py-2 text-xs text-text-tertiary md:flex md:w-56">
+          <Search size={14} />
+          <input
+            aria-label="Search anything"
+            placeholder="Search anything..."
+            className="min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-tertiary"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') navigate('/dashboard')
+            }}
+          />
+          <span className="text-[10px]">⌘K</span>
+        </label>
+        <button
+          type="button"
+          onClick={() => navigate('/notifications')}
+          className="relative rounded-lg border border-border-default bg-bg-surface p-2 text-text-secondary transition-colors hover:text-text-primary"
+          title="Notifications"
+        >
+          <Bell size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="hidden items-center gap-1.5 rounded-lg border border-[#250C77] bg-[#250C77] px-3 py-2 text-[11px] font-bold text-white transition-colors hover:bg-[#1d095d] sm:flex"
+        >
+          <Download size={13} />
+          Export Report
+        </button>
+        <div className="hidden min-w-0 text-right lg:block">
+          <p className="max-w-28 truncate text-[11px] font-semibold text-text-primary">{user?.name || 'Operator'}</p>
+          <p className="text-[10px] text-text-tertiary">{companyConfig?.name || 'Turnaround'}</p>
+        </div>
+      </div>
+    </header>
+  )
+}
+
 function SidebarNavContent() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -73,30 +136,31 @@ function SidebarNavContent() {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
   const { state } = useSidebar()
+  const { toast } = useToast()
   const isCollapsed = state === 'collapsed'
   const isAdmin = user?.role === 'admin'
   const { config: companyConfig } = useCompany()
 
   const [commandOpen, setCommandOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   // Real backend metrics
   const { data: dashboardStats } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: apiClient.getDashboardStats,
-    refetchInterval: 30000,
+    staleTime: 60_000,
   })
 
   const { data: vehiclesData } = useQuery({
     queryKey: ['vehicles'],
     queryFn: apiClient.getVehicles,
-    staleTime: 30000,
+    staleTime: 60_000,
   })
 
   const { data: notifData } = useQuery({
     queryKey: ['notifications', 'unread_count'],
     queryFn: () => apiClient.getNotifications({ unread_only: true, limit: 1 }),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
   })
   const unreadNotifCount = notifData?.unread ?? 0
 
@@ -166,8 +230,14 @@ function SidebarNavContent() {
   ]
 
   const handleLogout = async () => {
-    await logout()
-    navigate('/login')
+    try {
+      await logout()
+      setShowLogoutModal(false)
+      toast({ variant: 'success', title: 'Signed out successfully', message: 'Your Turnaround session has ended.' })
+      navigate('/login', { replace: true })
+    } catch (error) {
+      toast({ variant: 'error', title: 'Sign out failed', message: error instanceof Error ? error.message : 'Please try again.' })
+    }
   }
 
   const handleCommandSelect = (path: string) => {
@@ -187,17 +257,19 @@ function SidebarNavContent() {
         {!isCollapsed && companyConfig && (
           <div className="mt-2 mx-1 px-2.5 py-2 rounded-lg bg-[#250C77]/8 border border-[#250C77]/15 flex items-center gap-2.5">
             {companyConfig.logo_url ? (
-              <img src={companyConfig.logo_url} alt="logo" className="h-6 w-6 rounded object-contain shrink-0" />
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[#250C77]/10 bg-white/80 shadow-sm shrink-0">
+                <img src={companyConfig.logo_url} alt="company logo" className="h-full w-full object-contain p-1" />
+              </div>
             ) : (
-              <div className="h-6 w-6 rounded bg-[#250C77]/20 flex items-center justify-center shrink-0">
-                <Building2 size={12} className="text-[#250C77]" />
+              <div className="h-9 w-9 rounded-md bg-[#250C77]/20 flex items-center justify-center shrink-0">
+                <Building2 size={14} className="text-[#250C77]" />
               </div>
             )}
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold text-text-primary truncate">{companyConfig.name}</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] text-text-tertiary">{companyConfig.currency} · {companyConfig.country || 'Kenya'}</span>
-              </div>
+              <p className="text-[10px] text-text-tertiary truncate mt-0.5">
+                {companyConfig.address || [companyConfig.city, companyConfig.country].filter(Boolean).join(', ') || 'Company address not set'}
+              </p>
             </div>
           </div>
         )}
@@ -337,7 +409,7 @@ function SidebarNavContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={() => setShowLogoutModal(true)}
                   className="p-1 rounded-md text-text-tertiary hover:text-status-danger transition-colors cursor-pointer"
                   title="Sign out"
                 >
@@ -347,6 +419,31 @@ function SidebarNavContent() {
             )}
         </div>
       </SidebarFooter>
+
+      <Modal
+        open={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        title="Sign out of Turnaround?"
+        subtitle="Your active session will be ended on this device."
+        width="sm"
+      >
+        <div className="flex items-center gap-3">
+          <BrandLogo size={34} showText={false} />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-text-primary">Sign out?</p>
+            <p className="text-[11px] text-text-secondary truncate">{user?.name || 'Current user'}</p>
+            <p className="text-[10px] text-text-tertiary truncate">{user?.email || ''}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setShowLogoutModal(false)} className="rounded-lg border border-border-default px-3 py-2 text-xs font-semibold text-text-secondary hover:text-text-primary cursor-pointer">
+            Cancel
+          </button>
+          <button type="button" onClick={handleLogout} className="rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white hover:bg-red-600 cursor-pointer">
+            Sign out
+          </button>
+        </div>
+      </Modal>
 
       {/* Global ⌘K Command Palette */}
       <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
@@ -430,11 +527,13 @@ export const AppShell: React.FC = () => {
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex h-screen w-screen overflow-hidden text-text-primary bg-bg-canvas">
+        <CompanyWelcome />
         <RouteProgressBar isLoading={isNavigating} />
         <Sidebar collapsible="icon">
           <SidebarNavContent />
         </Sidebar>
         <SidebarInset>
+          <TopAppBar />
           <div className={`flex-1 min-w-0 overflow-y-auto bg-bg-canvas ${
             location.pathname === '/map' ? 'p-0 overflow-hidden' : 'p-4 sm:p-6'
           }`}>

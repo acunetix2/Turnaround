@@ -34,7 +34,6 @@ class Settings(BaseSettings):
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
-        "*"
     ]
 
     # Database — Supabase PostgreSQL (asyncpg)
@@ -48,8 +47,14 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
     # anon key (safe for frontend, used by supabase-js)
     SUPABASE_ANON_KEY: Optional[str] = None
+    AUTH_COOKIE_NAME: str = "turnaround_session"
+    AUTH_SESSION_DAYS: int = 30
+    AUTH_COOKIE_SECURE: bool = True
     # JWT secret — used only as dev fallback when SUPABASE_URL is not set
     SUPABASE_JWT_SECRET: Optional[str] = "dev-secret-key-for-local-testing-turnaround"
+
+    # Firebase Admin — server-side push delivery. Store the service account JSON as an env value.
+    FIREBASE_SERVICE_ACCOUNT_JSON: Optional[str] = None
 
     # AI / LLM Engine (Groq)
     GROQ_API_KEY: Optional[str] = None

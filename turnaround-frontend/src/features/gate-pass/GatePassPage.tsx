@@ -3,11 +3,12 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
-import { ArrowLeft, Image, Share2, ShieldCheck, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Share2, ShieldCheck, Download, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { apiClient } from '../../lib/api/client';
 import type { GatePassData } from '../../lib/api/types';
+import { LoadingStatus } from '../../components/common/Loader';
 
 /* ── Field cell — module-level to avoid "component created during render" ── */
 const F = ({
@@ -80,8 +81,9 @@ export const GatePassPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] gap-2 text-text-secondary text-sm">
-        <Loader2 size={16} className="animate-spin" /> Loading gate pass…
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2 size={20} className="animate-spin text-[#ED642B]" />
+        <LoadingStatus messages={['Please wait while we retrieve the gate pass', 'Checking pass status', 'Almost there']} centered />
       </div>
     );
   }

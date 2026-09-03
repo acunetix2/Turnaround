@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.config import settings
 from app.db.session import engine
@@ -13,7 +14,7 @@ from app.db.base import Base
 # Import all models so SQLAlchemy registers them against Base metadata
 from app.db.models import (  # noqa: F401
     Company, User, Vehicle, Location, Trip, GPSEvent, DwellEvent, Insight,
-    DemurrageClaim, GatePass, Notification
+    DemurrageClaim, GatePass, Notification, NotificationDevice
 )
 from app.middleware.database import DatabaseMiddleware, QueryTimeoutMiddleware
 from app.routers import (
@@ -22,6 +23,7 @@ from app.routers import (
     demurrage, gate_passes, users, account, notifications, company
 )
 from app.tasks.expiry_sweep import start_expiry_sweep_loop
+from app.routers import auth
 
 # ── Structured Logging ──────────────────────────────────────────────────────
 logging.basicConfig(
@@ -51,12 +53,15 @@ QUIET_ROUTES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Turnaround API — connecting to Supabase PostgreSQL")
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database schema verified & connected successfully")
-    except Exception as e:
-        logger.error(f"DB startup error: {str(e)}")
+    if settings.ENVIRONMENT == "development":
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database schema verified & connected successfully")
+        except Exception as e:
+            logger.error(f"DB startup error: {str(e)}")
+    else:
+        logger.info("Skipping startup schema creation in production; use Alembic migrations")
 
     # Start background gate pass expiry sweep
     sweep_task = asyncio.create_task(start_expiry_sweep_loop())
@@ -150,6 +155,15 @@ app.add_middleware(
 
 
 # ── Global Exception Handler ────────────────────────────────────────────────
+@app.exception_handler(SQLAlchemyTimeoutError)
+async def database_timeout_handler(request: Request, exc: SQLAlchemyTimeoutError):
+    logger.error("Database timeout on path=%s: %s", request.url.path, exc)
+    return JSONResponse(
+        status_code=504,
+        content={"error": {"code": "DATABASE_TIMEOUT", "message": "The database took too long to respond. Please retry shortly."}},
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {str(exc)} on path={request.url.path}", exc_info=True)
@@ -178,6 +192,7 @@ app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(account.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(company.router, prefix=API_PREFIX)
+app.include_router(auth.router, prefix=API_PREFIX)
 
 
 @app.get("/", tags=["Root"], summary="API root redirect")

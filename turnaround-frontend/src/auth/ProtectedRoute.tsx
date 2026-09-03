@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 import type { UserRole } from '../lib/api/types';
+import { LoadingStatus } from '../components/common/Loader';
 
 interface ProtectedRouteProps {
   children: React.ReactElement;
@@ -12,7 +13,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   allowedRoles
 }) => {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, loadingAction } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -20,7 +21,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       <div className="flex h-screen w-screen items-center justify-center bg-bg-canvas text-text-secondary">
         <div className="flex flex-col items-center gap-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent"></div>
-          <span className="font-numeric text-sm">Authenticating fleet session...</span>
+          <LoadingStatus messages={
+            loadingAction === 'logging-out'
+              ? ['Logging you out securely', 'Closing your workspace session', 'Almost there']
+              : loadingAction === 'logging-in'
+                ? ['Logging you in securely', 'Preparing your workspace', 'Almost there']
+                : ['Please wait while we secure your session', 'Loading your workspace', 'Almost there']
+          } fullscreen />
         </div>
       </div>
     );

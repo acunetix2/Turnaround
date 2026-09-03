@@ -25,6 +25,7 @@ from app.deps import get_current_company, get_current_user
 from app.schemas.gate_pass import GatePassCreate, GatePassUpdate, GatePassResponse
 from app.schemas.common import PaginatedResponse
 from app.auth.rbac import require_role
+from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/gate-passes", tags=["Gate Passes"])
 
@@ -205,6 +206,13 @@ async def create_gate_pass(
     db.add(gate_pass)
     await db.commit()
     await db.refresh(gate_pass)
+    await notif_svc.gate_pass_issued(
+        db, company_id=company_id, pass_id=gate_pass.id,
+        pass_number=gate_pass.pass_number,
+        vehicle_reg=gate_pass.vehicle_reg,
+        terminal=gate_pass.terminal_name,
+    )
+    await db.commit()
     return _to_response(gate_pass, current_user)
 
 
@@ -217,12 +225,20 @@ async def update_gate_pass(
     _rbac: bool = Depends(WRITE_ROLES),
 ):
     gp = await _fetch_one(db, company_id, pass_id)
+    previous_status = gp.status
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(gp, key, value)
     gp.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(gp)
+    if "status" in update_data and gp.status != previous_status:
+        await notif_svc.gate_pass_status_changed(
+            db, company_id=company_id, pass_id=gp.id,
+            pass_number=gp.pass_number,
+            status=gp.status.value,
+        )
+        await db.commit()
     issuer = await _resolve_issuer(db, gp.issued_by)
     return _to_response(gp, issuer)
 
@@ -255,6 +271,11 @@ async def revoke_gate_pass(
     gp.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(gp)
+    await notif_svc.gate_pass_revoked(
+        db, company_id=company_id, pass_id=gp.id,
+        pass_number=gp.pass_number, vehicle_reg=gp.vehicle_reg,
+    )
+    await db.commit()
     issuer = await _resolve_issuer(db, gp.issued_by)
     return _to_response(gp, issuer)
 

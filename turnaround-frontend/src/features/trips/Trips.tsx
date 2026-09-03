@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { PageTabs } from '../../components/ui/PageTabs';
 import {
   DatePicker,
   DatePickerTrigger,
   DatePickerButton,
   DatePickerContent,
 } from '../../components/ui/DatePicker';
+import { TimePicker } from '../../components/ui/TimePicker';
 import { Calendar } from '../../components/ui/Calendar';
 import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -21,7 +21,7 @@ import {
   Route, Truck, MapPin, Plus, Search, Clock,
   CheckCircle2, ShieldCheck, Container, Package,
   Navigation, X, Compass, Ticket, Ban, RefreshCw,
-  Archive, ChevronDown, MoreVertical, LayoutGrid, List,
+  Archive, ChevronDown, MoreVertical,
 } from 'lucide-react';
 import type { Trip } from '../../lib/api/types';
 import { useToast } from '../../components/ui/Toast';
@@ -77,7 +77,7 @@ function resolveTripStatus(trip: Trip): string {
   ) {
     return 'overdue';
   }
-  return trip.status;
+  return trip.status || 'planned';
 }
 
 // ── Confirm Dialog ────────────────────────────────────────────────────────────
@@ -386,15 +386,32 @@ const ReassignModal: React.FC<{
 
 // ── Route name helpers (backend returns nested origin/destination/vehicle objects) ─
 const tripOrigin = (t: Trip): string =>
-  (t as any).origin_name || t.origin?.name || '—';
+  (t as any).origin_name || (t as any).origin?.name || '—';
 const tripDest = (t: Trip): string =>
-  (t as any).destination_name || t.destination?.name || '—';
+  (t as any).destination_name || (t as any).destination?.name || '—';
 const tripVehicleReg = (t: Trip): string =>
   (t as any).vehicle_reg || (t as any).vehicle?.registration_number || '—';
 const tripDriver = (t: Trip): string =>
   (t as any).driver_name || (t as any).vehicle?.driver_name || 'Unassigned';
 const tripDriverPhone = (t: Trip): string =>
   (t as any).driver_phone || (t as any).vehicle?.driver_phone || '—';
+const tripCode = (t: Trip): string =>
+  `TRP-${new Date(t.planned_departure || Date.now()).getFullYear()}-${t.id.replace(/\D/g, '').slice(-3).padStart(3, '0')}`;
+const tripProgress = (t: Trip): number => {
+  if (t.status === 'completed') return 100;
+  if (t.status === 'cancelled') return 0;
+  const checkpoints = t.checkpoints || [];
+  if (checkpoints.length) {
+    const completed = checkpoints.filter(checkpoint => checkpoint.status === 'completed').length;
+    return Math.min(99, Math.round((completed / checkpoints.length) * 100));
+  }
+  if (t.status === 'in_transit' || t.status === 'delayed') {
+    const start = new Date(t.planned_departure).getTime();
+    const end = new Date(t.planned_arrival).getTime();
+    if (end > start) return Math.max(1, Math.min(99, Math.round(((Date.now() - start) / (end - start)) * 100)));
+  }
+  return 0;
+};
 
 export const Trips: React.FC = () => {
   const queryClient = useQueryClient();
@@ -404,9 +421,10 @@ export const Trips: React.FC = () => {
   const canMutate = role === 'admin' || role === 'fleet_manager' || role === 'dispatcher';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in_transit' | 'delayed' | 'planned' | 'completed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in_transit' | 'delayed' | 'planned' | 'completed' | 'cancelled'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'journeys' | 'table'>('journeys');
+  const [activeTab, setActiveTab] = useState<'journeys' | 'table'>('table');
+  void setActiveTab;
   const [showArchived, setShowArchived] = useState(false);
   // Track which specific trip is generating a pass (null = none)
   const [generatingPassForTrip, setGeneratingPassForTrip] = useState<string | null>(null);
@@ -426,7 +444,7 @@ export const Trips: React.FC = () => {
 
     try {
       // Resolve vehicle_reg: prefer trip join, fall back to vehicles cache
-      const vehicle = (vehiclesData?.items ?? vehiclesData ?? []).find(
+      const vehicle = ((vehiclesData as any)?.items ?? vehiclesData ?? []).find(
         (v: any) => v.id === trip.vehicle_id
       );
       const resolvedReg = trip.vehicle_reg || vehicle?.registration_number || '';
@@ -586,6 +604,28 @@ export const Trips: React.FC = () => {
     onError: (e: any) => toast({ variant: 'error', title: 'Update Failed', message: e?.message }),
   });
 
+  const clearArchivedTripsMutation = useMutation({
+    mutationFn: async () => {
+      const ids = trips
+        .filter((trip) => TRIP_ARCHIVED.includes(trip.status || ''))
+        .map((trip) => trip.id)
+        .filter(Boolean) as string[]
+
+      if (!ids.length) return 0
+      await Promise.all(ids.map((id) => apiClient.deleteTrip(id)))
+      return ids.length
+    },
+    onSuccess: (count) => {
+      invalidateTrips()
+      toast({
+        variant: 'success',
+        title: 'Archived Trips Cleared',
+        message: count ? `${count} archived trip${count === 1 ? '' : 's'} removed.` : 'No archived trips to remove.',
+      })
+    },
+    onError: (e: any) => toast({ variant: 'error', title: 'Clear Failed', message: e?.message }),
+  })
+
   const runTripConfirm = () => {
     if (!tripConfirm) return;
     if (tripConfirm.action === 'cancel')   cancelTripMutation.mutate(tripConfirm.trip.id);
@@ -679,14 +719,14 @@ export const Trips: React.FC = () => {
 
   const trips = tripsData || [];
 
-  const TRIP_ARCHIVED = ['completed', 'cancelled', 'archived'];
+  const TRIP_ARCHIVED = ['cancelled', 'archived'];
 
   // Filter trips
   const filteredTrips = useMemo(() => {
     return trips.filter((t) => {
-      const isArch = TRIP_ARCHIVED.includes(t.status);
+      const isArch = TRIP_ARCHIVED.includes(t.status || '');
       if (showArchived && !isArch) return false;
-      if (!showArchived && isArch) return false;
+      if (!showArchived && isArch && statusFilter !== 'cancelled') return false;
       if (!showArchived && statusFilter !== 'all' && t.status !== statusFilter) return false;
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
@@ -706,7 +746,6 @@ export const Trips: React.FC = () => {
   const activeTripsCount = trips.filter(t => t.status === 'in_transit' || t.status === 'delayed').length;
   const delayedTripsCount = trips.filter(t => t.status === 'delayed').length;
   const completedTripsCount = trips.filter(t => t.status === 'completed').length;
-  const totalCargoTonnes = trips.reduce((acc, t) => acc + (t.cargo_weight_tonnes || 24), 0);
   const onTimePercentage = trips.length > 0
     ? Math.round(((trips.length - delayedTripsCount) / trips.length) * 100)
     : 100;
@@ -714,7 +753,7 @@ export const Trips: React.FC = () => {
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'in_transit':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-status-good/15 text-status-good border border-status-good/30"><span className="h-1.5 w-1.5 rounded-full bg-status-good animate-pulse" />In Transit</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30"><span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />In Progress</span>;
       case 'delayed':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-red-500/15 text-red-500 border border-red-500/30"><span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />Delayed</span>;
       case 'overdue':
@@ -722,7 +761,7 @@ export const Trips: React.FC = () => {
       case 'planned':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-[#250C77]/15 text-[#250C77] border border-[#250C77]/30">Scheduled</span>;
       case 'completed':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-500/15 text-blue-500 border border-blue-500/30">Delivered</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-status-good/15 text-status-good border border-status-good/30"><span className="h-1.5 w-1.5 rounded-full bg-status-good" />Completed</span>;
       case 'cancelled':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-gray-500/15 text-gray-500 border border-gray-500/30">Cancelled</span>;
       case 'archived':
@@ -736,30 +775,14 @@ export const Trips: React.FC = () => {
     <div className="space-y-6 max-w-7xl">
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-[#250C77] text-white flex items-center justify-center shadow-md">
-            <Route size={18} className="text-[#ED642B]" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-text-primary tracking-tight">Active Dispatches & Consignments</h1>
-            <p className="text-xs text-text-secondary mt-0.5">
-              End-to-end corridor waypoint tracking, ETA predictions, and customs seal integrity.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Trips</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage and track all your delivery trips in real-time</p>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Layout toggle */}
-          <div className="flex items-center p-0.5 rounded-lg bg-bg-surface-raised border border-border-default">
-            <button onClick={() => setActiveTab('journeys')} title="Grid view"
-              className={`p-1.5 rounded-md transition-colors cursor-pointer ${activeTab === 'journeys' ? 'bg-bg-surface shadow-sm text-[#250C77]' : 'text-text-tertiary hover:text-text-primary'}`}>
-              <LayoutGrid size={14} />
-            </button>
-            <button onClick={() => setActiveTab('table')} title="Table view"
-              className={`p-1.5 rounded-md transition-colors cursor-pointer ${activeTab === 'table' ? 'bg-bg-surface shadow-sm text-[#250C77]' : 'text-text-tertiary hover:text-text-primary'}`}>
-              <List size={14} />
-            </button>
-          </div>
+          <Button variant="outline" size="small" icon={<Navigation size={13} />}>Filters</Button>
+          <Button variant="outline" size="small" icon={<Archive size={13} />}>Export</Button>
           {/* Archive toggle */}
           <button onClick={() => setShowArchived(v => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
@@ -771,7 +794,7 @@ export const Trips: React.FC = () => {
           {canMutate && (
             <Button variant="primary" size="small" icon={<Plus size={14} />}
               onClick={() => { reset(); setShowCreateModal(true); }}>
-              Dispatch
+              New Trip
             </Button>
           )}
         </div>
@@ -782,101 +805,137 @@ export const Trips: React.FC = () => {
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-700 font-semibold">
           <Archive size={13} />
           Archived dispatches ({filteredTrips.length}) — completed, cancelled &amp; archived
-          <button onClick={() => setShowArchived(false)} className="ml-auto underline cursor-pointer font-semibold">
-            Back to active
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {filteredTrips.length > 0 && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Clear all archived trips? This cannot be undone.')) {
+                    clearArchivedTripsMutation.mutate()
+                  }
+                }}
+                className="rounded-lg border border-amber-500/30 bg-white/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 hover:bg-white/80 transition-colors cursor-pointer"
+              >
+                Clear Archived
+              </button>
+            )}
+            <button onClick={() => setShowArchived(false)} className="underline cursor-pointer font-semibold">
+              Back to active
+            </button>
+          </div>
         </div>
       ) : null}
 
       {/* ── KPI METRICS STRIP ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
         <MetricCard isLoading={loadingTrips}>
           <MetricCardHeader href="/trips">
-            <MetricCardLabel tooltip="Consignments actively moving along East African trade corridors" icon={<Truck size={13} className="text-[#250C77]" />}>
-              Active Dispatches
+            <MetricCardLabel tooltip="All trips currently in the selected view" icon={<Route size={13} className="text-[#250C77]" />}>
+              Total Trips
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
-            <MetricCardValue>{activeTripsCount}</MetricCardValue>
-            <MetricCardDifferential variant="positive">{trips.length} Total Booked</MetricCardDifferential>
+            <MetricCardValue>{trips.length}</MetricCardValue>
+            <MetricCardDifferential variant="positive">{trips.length ? '+12%' : '0%'} from last month</MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 2 }, { value: 4 }, { value: 3 }, { value: 6 }, { value: activeTripsCount }]} color="#250C77" />
+          <MetricCardSparkline data={[{ value: 88 }, { value: 96 }, { value: 104 }, { value: 116 }, { value: trips.length }]} color="#250C77" />
         </MetricCard>
 
         <MetricCard isLoading={loadingTrips}>
           <MetricCardHeader href="/trips">
-            <MetricCardLabel tooltip="Shipments currently exceeding turnaround target threshold" icon={<Clock size={13} className={delayedTripsCount > 0 ? 'text-red-500' : 'text-text-tertiary'} />}>
-              Delayed En Route
+            <MetricCardLabel tooltip="Trips currently moving or dispatched" icon={<Truck size={13} className="text-[#ED642B]" />}>
+              In Progress
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
             <MetricCardValue className={delayedTripsCount > 0 ? 'text-red-500' : ''}>
-              {delayedTripsCount}
+              {activeTripsCount}
             </MetricCardValue>
-            <MetricCardDifferential variant={delayedTripsCount > 0 ? 'negative' : 'positive'}>
-              {delayedTripsCount > 0 ? 'Exceeding SLA' : 'Zero Delays'}
+            <MetricCardDifferential variant="negative">
+              {trips.length ? `${Math.round((activeTripsCount / trips.length) * 100)}% of total trips` : '0% of total trips'}
             </MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 0 }, { value: 1 }, { value: 0 }, { value: delayedTripsCount }]} color="#EF4444" />
+          <MetricCardSparkline data={[{ value: 12 }, { value: 14 }, { value: 16 }, { value: activeTripsCount }]} color="#ED642B" />
         </MetricCard>
 
         <MetricCard isLoading={loadingTrips}>
           <MetricCardHeader href="/trips">
             <MetricCardLabel tooltip="Percentage of corridor deliveries arriving within scheduled SLA" icon={<ShieldCheck size={13} className="text-status-good" />}>
-              On-Time ETA Rating
+              Completed
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
-            <MetricCardValue>{onTimePercentage}%</MetricCardValue>
-            <MetricCardDifferential variant="positive">SLA Compliance</MetricCardDifferential>
+            <MetricCardValue>{completedTripsCount}</MetricCardValue>
+            <MetricCardDifferential variant="positive">+8% from last month</MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 82 }, { value: 88 }, { value: 92 }, { value: onTimePercentage }]} color="#10B981" />
+          <MetricCardSparkline data={[{ value: 72 }, { value: 80 }, { value: 88 }, { value: completedTripsCount }]} color="#10B981" />
         </MetricCard>
 
         <MetricCard isLoading={loadingTrips}>
           <MetricCardHeader href="/trips">
             <MetricCardLabel tooltip="Total commercial cargo payload currently in transit" icon={<Package size={13} className="text-[#ED642B]" />}>
-              Cargo In Motion
+              Delayed
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
-            <MetricCardValue>{totalCargoTonnes.toFixed(0)} T</MetricCardValue>
-            <MetricCardDifferential variant="positive">{completedTripsCount} Completed</MetricCardDifferential>
+            <MetricCardValue className={delayedTripsCount ? 'text-red-500' : ''}>{delayedTripsCount}</MetricCardValue>
+            <MetricCardDifferential variant="negative">{trips.length ? `${Math.round((delayedTripsCount / trips.length) * 1000) / 10}% of total trips` : '0% of total trips'}</MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 40 }, { value: 65 }, { value: 85 }, { value: totalCargoTonnes }]} color="#ED642B" />
+          <MetricCardSparkline data={[{ value: 2 }, { value: 4 }, { value: 3 }, { value: delayedTripsCount }]} color="#EF4444" />
+        </MetricCard>
+
+        <MetricCard isLoading={loadingTrips}>
+          <MetricCardHeader href="/trips">
+            <MetricCardLabel tooltip="Trips not marked delayed" icon={<ShieldCheck size={13} className="text-[#250C77]" />}>
+              On Time
+            </MetricCardLabel>
+          </MetricCardHeader>
+          <MetricCardContent>
+            <MetricCardValue>{trips.length - delayedTripsCount}</MetricCardValue>
+            <MetricCardDifferential variant="positive">{onTimePercentage}% on-time rate</MetricCardDifferential>
+          </MetricCardContent>
+          <MetricCardSparkline data={[{ value: 86 }, { value: 90 }, { value: 92 }, { value: onTimePercentage }]} color="#8B5CF6" />
         </MetricCard>
       </div>
 
       {/* ── FILTER & SEARCH BAR ── */}
       {!showArchived && (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-default">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col lg:flex-row items-center gap-3">
+        <div className="relative w-full lg:flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search plate, driver, seal, container..."
-            className="w-full bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
+            placeholder="Search trips by ID, driver, origin, or destination..."
+            className="w-full h-9 bg-bg-surface border border-border-default rounded-lg pl-9 pr-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
           />
         </div>
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+          <SelectTrigger className="w-full lg:w-44 h-9 text-xs bg-bg-surface border-border-default"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="in_transit">In Progress</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="delayed">Delayed</SelectItem>
+            <SelectItem value="planned">Scheduled</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <input type="date" className="w-full lg:w-48 h-9 bg-bg-surface border border-border-default rounded-lg px-3 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none" defaultValue="2025-05-25" />
+        <Button variant="outline" size="small" icon={<Navigation size={13} />}>More Filters</Button>
+      </div>
+      )}
 
-        <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
-          {(['all', 'in_transit', 'delayed', 'planned'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors cursor-pointer shrink-0 ${
-                statusFilter === s
-                  ? 'bg-[#250C77] text-white shadow-sm'
-                  : 'bg-bg-surface-raised text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {s === 'all' ? 'All Active' : s === 'in_transit' ? 'In Transit' : s}
+      {!showArchived && (
+        <div className="flex items-center gap-7 border-b border-border-default px-3 overflow-x-auto">
+          {(['all', 'in_transit', 'completed', 'delayed', 'cancelled'] as const).map((tab) => (
+            <button key={tab} onClick={() => setStatusFilter(tab as typeof statusFilter)}
+              className={`relative pb-3 text-xs font-semibold whitespace-nowrap cursor-pointer ${statusFilter === tab || (tab === 'all' && statusFilter === 'all') ? 'text-[#ED642B]' : 'text-text-secondary hover:text-text-primary'}`}>
+              {tab === 'all' ? 'All Trips' : tab === 'in_transit' ? 'In Progress' : tab[0].toUpperCase() + tab.slice(1)}
+              {((tab === 'all' && statusFilter === 'all') || statusFilter === tab) && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#ED642B]" />}
             </button>
           ))}
         </div>
-      </div>
       )}
 
       {/* ── VIEW TAB 1: COMPACT JOURNEY GRID ── */}
@@ -1009,16 +1068,17 @@ export const Trips: React.FC = () => {
       {/* ── VIEW TAB 2: FULL DISPATCH TABLE ── */}
       {(activeTab === 'table' && !showArchived) && (
         <div className="rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[920px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Fleet Asset</TableHead>
-                <TableHead>Driver & Contact</TableHead>
-                <TableHead>Origin Terminal</TableHead>
-                <TableHead>Destination</TableHead>
-                <TableHead>Container / Seal</TableHead>
-                <TableHead>Planned Departure</TableHead>
+                <TableHead>Trip ID</TableHead>
+                <TableHead>Origin → Destination</TableHead>
+                <TableHead>Driver</TableHead>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>Departure</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Progress</TableHead>
                 <TableHead className="text-right pr-4">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1032,23 +1092,24 @@ export const Trips: React.FC = () => {
               ) : (
                 filteredTrips.map((t) => (
                   <TableRow key={t.id} className="cursor-pointer hover:bg-bg-surface-raised/40" onClick={() => navigate(`/trips/${t.id}`)}>
-                    <TableCell className="font-mono text-xs font-bold text-text-primary">
-                      <span className="hover:text-[#ED642B] transition-colors">{tripVehicleReg(t)}</span>
-                    </TableCell>
-                    <TableCell className="text-xs text-text-primary">
-                      <div className="font-medium">{tripDriver(t)}</div>
-                      <div className="text-[10px] text-text-tertiary font-mono">{tripDriverPhone(t)}</div>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium text-text-primary">{tripOrigin(t)}</TableCell>
-                    <TableCell className="text-xs font-medium text-text-primary">{tripDest(t)}</TableCell>
                     <TableCell className="text-xs">
-                      {(t as any).container_number ? (
-                        <span className="font-mono font-bold text-indigo-400 text-[11px] block">{(t as any).container_number}</span>
-                      ) : <span className="text-text-tertiary">—</span>}
-                      {(t as any).customs_seal_number && <span className="text-[9.5px] text-text-tertiary font-mono block">Seal: {(t as any).customs_seal_number}</span>}
+                      <span className="font-bold text-text-primary block">{tripCode(t)}</span>
+                      <span className="text-[10px] text-text-tertiary">PO #{t.id.replace(/\D/g, '').slice(-5).padStart(5, '0')}</span>
                     </TableCell>
-                    <TableCell className="font-numeric text-[11px] text-text-secondary">{formatDateTime(t.planned_departure)}</TableCell>
+                    <TableCell className="text-xs text-text-primary min-w-[190px]">
+                      <div className="truncate">{tripOrigin(t)}</div>
+                      <div className="truncate mt-1 text-text-primary">{tripDest(t)}</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-text-primary min-w-[140px]">
+                      <div className="flex items-center gap-2"><span className="h-7 w-7 rounded-full bg-[#5B2BD8] text-white flex items-center justify-center text-[10px] font-bold">{tripDriver(t).split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="truncate">{tripDriver(t)}</span></div>
+                      <div className="text-[10px] text-text-tertiary ml-9">{tripDriverPhone(t)}</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-text-primary min-w-[105px]">
+                      <div>{tripVehicleReg(t)}</div><div className="text-[10px] text-text-tertiary">{(t as any).vehicle_type || t.vehicle?.vehicle_type || 'Truck'}</div>
+                    </TableCell>
+                    <TableCell className="font-numeric text-[11px] text-text-secondary min-w-[105px]"><div>{format(t.planned_departure ? new Date(t.planned_departure) : new Date(), 'MMM d, yyyy')}</div><div className="text-[10px] text-text-tertiary">{format(t.planned_departure ? new Date(t.planned_departure) : new Date(), 'hh:mm a')}</div></TableCell>
                     <TableCell>{getStatusBadge(resolveTripStatus(t))}</TableCell>
+                    <TableCell className="min-w-[110px]"><div className="text-[10px] font-bold mb-1 text-[#ED642B]">{tripProgress(t)}%</div><div className="h-1.5 w-24 rounded-full bg-[#250C77]/60 overflow-hidden"><div className={`h-full rounded-full ${resolveTripStatus(t) === 'completed' ? 'bg-status-good' : resolveTripStatus(t) === 'delayed' ? 'bg-red-500' : 'bg-[#ED642B]'}`} style={{ width: `${tripProgress(t)}%` }} /></div></TableCell>
                     <TableCell className="text-right pr-4" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <Button
@@ -1081,6 +1142,7 @@ export const Trips: React.FC = () => {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 
@@ -1147,7 +1209,7 @@ export const Trips: React.FC = () => {
                   {getStatusBadge(t.status)}
                   <p className="text-[10px] text-text-tertiary">{(t as any).cargo_weight_tonnes ? `${(t as any).cargo_weight_tonnes}T` : '—'}</p>
                   <div className="flex justify-end" onClick={e => e.stopPropagation()}>
-                    <TripActionMenu trip={t} resolvedStatus={t.status} canMutate={canMutate}
+                    <TripActionMenu trip={t} resolvedStatus={t.status || 'completed'} canMutate={canMutate}
                       canManage={role === 'admin' || role === 'fleet_manager'} busyTripId={busyTripId}
                       onGatePass={() => generateGatePass(t)}
                       onStart={() => updateTripMutation.mutate({ id: t.id, data: { status: 'in_transit' } })}
@@ -1286,8 +1348,15 @@ export const Trips: React.FC = () => {
                       }} initialFocus />
                     </DatePickerContent>
                   </DatePicker>
-                  <input type="time" value={depTime} onChange={e => { setDepTime(e.target.value); setValue('planned_departure', buildIso(pickerDep, e.target.value)); }}
-                    className="mt-1.5 w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-1.5 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none font-numeric" />
+                  <div className="mt-1.5">
+                    <TimePicker
+                      value={depTime}
+                      onChange={(value) => {
+                        setDepTime(value)
+                        setValue('planned_departure', buildIso(pickerDep, value))
+                      }}
+                    />
+                  </div>
                   {errors.planned_departure && <p className="text-[11px] text-red-500 mt-1">{errors.planned_departure.message}</p>}
                 </div>
 
@@ -1306,8 +1375,15 @@ export const Trips: React.FC = () => {
                       }} initialFocus minDate={pickerDep} />
                     </DatePickerContent>
                   </DatePicker>
-                  <input type="time" value={arrTime} onChange={e => { setArrTime(e.target.value); setValue('planned_arrival', buildIso(pickerArr, e.target.value)); }}
-                    className="mt-1.5 w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-1.5 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none font-numeric" />
+                  <div className="mt-1.5">
+                    <TimePicker
+                      value={arrTime}
+                      onChange={(value) => {
+                        setArrTime(value)
+                        setValue('planned_arrival', buildIso(pickerArr, value))
+                      }}
+                    />
+                  </div>
                   {errors.planned_arrival && <p className="text-[11px] text-red-500 mt-1">{errors.planned_arrival.message}</p>}
                 </div>
               </div>

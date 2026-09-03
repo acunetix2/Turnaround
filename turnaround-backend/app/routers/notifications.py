@@ -9,11 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, update
 
 from app.db.session import get_db
-from app.db.models.notification import Notification, NotificationSeverity, NotificationCategory
+from app.db.models.notification import Notification, NotificationDevice, NotificationSeverity, NotificationCategory
+import uuid
 from app.db.models.user import User
 from app.deps import get_current_company, get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+class DeviceTokenRequest(BaseModel):
+    token: str
 
 
 class NotificationResponse(BaseModel):
@@ -36,6 +41,24 @@ class NotificationListResponse(BaseModel):
     items: List[NotificationResponse]
     total: int
     unread: int
+
+
+@router.post("/devices", status_code=status.HTTP_204_NO_CONTENT, summary="Register a push notification device")
+async def register_device(
+    payload: DeviceTokenRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    token = payload.token.strip()
+    if not token or len(token) > 512:
+        raise HTTPException(status_code=422, detail="Invalid device token")
+    result = await db.execute(select(NotificationDevice).where(
+        NotificationDevice.user_id == current_user.id,
+        NotificationDevice.token == token,
+    ))
+    if not result.scalar_one_or_none():
+        db.add(NotificationDevice(id=str(uuid.uuid4()), user_id=current_user.id, token=token))
+        await db.commit()
 
 
 @router.get("", response_model=NotificationListResponse, summary="List notifications")
@@ -64,6 +87,21 @@ async def list_notifications(
             )
         )
     )
+
+    if not current_user.push_notifications:
+        return NotificationListResponse(items=[], total=0, unread=0)
+    allowed_categories = [
+        category for category, enabled in {
+            NotificationCategory.DELAY: current_user.notify_on_delay,
+            NotificationCategory.TRIP: current_user.notify_on_arrival,
+            NotificationCategory.GATE_PASS: current_user.notify_on_gate_pass,
+            NotificationCategory.DEMURRAGE: current_user.notify_on_demurrage,
+        }.items() if enabled
+    ]
+    base_q = base_q.where(or_(
+        Notification.category.in_(allowed_categories),
+        Notification.category.in_([NotificationCategory.USER, NotificationCategory.SYSTEM]),
+    ))
 
     if unread_only:
         base_q = base_q.where(Notification.read == False)  # noqa: E712

@@ -24,6 +24,11 @@ class CompanyConfigResponse(BaseModel):
     registration_number: Optional[str] = None
     industry: Optional[str] = None
     logo_url: Optional[str] = None
+    welcome_media_url: Optional[str] = None
+    welcome_media_type: Optional[str] = None
+    welcome_motto: Optional[str] = None
+    privacy_policy: Optional[str] = None
+    terms_of_service: Optional[str] = None
     website: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -52,6 +57,11 @@ class CompanyConfigUpdate(BaseModel):
     registration_number: Optional[str] = None
     industry: Optional[str] = None
     logo_url: Optional[str] = None
+    welcome_media_url: Optional[str] = None
+    welcome_media_type: Optional[str] = None
+    welcome_motto: Optional[str] = None
+    privacy_policy: Optional[str] = None
+    terms_of_service: Optional[str] = None
     website: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -73,6 +83,31 @@ class CompanyConfigUpdate(BaseModel):
     integrations: Optional[dict] = None
 
     model_config = ConfigDict(extra='ignore')
+
+
+class PublicLegalResponse(BaseModel):
+    company_id: str
+    company_name: str
+    privacy_policy: Optional[str] = None
+    terms_of_service: Optional[str] = None
+
+
+@router.get("/public-legal", response_model=PublicLegalResponse, summary="Get published public legal content")
+async def get_public_legal(
+    company_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Return only content intentionally published as public legal information."""
+    result = await db.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return PublicLegalResponse(
+        company_id=company.id,
+        company_name=company.name,
+        privacy_policy=company.privacy_policy,
+        terms_of_service=company.terms_of_service,
+    )
 
 
 @router.get("", response_model=CompanyConfigResponse, summary="Get company configuration")

@@ -11,6 +11,17 @@ export type LocationType =
 
 export type VehicleStatus = 'active' | 'idle' | 'maintenance' | 'in_transit' | 'delayed';
 
+export const ASSET_TYPE_OPTIONS = [
+  { value: 'truck', label: 'Truck' },
+  { value: 'trailer', label: 'Trailer' },
+  { value: 'container', label: 'Container' },
+  { value: 'minitruck', label: 'Mini Truck' },
+  { value: 'ship', label: 'Ship' },
+  { value: 'tanker', label: 'Tanker' },
+  { value: 'chassis', label: 'Container Chassis' },
+  { value: 'tractor', label: 'Tractor Unit' },
+] as const;
+
 export type SeverityType = 'low' | 'medium' | 'high';
 
 export interface Company {
@@ -23,6 +34,9 @@ export interface CompanyConfig extends Company {
   registration_number?: string;
   industry?: string;
   logo_url?: string;
+  welcome_media_url?: string;
+  welcome_media_type?: 'image' | 'video';
+  welcome_motto?: string;
   website?: string;
   phone?: string;
   email?: string;
@@ -135,6 +149,7 @@ export interface Trip {
   cargo_type?: string;
   cargo_weight_tonnes?: number;
   checkpoints?: TripCheckpoint[];
+  vehicle?: Vehicle;
   // Denormalised display fields (derived from joined origin/destination on backend)
   vehicle_reg?: string;
   vehicle_type?: string;

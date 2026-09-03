@@ -33,6 +33,7 @@ export const Signup: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(false);
 
   const [form, setForm] = useState({
     firstName: '',
@@ -45,28 +46,34 @@ export const Signup: React.FC = () => {
     confirmPassword: '',
   });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'firstName' | 'lastName' | 'email' | 'company' | 'password' | 'confirmPassword', string>>>({});
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
 
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.firstName || !form.lastName || !form.email || !form.company) {
-      setError('Please fill in all required fields.');
-      return;
-    }
+    const requiredFields = ['firstName', 'lastName', 'email', 'company'] as const;
+    const nextErrors = Object.fromEntries(requiredFields.filter(field => !form[field].trim()).map(field => [field, 'This field is required.']));
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     setError('');
     setStep(2);
   };
 
   const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
-    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
+    const nextErrors: typeof fieldErrors = {};
+    if (!form.password) nextErrors.password = 'Password is required.';
+    else if (form.password.length < 8) nextErrors.password = 'Use at least 8 characters.';
+    if (!form.confirmPassword) nextErrors.confirmPassword = 'Please confirm your password.';
+    else if (form.password !== form.confirmPassword) nextErrors.confirmPassword = 'Passwords do not match.';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     setError('');
     setSubmitting(true);
     try {
-      await signup({
+      const result = await signup({
         email: form.email,
         password: form.password,
         name: `${form.firstName} ${form.lastName}`.trim(),
@@ -74,6 +81,7 @@ export const Signup: React.FC = () => {
         role: form.role as UserRole,
         fleetSize: form.fleetSize
       });
+      setRequiresEmailConfirmation(Boolean(result.requires_email_confirmation));
       setDone(true);
     } catch (err: any) {
       setError(err?.message || 'Failed to sign up. Please try again.');
@@ -162,15 +170,17 @@ export const Signup: React.FC = () => {
               <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-status-good/20 text-status-good">
                 <CheckCircle size={28} />
               </div>
-              <h2 className="text-xl font-extrabold text-white">Account Created Successfully</h2>
+              <h2 className="text-xl font-extrabold text-white">{requiresEmailConfirmation ? 'Confirm your email' : 'Account Created Successfully'}</h2>
               <p className="text-xs text-text-secondary leading-relaxed">
-                Welcome to Turnaround. Your organisation profile has been created with demo vehicles and corridor locations ready to explore.
+                {requiresEmailConfirmation
+                  ? `We sent a confirmation link to ${form.email}. Confirm your email, then return here to sign in.`
+                  : 'Welcome to Turnaround. Your organisation profile is ready to explore.'}
               </p>
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate(requiresEmailConfirmation ? '/login' : '/dashboard')}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 transition-all cursor-pointer"
               >
-                Go to Dashboard
+                {requiresEmailConfirmation ? 'Back to Sign In' : 'Go to Dashboard'}
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -225,7 +235,7 @@ export const Signup: React.FC = () => {
 
               {/* ── STEP 1: Personal & Fleet Info ── */}
               {step === 1 && (
-                <form onSubmit={handleStep1} className="space-y-3.5">
+                <form onSubmit={handleStep1} noValidate className="space-y-3.5">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelCls}>First name</label>
@@ -237,6 +247,7 @@ export const Signup: React.FC = () => {
                         placeholder="James"
                         className={inputCls}
                       />
+                      {fieldErrors.firstName && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.firstName}</p>}
                     </div>
                     <div>
                       <label className={labelCls}>Last name</label>
@@ -248,6 +259,7 @@ export const Signup: React.FC = () => {
                         placeholder="Mwangi"
                         className={inputCls}
                       />
+                      {fieldErrors.lastName && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.lastName}</p>}
                     </div>
                   </div>
 
@@ -261,6 +273,7 @@ export const Signup: React.FC = () => {
                       placeholder="james.mwangi@haulage.co.ke"
                       className={inputCls}
                     />
+                    {fieldErrors.email && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.email}</p>}
                   </div>
 
                   <div>
@@ -273,6 +286,7 @@ export const Signup: React.FC = () => {
                       placeholder="East Africa Haulage Ltd"
                       className={inputCls}
                     />
+                    {fieldErrors.company && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.company}</p>}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -306,7 +320,7 @@ export const Signup: React.FC = () => {
 
               {/* ── STEP 2: Password & Submit ── */}
               {step === 2 && (
-                <form onSubmit={handleStep2} className="space-y-4">
+                <form onSubmit={handleStep2} noValidate className="space-y-4">
                   <div>
                     <label className={labelCls}>Create a secure password</label>
                     <input
@@ -317,6 +331,7 @@ export const Signup: React.FC = () => {
                       placeholder="At least 8 characters"
                       className={inputCls}
                     />
+                    {fieldErrors.password && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.password}</p>}
                     {/* Strength indicator */}
                     <div className="mt-2 flex gap-1">
                       {[8, 12, 16].map((n) => (
@@ -341,12 +356,13 @@ export const Signup: React.FC = () => {
                       placeholder="Repeat your password"
                       className={inputCls}
                     />
+                    {fieldErrors.confirmPassword && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.confirmPassword}</p>}
                   </div>
 
                   <p className="text-[11px] text-text-tertiary">
                     By registering, you agree to Turnaround's{' '}
-                    <a href="#" className="text-[#ED642B] hover:underline">Terms of Service</a> and{' '}
-                    <a href="#" className="text-[#ED642B] hover:underline">Privacy Policy</a>.
+                    <Link to="/terms" className="text-[#ED642B] hover:underline">Terms of Service</Link> and{' '}
+                    <Link to="/privacy" className="text-[#ED642B] hover:underline">Privacy Policy</Link>.
                   </p>
 
                   <div className="flex gap-2.5 pt-1">

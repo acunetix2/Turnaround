@@ -1,4 +1,5 @@
 from typing import Annotated, Optional
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -19,6 +20,7 @@ from app.auth.rbac import require_role
 from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/demurrage", tags=["Demurrage"])
+logger = logging.getLogger(__name__)
 
 WRITE_ROLES = require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER)
 
@@ -173,6 +175,7 @@ async def update_claim(
     if not claim:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Claim not found"}})
 
+    previous_status = claim.status
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(claim, key, value)
@@ -180,6 +183,16 @@ async def update_claim(
 
     await db.commit()
     await db.refresh(claim)
+    if "status" in update_data and claim.status != previous_status:
+        try:
+            await notif_svc.demurrage_status_changed(
+                db, company_id=company_id, claim_id=claim.id,
+                claim_number=claim.claim_number,
+                status=claim.status.value,
+            )
+            await db.commit()
+        except Exception:
+            logger.exception("Demurrage status notification failed")
     return claim
 
 

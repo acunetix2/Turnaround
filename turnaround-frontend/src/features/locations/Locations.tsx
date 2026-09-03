@@ -27,6 +27,7 @@ import {
 import type { Location } from '../../lib/api/types'
 import { Select } from '../../components/ui/Select'
 import { useToast } from '../../components/ui/Toast'
+import { LoadingStatus } from '../../components/common/Loader'
 import { Button } from '../../components/ui/Button'
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/Alert'
 import { EmptyStatePresentational } from '../../components/ui/EmptyStatePresentational'
@@ -99,6 +100,8 @@ export const Locations: React.FC = () => {
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingLocation, setEditingLocation] = useState<Location | null>(null)
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+  const [stationDetailTab, setStationDetailTab] = useState<'overview' | 'capacity' | 'operations' | 'performance' | 'contacts'>('overview')
   const [submitError, setSubmitError] = useState('')
 
   const { data: locations, isLoading: loadingLocs, isError: locsError, refetch } = useQuery({
@@ -252,7 +255,9 @@ export const Locations: React.FC = () => {
 
   if (loadingLocs) {
     return (
-      <div className="space-y-4 animate-pulse">
+      <div className="space-y-4">
+        <LoadingStatus messages={['Please wait while we load your facilities', 'Checking geofence coverage', 'Almost there', 'Preparing location overview']} centered />
+        <div className="space-y-4 animate-pulse">
         <div className="h-10 w-full bg-bg-surface-raised rounded-xl" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -260,6 +265,7 @@ export const Locations: React.FC = () => {
           ))}
         </div>
         <div className="h-96 w-full bg-bg-surface-raised rounded-2xl" />
+        </div>
       </div>
     )
   }
@@ -291,25 +297,18 @@ export const Locations: React.FC = () => {
   const avgSla = Math.round(
     locationList.reduce((acc, l) => acc + (l.expected_dwell_minutes || 0), 0) / (totalLocs || 1)
   )
-  const totalFinancialLoss = (locationStats || []).reduce(
-    (acc, s) => acc + (s.financial_impact || 0),
-    0
-  )
   const highDelayLocs = (locationStats || []).filter(
     (s) => (s.avg_excess_delay_minutes || 0) > 45
   ).length
+  const selectedLocation = filteredLocations.find(location => location.id === selectedLocationId) || filteredLocations[0]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 max-w-7xl">
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-lg sm:text-xl font-bold text-text-primary tracking-tight">
-            Corridor Geofences & Dwell SLAs
-          </h1>
-          <p className="text-xs text-text-secondary mt-0.5">
-            Configure terminal geofence perimeters, monitor SLA benchmarks, and eliminate facility dwell bottlenecks.
-          </p>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Freight Stations</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage freight stations, terminals and transfer hubs across your network</p>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -345,7 +344,7 @@ export const Locations: React.FC = () => {
               icon={<Plus size={14} />}
               onClick={handleOpenAdd}
             >
-              Register Geofence
+              Add Freight Station
             </Button>
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-text-tertiary bg-bg-surface-raised border border-border-default px-3 py-1.5 rounded-xl">
@@ -357,20 +356,20 @@ export const Locations: React.FC = () => {
       </div>
 
       {/* ── SUMMARY KPIS (SUPABASE METRIC CARDS) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <MetricCard>
           <MetricCardHeader href="/locations">
             <MetricCardLabel
               tooltip="Total geofenced terminals, border points, and client facilities"
               icon={<Building2 size={13} className="text-[#250C77]" />}
             >
-              Monitored Facilities
+              Total Stations
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
             <MetricCardValue>{totalLocs}</MetricCardValue>
             <MetricCardDifferential variant="positive">
-              active hubs
+              {totalLocs} monitored
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
@@ -385,13 +384,13 @@ export const Locations: React.FC = () => {
               tooltip="Standard target turnaround duration across corridor network"
               icon={<Clock size={13} className="text-[#ED642B]" />}
             >
-              Average SLA Target
+              Active Stations
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
             <MetricCardValue>{formatMinutes(avgSla)}</MetricCardValue>
             <MetricCardDifferential variant="positive">
-              baseline SLA
+              {totalLocs} operational
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
@@ -406,15 +405,15 @@ export const Locations: React.FC = () => {
               tooltip="Hubs where historical vehicle dwell exceeds SLA by >45 minutes"
               icon={<AlertTriangle size={13} className={highDelayLocs > 0 ? 'text-red-500' : 'text-emerald-500'} />}
             >
-              Congestion Hotspots
+              Total Capacity
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
             <MetricCardValue className={highDelayLocs > 0 ? 'text-red-500' : ''}>
-              {highDelayLocs}
+              —
             </MetricCardValue>
             <MetricCardDifferential variant={highDelayLocs > 0 ? 'negative' : 'positive'}>
-              {highDelayLocs > 0 ? 'exceeding >45m' : 'optimal flow'}
+              Not configured
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
@@ -429,15 +428,15 @@ export const Locations: React.FC = () => {
               tooltip="Cumulative financial capital leaked due to excess turnaround delays at stops"
               icon={<DollarSign size={13} className="text-amber-500" />}
             >
-              Estimated Dwell Loss
+              Utilization Rate
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
             <MetricCardValue className="text-amber-500">
-              {formatCurrency(totalFinancialLoss)}
+              {totalLocs ? `${Math.max(0, Math.round((1 - highDelayLocs / totalLocs) * 1000) / 10)}%` : '—'}
             </MetricCardValue>
             <MetricCardDifferential variant="negative">
-              unrecovered capital
+              SLA performance
             </MetricCardDifferential>
           </MetricCardContent>
           <MetricCardSparkline
@@ -445,6 +444,8 @@ export const Locations: React.FC = () => {
             color="#F59E0B"
           />
         </MetricCard>
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<Clock size={13} className="text-status-good" />}>Avg Dwell Time</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>{formatMinutes(avgSla)}</MetricCardValue><MetricCardDifferential variant="positive">station benchmark</MetricCardDifferential></MetricCardContent></MetricCard>
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<DollarSign size={13} className="text-[#ED642B]" />}>Monthly Revenue</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>—</MetricCardValue><MetricCardDifferential variant="neutral">Not tracked</MetricCardDifferential></MetricCardContent></MetricCard>
       </div>
 
       {/* ── DIAGNOSTIC ALERT ── */}
@@ -494,6 +495,7 @@ export const Locations: React.FC = () => {
 
       {/* ── TABLE OR GRID VIEW ── */}
       {viewMode === 'table' ? (
+        <div className="grid grid-cols-1 gap-4 items-start">
         <div className="rounded-2xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
           <Table>
             <TableHeader>
@@ -536,7 +538,7 @@ export const Locations: React.FC = () => {
                   const visits = stats?.total_visits || 0
 
                   return (
-                    <TableRow key={loc.id} className="hover:bg-bg-surface-raised/40 transition-colors">
+                    <TableRow key={loc.id} onClick={() => setSelectedLocationId(loc.id)} className={`hover:bg-bg-surface-raised/40 transition-colors cursor-pointer ${selectedLocation?.id === loc.id ? 'bg-[#250C77]/10' : ''}`}>
                       <TableCell className="pl-4 font-semibold text-text-primary">
                         <Link
                           to={`/locations/${loc.id}`}
@@ -612,6 +614,14 @@ export const Locations: React.FC = () => {
               )}
             </TableBody>
           </Table>
+        </div>
+        {selectedLocation && <div className="rounded-2xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
+          <div className="px-4 py-4 border-b border-border-default flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h2 className="text-sm font-bold text-text-primary">{selectedLocation.name}</h2><span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-500">Monitored</span></div><p className="text-[11px] text-text-secondary mt-1">{LOCATION_TYPE_LABELS[selectedLocation.location_type] || selectedLocation.location_type} · {selectedLocation.id.slice(0, 8).toUpperCase()}</p></div><Link to={`/locations/${selectedLocation.id}`}><Button size="tiny" variant="outline" icon={<Edit2 size={11} />}>Edit Station</Button></Link></div>
+          <div className="flex items-center gap-5 border-b border-border-default px-4 py-3 text-[11px] text-text-secondary">{(['overview', 'capacity', 'operations', 'performance', 'contacts'] as const).map(tab => <button key={tab} onClick={() => setStationDetailTab(tab)} className={`relative pb-1 capitalize cursor-pointer ${stationDetailTab === tab ? 'font-semibold text-[#ED642B]' : 'hover:text-text-primary'}`}>{tab}{stationDetailTab === tab && <span className="absolute inset-x-0 -bottom-3 h-0.5 bg-[#ED642B]" />}</button>)}</div>
+          {stationDetailTab !== 'overview' && <div className="p-4"><div className="rounded-xl border border-border-default bg-bg-surface-raised/40 p-4"><h3 className="text-xs font-bold capitalize text-text-primary">{stationDetailTab}</h3>{stationDetailTab === 'capacity' && <div className="grid grid-cols-2 gap-3 mt-3 text-[11px]"><div><p className="text-text-tertiary">Configured capacity</p><p className="mt-1 font-semibold text-text-primary">Not configured</p></div><div><p className="text-text-tertiary">Geofence coverage</p><p className="mt-1 font-semibold text-text-primary">{selectedLocation.geofence_radius} metres</p></div></div>}{stationDetailTab === 'operations' && <div className="grid grid-cols-2 gap-3 mt-3 text-[11px]"><div><p className="text-text-tertiary">Expected dwell</p><p className="mt-1 font-semibold text-text-primary">{formatMinutes(selectedLocation.expected_dwell_minutes)}</p></div><div><p className="text-text-tertiary">Operating status</p><p className="mt-1 font-semibold text-status-good">Monitored</p></div></div>}{stationDetailTab === 'performance' && <div className="grid grid-cols-2 gap-3 mt-3 text-[11px]"><div><p className="text-text-tertiary">Recorded visits</p><p className="mt-1 font-semibold text-text-primary">{locationStats?.find(stat => stat.location_id === selectedLocation.id)?.total_visits || 0}</p></div><div><p className="text-text-tertiary">Financial impact</p><p className="mt-1 font-semibold text-[#ED642B]">{formatCurrency(locationStats?.find(stat => stat.location_id === selectedLocation.id)?.financial_impact || 0)}</p></div></div>}{stationDetailTab === 'contacts' && <div className="mt-3 text-[11px]"><p className="text-text-tertiary">Station contact</p><p className="mt-1 font-semibold text-text-primary">Contact details are not configured for this station.</p></div>}</div></div>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4"><div className="space-y-3 text-[11px]"><div><p className="text-text-tertiary">Address</p><p className="font-medium text-text-primary mt-0.5">{selectedLocation.name}</p><p className="text-text-secondary">{selectedLocation.latitude.toFixed(4)}, {selectedLocation.longitude.toFixed(4)}</p></div><div><p className="text-text-tertiary">Station Type</p><p className="font-medium text-text-primary mt-0.5">{LOCATION_TYPE_LABELS[selectedLocation.location_type] || selectedLocation.location_type}</p></div><div><p className="text-text-tertiary">Total Capacity</p><p className="font-medium text-text-primary mt-0.5">Not configured</p></div><div><p className="text-text-tertiary">Utilization Rate</p><p className="font-medium text-status-good mt-0.5">{Math.max(0, Math.round((1 - ((locationStats?.find(stat => stat.location_id === selectedLocation.id)?.avg_excess_delay_minutes || 0) / Math.max(selectedLocation.expected_dwell_minutes, 1))) * 100))}% SLA utilization</p></div><div><p className="text-text-tertiary">Avg Dwell Time</p><p className="font-medium text-text-primary mt-0.5">{formatMinutes(locationStats?.find(stat => stat.location_id === selectedLocation.id)?.avg_dwell_minutes || selectedLocation.expected_dwell_minutes)}</p></div><div><p className="text-text-tertiary">Geofence Radius</p><p className="font-medium text-text-primary mt-0.5">{selectedLocation.geofence_radius} metres</p></div></div><div className="rounded-xl border border-border-default bg-bg-surface-raised/50 p-2 overflow-hidden"><LocationMapPicker latitude={selectedLocation.latitude} longitude={selectedLocation.longitude} geofenceRadius={selectedLocation.geofence_radius} onSelectCoordinates={() => {}} /></div></div>
+          <div className="border-t border-border-default px-4 py-3"><h3 className="text-[11px] font-bold text-text-primary mb-2">Recent Activity</h3><div className="space-y-2 text-[10px] text-text-secondary"><div className="flex justify-between"><span>{locationStats?.find(stat => stat.location_id === selectedLocation.id)?.total_visits || 0} recorded visits</span><span className="text-text-tertiary">Live analytics</span></div><div className="flex justify-between"><span>Financial impact</span><span className="font-semibold text-[#ED642B]">{formatCurrency(locationStats?.find(stat => stat.location_id === selectedLocation.id)?.financial_impact || 0)}</span></div></div></div>
+        </div>}
         </div>
       ) : (
         /* Grid View */
@@ -764,18 +774,20 @@ export const Locations: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-text-primary mb-1">Facility Classification *</label>
-                  <select
-                    {...regAdd('location_type')}
-                    className="w-full bg-bg-surface-raised border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none"
-                  >
-                    <option value="warehouse">Warehouse Hub</option>
-                    <option value="customer_facility">Customer Facility</option>
-                    <option value="depot">Transit Depot</option>
-                    <option value="port">Maritime Port</option>
-                    <option value="border_crossing">Border Crossing</option>
-                    <option value="loading_point">Loading Point</option>
-                    <option value="unloading_point">Unloading Point</option>
-                  </select>
+                  <Select
+                    value={watchAdd('location_type') ?? 'warehouse'}
+                    onValueChange={(value) => setAddValue('location_type', value as LocationFormValues['location_type'], { shouldValidate: true })}
+                    options={[
+                      { value: 'warehouse', label: 'Warehouse Hub' },
+                      { value: 'customer_facility', label: 'Customer Facility' },
+                      { value: 'depot', label: 'Transit Depot' },
+                      { value: 'port', label: 'Maritime Port' },
+                      { value: 'border_crossing', label: 'Border Crossing' },
+                      { value: 'loading_point', label: 'Loading Point' },
+                      { value: 'unloading_point', label: 'Unloading Point' },
+                    ]}
+                    placeholder="Select facility type"
+                  />
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import { Landing } from '../auth/Landing';
 import { Login } from '../auth/Login';
 import { Signup } from '../auth/Signup';
 import { ForgotPassword } from '../auth/ForgotPassword';
-import { Dashboard } from '../features/dashboard/Dashboard';
+import { DashboardReference as Dashboard } from '../features/dashboard/DashboardReference';
 import { LiveMap } from '../features/live-map/LiveMap';
 import { Vehicles } from '../features/vehicles/Vehicles';
 import { VehicleDetail } from '../features/vehicles/VehicleDetail';
@@ -25,6 +25,8 @@ import { GatePassList } from '../features/gate-pass/GatePassList';
 import { UserManagement } from '../features/users/UserManagement';
 import { Notifications } from '../features/notifications/Notifications';
 import { CompanyConfig } from '../features/admin/CompanyConfig';
+import { PrivacyPolicyPage } from '../features/legal/PrivacyPolicyPage';
+import { TermsOfServicePage } from '../features/legal/TermsOfServicePage';
 import { RouteErrorBoundary } from '../components/common/RouteErrorBoundary';
 import type { UserRole } from '../lib/api/types';
 
@@ -45,6 +47,8 @@ export const router = createBrowserRouter([
   { path: '/login',           element: <Login />,          errorElement: <RouteErrorBoundary /> },
   { path: '/signup',          element: <Signup />,         errorElement: <RouteErrorBoundary /> },
   { path: '/forgot-password', element: <ForgotPassword />, errorElement: <RouteErrorBoundary /> },
+  { path: '/privacy',         element: <PrivacyPolicyPage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/terms',           element: <TermsOfServicePage />, errorElement: <RouteErrorBoundary /> },
 
   // ── Authenticated app shell ──────────────────────────────────────────────
   {
