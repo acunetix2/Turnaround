@@ -581,6 +581,21 @@ export const apiClient = {
     return items.map(_normalizeTrip);
   },
 
+  async getTripById(id: string): Promise<Trip> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      const trip = memoryTrips.find((item) => item.id === id);
+      if (!trip) throw new Error('Trip not found');
+      return trip;
+    }
+    const res = await fetch(`${API_BASE_URL}/trips/${id}`, { headers: getHeaders() });
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('Trip not found');
+      throw new Error('Failed to fetch trip');
+    }
+    return _normalizeTrip(await res.json());
+  },
+
   async createTrip(data: Omit<Trip, 'id'>): Promise<Trip> {
     if (USE_MOCKS) {
       await sleep(350);
