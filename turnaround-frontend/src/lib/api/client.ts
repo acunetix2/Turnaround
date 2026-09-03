@@ -411,6 +411,16 @@ export const apiClient = {
     return res.json();
   },
 
+  async changePassword(current_password: string, new_password: string): Promise<{ message: string; status: string }> {
+    const res = await fetch(`${API_BASE_URL}/account/change-password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ current_password, new_password }),
+    });
+    if (!res.ok) throw new Error('Failed to change password');
+    return res.json();
+  },
+
   async getNotificationPreferences(): Promise<Record<string, boolean>> {
     if (USE_MOCKS) {
       await sleep(100);
@@ -498,6 +508,35 @@ export const apiClient = {
   async deleteUser(id: string): Promise<boolean> {
     const res = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE', headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to delete user');
+    return true;
+  },
+
+  // --- Notifications ---
+  async getNotifications(params: { unread_only?: boolean; limit?: number; offset?: number } = {}): Promise<{ items: any[]; total: number; unread: number }> {
+    if (USE_MOCKS) return { items: [], total: 0, unread: 0 };
+    const query = new URLSearchParams();
+    if (params.unread_only !== undefined) query.set('unread_only', String(params.unread_only));
+    if (params.limit !== undefined) query.set('limit', String(params.limit));
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    const res = await fetch(`${API_BASE_URL}/notifications?${query.toString()}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch notifications');
+    return res.json();
+  },
+
+  async markNotificationRead(id: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to mark notification as read');
+    return res.json();
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/notifications/read-all`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to mark notifications as read');
+  },
+
+  async deleteNotification(id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE_URL}/notifications/${id}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to delete notification');
     return true;
   },
 
@@ -807,6 +846,26 @@ export const apiClient = {
     return _normalizeTrip(await res.json());
   },
 
+  async startTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'in_transit' });
+  },
+
+  async completeTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'completed' });
+  },
+
+  async cancelTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'cancelled' });
+  },
+
+  async reassignTrip(id: string, data: { vehicle_id: string }): Promise<Trip> {
+    return this.updateTrip(id, data);
+  },
+
+  async archiveTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'cancelled' });
+  },
+
   async deleteTrip(id: string): Promise<boolean> {
     if (USE_MOCKS) {
       await sleep(200);
@@ -897,6 +956,33 @@ export const apiClient = {
     if (!res.ok) throw new Error('Failed to fetch gate passes');
     const data = await res.json();
     return Array.isArray(data) ? data : (data.items || []);
+  },
+
+  async getGatePassById(id: string): Promise<import('./types').GatePassData> {
+    if (USE_MOCKS) {
+      const pass = memoryGatePasses.find((item) => item.id === id);
+      if (!pass) throw new Error('Gate pass not found');
+      return pass;
+    }
+    const res = await fetch(`${API_BASE_URL}/gate-passes/${id}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch gate pass');
+    return res.json();
+  },
+
+  async approveGatePass(id: string): Promise<import('./types').GatePassData> {
+    return this.updateGatePass(id, { status: 'approved' });
+  },
+
+  async markGatePassUsed(id: string): Promise<import('./types').GatePassData> {
+    return this.updateGatePass(id, { status: 'used' });
+  },
+
+  async reissueGatePass(id: string): Promise<import('./types').GatePassData> {
+    return this.updateGatePass(id, { status: 'pre_approved' });
+  },
+
+  async deleteGatePass(id: string): Promise<boolean> {
+    return this.updateGatePass(id, { status: 'cancelled' }).then(() => true);
   },
 
   /** Returns the first active (non-expired, non-cancelled) gate pass for a trip, or null. */
