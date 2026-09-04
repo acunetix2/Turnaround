@@ -3,6 +3,14 @@
 # 🚛 Turnaround
 ### Operational Intelligence Platform for Commercial Fleet & Corridor Logistics
 
+<img src="https://readme-typing-svg.demolab.com?font=Space+Grotesk&weight=700&size=20&duration=3200&pause=900&color=ED642B&center=true&vCenter=true&width=720&lines=Make+every+delay+visible.;Make+every+minute+actionable.;Fleet+intelligence+for+East+African+corridors." alt="Animated Turnaround tagline" />
+
+<br />
+
+<img src="https://img.shields.io/badge/LIVE%20FLEET-TRACKING-250C77?style=for-the-badge&labelColor=ED642B" alt="Live fleet tracking" />
+<img src="https://img.shields.io/badge/DWELL-COST%20INTELLIGENCE-ED642B?style=for-the-badge&labelColor=250C77" alt="Dwell cost intelligence" />
+<img src="https://img.shields.io/badge/EAST%20AFRICA-CORRIDORS-10B981?style=for-the-badge&labelColor=111827" alt="East Africa corridors" />
+
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-Frontend-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Architecture-3178C6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
