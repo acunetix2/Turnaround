@@ -12,7 +12,7 @@
 
 *Real-time fleet dwell monitoring, geofence cost tracking, and turnaround analytics for commercial trucking corridors across East Africa.*
 
-[Product Capabilities](#-product-capabilities) • [Local Development](#-local-development) • [GPS Integration](#-gps-integration) • [System Architecture](#-system-architecture) • [Core Engine Modules](#-core-engine-modules) • [Data Lifecycle & Pipeline](#-data-lifecycle--pipeline) • [Role-Based Access Control](#-role-based-access-control-rbac)
+[Product Capabilities](#-product-capabilities) • [GPS Integration](#-gps-integration) • [System Architecture](#-system-architecture) • [Core Engine Modules](#-core-engine-modules) • [Data Lifecycle & Pipeline](#-data-lifecycle--pipeline) • [Role-Based Access Control](#-role-based-access-control-rbac)
 
 </div>
 
@@ -54,88 +54,6 @@ Containers are modeled as cargo equipment and are not assigned drivers. Powered 
 | Authentication | Supabase Auth with backend-managed sessions |
 | Notifications | Firebase Cloud Messaging |
 | Deployment | Vercel frontend and Render backend |
-
-## 📁 Repository Structure
-
-```text
-Turnaround/
-├── Designs/                  Images, CSV templates, and demo assets
-├── turnaround-backend/       FastAPI service and migrations
-│   ├── app/auth/              JWT and role-based access control
-│   ├── app/db/                Database sessions and models
-│   ├── app/engines/            Dwell, geofence, analytics, and financial engines
-│   ├── app/routers/            Auth, GPS, vehicles, trips, containers, and reports
-│   ├── alembic/               Database schema migrations
-│   └── run.py                 Backend entry point
-├── turnaround-frontend/       React and Vite application
-│   ├── public/                Fleet, port, warehouse, and corridor imagery
-│   └── src/                   Auth, map, fleet, trips, analytics, and shared UI
-├── render.yaml                Render backend deployment configuration
-└── vercel.json                Vercel frontend deployment configuration
-```
-
-## 💻 Local Development
-
-### Prerequisites
-
-- Python 3.11 or newer
-- Node.js 20 or newer
-- pnpm
-- A Supabase project with PostgreSQL and authentication enabled
-
-### Backend
-
-```powershell
-cd turnaround-backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-alembic upgrade heads
-python run.py
-```
-
-The API runs at `http://localhost:8000`. Interactive documentation is available at `http://localhost:8000/docs`.
-
-### Frontend
-
-```powershell
-cd turnaround-frontend
-pnpm install
-pnpm dev
-```
-
-The Vite application runs at `http://localhost:5173`.
-
-```powershell
-pnpm build        # Production bundle
-pnpm typecheck    # TypeScript checks
-pnpm lint         # ESLint
-pnpm test         # Vitest tests
-```
-
-## 🔐 Environment Variables
-
-Create `turnaround-backend/.env`:
-
-```dotenv
-ENVIRONMENT=development
-DATABASE_URL=postgresql+asyncpg://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
-SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<server-only-service-role-key>
-SUPABASE_ANON_KEY=<supabase-anon-key>
-SUPABASE_JWT_SECRET=<fallback-development-secret>
-FRONTEND_URL=http://localhost:5173
-CORS_ORIGINS=["http://localhost:5173"]
-```
-
-Create `turnaround-frontend/.env`:
-
-```dotenv
-VITE_USE_MOCKS=false
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-```
-
-Set `VITE_USE_MOCKS=true` for an offline demo using fixture data. Never expose or commit the backend service-role key.
 
 ## 📡 GPS Integration
 
