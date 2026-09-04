@@ -26,6 +26,22 @@ In cross-border trucking, unexplained dwell times at weighbridges, container dep
 
 ---
 
+## 👤 Creator & Lead Developer
+
+**Turnaround** was created and developed by **Iddy K. Chesire**, known online as **[@acunetix2](https://github.com/acunetix2)**.
+
+The platform brings together product design, fleet operations workflows, GPS intelligence, geofencing, dispatch management, analytics, and full-stack engineering into one logistics operations system for East African corridors.
+
+<div align="center">
+
+### Built by Iddy K. Chesire · @acunetix2
+
+*Turning complex fleet operations into clear, actionable intelligence.*
+
+</div>
+
+---
+
 ## 🚀 Product Capabilities
 
 Turnaround brings the main operating resources and decisions into one workspace:
