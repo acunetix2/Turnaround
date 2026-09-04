@@ -286,7 +286,7 @@ export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) =
             style={{ background: 'linear-gradient(90deg,#0B0524 0%,#250C77 100%)' }}
           >
             <p className="text-[9px] text-purple-300">
-              Present with valid ID · turnaround.africa
+              Present with valid ID · turnaround.com
             </p>
             <p className="font-mono text-[9px] text-orange-400 font-bold">
               #{pass.pass_number}

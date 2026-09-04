@@ -30,6 +30,7 @@ import { CompanyConfig } from '../features/admin/CompanyConfig';
 import { MaintenanceFuel } from '../features/maintenance/MaintenanceFuel';
 import { PrivacyPolicyPage } from '../features/legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from '../features/legal/TermsOfServicePage';
+import { AboutPage } from '../features/legal/AboutPage';
 import { RouteErrorBoundary } from '../components/common/RouteErrorBoundary';
 import type { UserRole } from '../lib/api/types';
 
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPassword />, errorElement: <RouteErrorBoundary /> },
   { path: '/privacy',         element: <PrivacyPolicyPage />, errorElement: <RouteErrorBoundary /> },
   { path: '/terms',           element: <TermsOfServicePage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/about',           element: <AboutPage />,           errorElement: <RouteErrorBoundary /> },
 
   // ── Authenticated app shell ──────────────────────────────────────────────
   {

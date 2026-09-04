@@ -92,7 +92,7 @@ async def get_current_user(
             id=user_id,
             company_id=company.id,
             name=payload.get("name", "Dispatcher Admin"),
-            email=payload.get("email", f"{user_id}@turnaround.io"),
+            email=payload.get("email", f"{user_id}@turnaround.com"),
             role=role_enum,
         )
         db.add(user)

@@ -324,7 +324,7 @@ export const GatePassPage: React.FC = () => {
           className="px-7 py-3 flex items-center justify-between"
           style={{ background: 'linear-gradient(90deg,#0B0524 0%,#250C77 100%)' }}
         >
-          <p className="text-[9px] text-purple-300">Present with valid ID · turnaround.africa</p>
+          <p className="text-[9px] text-purple-300">Present with valid ID · turnaround.com</p>
           <p className="font-mono text-[9px] text-orange-400 font-bold">#{pass.pass_number}</p>
         </div>
       </div>

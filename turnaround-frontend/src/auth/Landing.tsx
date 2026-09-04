@@ -156,6 +156,10 @@ export const Landing: React.FC = () => {
               </button>
             </div>
 
+            <Link to="/about" className="px-3.5 py-2 text-xs font-semibold tracking-wide text-[#D1D5DB] transition-colors hover:text-white">
+              About
+            </Link>
+
           </nav>
 
           {/* Action CTAs */}
@@ -810,7 +814,7 @@ export const Landing: React.FC = () => {
                 <li><Link to="/signup" className="hover:text-white transition-colors">Register fleet</Link></li>
                 <li><Link to="/login" className="hover:text-white transition-colors">Dispatcher console</Link></li>
                 <li><Link to="/forgot-password" className="hover:text-white transition-colors">Password recovery</Link></li>
-                <li><a href="mailto:support@turnaround.io" className="hover:text-white transition-colors">Technical support</a></li>
+                <li><a href="mailto:support@turnaround.com" className="hover:text-white transition-colors">Technical support</a></li>
                 <li><Link to="/login" className="hover:text-white transition-colors">Operator dashboard</Link></li>
               </ul>
             </div>

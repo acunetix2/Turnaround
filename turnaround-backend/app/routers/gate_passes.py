@@ -297,7 +297,7 @@ async def get_gate_pass_qr_code(
         f"PASS:{gp.pass_number}|VEH:{gp.vehicle_reg}"
         f"|TERM:{gp.terminal_name}|UNTIL:{gp.time_window_end.isoformat()}"
         f"|STATUS:{gp.status.value.upper()}"
-        f"|VERIFY:https://turnaround.africa/verify/{gp.pass_number}"
+        f"|VERIFY:https://turnaround.com/verify/{gp.pass_number}"
     )
 
     qr = qrcode.QRCode(version=1, box_size=10, border=2)
