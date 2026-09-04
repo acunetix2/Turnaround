@@ -5,6 +5,7 @@ import { ProtectedRoute } from '../auth/ProtectedRoute';
 import { Landing } from '../auth/Landing';
 import { Login } from '../auth/Login';
 import { Signup } from '../auth/Signup';
+import { ConfirmEmail } from '../auth/ConfirmEmail';
 import { ForgotPassword } from '../auth/ForgotPassword';
 import { DashboardReference as Dashboard } from '../features/dashboard/DashboardReference';
 import { LiveMap } from '../features/live-map/LiveMap';
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
   { path: '/',                element: <Landing />,        errorElement: <RouteErrorBoundary /> },
   { path: '/login',           element: <Login />,          errorElement: <RouteErrorBoundary /> },
   { path: '/signup',          element: <Signup />,         errorElement: <RouteErrorBoundary /> },
+  { path: '/confirm-email',  element: <ConfirmEmail />,   errorElement: <RouteErrorBoundary /> },
   { path: '/forgot-password', element: <ForgotPassword />, errorElement: <RouteErrorBoundary /> },
   { path: '/privacy',         element: <PrivacyPolicyPage />, errorElement: <RouteErrorBoundary /> },
   { path: '/terms',           element: <TermsOfServicePage />, errorElement: <RouteErrorBoundary /> },

@@ -189,6 +189,7 @@ export const LiveMap: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [vehicleCardExpanded, setVehicleCardExpanded] = useState<boolean>(false);
+  const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
   const { config: companyConfig } = useCompany();
   const operatingZone = getOperatingZone(companyConfig?.operating_zone);
 
@@ -358,6 +359,20 @@ export const LiveMap: React.FC = () => {
       return matchesStatus && matchesSearch;
     });
   }, [vehicles, statusFilter, searchQuery]);
+
+  const topTenVehicles = useMemo(() => {
+    const statusRank: Record<string, number> = { delayed: 4, in_transit: 3, active: 2, idle: 1, maintenance: 0 };
+    return [...filteredVehicles]
+      .sort((a, b) => (statusRank[b.status] ?? 0) - (statusRank[a.status] ?? 0))
+      .slice(0, 10);
+  }, [filteredVehicles]);
+
+  const availabilityLabel = (vehicle: Vehicle) => {
+    if (vehicle.status === 'maintenance') return 'Maintenance';
+    if (vehicle.status === 'delayed') return 'Delayed';
+    if (vehicle.status === 'in_transit') return 'On trip';
+    return 'Available';
+  };
 
   const filteredLocations = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -847,8 +862,8 @@ export const LiveMap: React.FC = () => {
           <div className="p-4 border-b border-border-default space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-extrabold text-text-primary">Live Fleet Directory</h2>
-                <p className="text-[11px] text-text-secondary">Click any unit to focus and track</p>
+                <h2 className="text-sm font-extrabold text-text-primary">Top 10 Fleet Tracker</h2>
+                <p className="text-[11px] text-text-secondary">Click a vehicle to focus the map</p>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
@@ -888,16 +903,17 @@ export const LiveMap: React.FC = () => {
             </div>
           </div>
 
-          {/* Vehicle List */}
+          {/* Top 10 Vehicle List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {filteredVehicles.length === 0 ? (
               <div className="py-12 text-center text-xs text-text-tertiary">
                 No vehicles matching filter.
               </div>
             ) : (
-              filteredVehicles.map((vh) => {
+              topTenVehicles.map((vh, index) => {
                 const gps = gpsPositions ? gpsPositions[vh.id] : null;
                 const isSelected = selectedVehicleId === vh.id;
+                const isExpanded = expandedVehicleId === vh.id;
 
                 return (
                   <div
@@ -911,11 +927,13 @@ export const LiveMap: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
+                        <span className="w-4 text-center font-numeric text-[10px] font-bold text-text-tertiary">{index + 1}</span>
                         <Truck size={14} className={isSelected ? 'text-[#ED642B]' : 'text-[#250C77]'} />
                         <span className="font-numeric text-xs font-extrabold text-text-primary">
                           {vh.registration_number}
                         </span>
                       </div>
+                      <div className="flex items-center gap-1.5">
                       <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${
                         vh.status === 'in_transit'
                           ? 'bg-status-good/15 text-status-good'
@@ -925,6 +943,18 @@ export const LiveMap: React.FC = () => {
                       }`}>
                         {vh.status === 'in_transit' ? 'In Transit' : vh.status === 'delayed' ? 'Delayed' : 'Stationary'}
                       </span>
+                      <button
+                        type="button"
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${vh.registration_number} details`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setExpandedVehicleId(isExpanded ? null : vh.id);
+                        }}
+                        className="rounded p-1 text-text-tertiary hover:bg-bg-surface-raised hover:text-text-primary"
+                      >
+                        <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-text-secondary">
@@ -935,6 +965,31 @@ export const LiveMap: React.FC = () => {
                         </span>
                       )}
                     </div>
+
+                    {isExpanded && (
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border-default pt-2 text-[10px]">
+                        <div>
+                          <p className="text-text-tertiary">Driver</p>
+                          <p className="truncate font-semibold text-text-primary">
+                            {vh.driver_name || (vh.vehicle_type.toLowerCase() === 'container' ? 'Not applicable' : 'Unassigned')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-text-tertiary">Co-driver</p>
+                          <p className="truncate font-semibold text-text-primary">
+                            {vh.co_driver?.name || (vh.vehicle_type.toLowerCase() === 'container' ? 'Not applicable' : 'Unassigned')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-text-tertiary">Availability</p>
+                          <p className="font-semibold text-text-primary">{availabilityLabel(vh)}</p>
+                        </div>
+                        <div>
+                          <p className="text-text-tertiary">GPS</p>
+                          <p className="font-semibold text-text-primary">{gps ? 'Connected' : 'No signal'}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })

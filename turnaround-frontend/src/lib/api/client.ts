@@ -156,6 +156,18 @@ export const apiClient = {
     return res.json();
   },
 
+  async confirmEmail(tokenHash: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/auth/confirm-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token_hash: tokenHash }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'This confirmation link is invalid or has expired.');
+    }
+  },
+
   async getAuthUser(): Promise<import('./types').User> {
     const res = await fetch(`${API_BASE_URL}/auth/me`, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) throw new Error('Not authenticated');

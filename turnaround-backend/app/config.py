@@ -39,6 +39,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
     ]
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # Database — Supabase PostgreSQL (asyncpg)
     # Format: postgresql+asyncpg://postgres:[password]@db.[project-ref].supabase.co:5432/postgres

@@ -68,6 +68,10 @@ class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 
+class ConfirmEmailRequest(BaseModel):
+    token_hash: str = Field(min_length=1)
+
+
 class AuthResponse(BaseModel):
     user: dict
     requires_email_confirmation: bool = False
@@ -151,7 +155,14 @@ async def signup(payload: SignupRequest, response: Response, db: Annotated[Async
         samesite="none" if settings.AUTH_COOKIE_SECURE else "lax",
     )
     try:
-        result = get_supabase_client().auth.sign_up({"email": str(payload.email), "password": payload.password, "options": {"data": {"name": payload.name, "company": payload.company}}})
+        result = get_supabase_client().auth.sign_up({
+            "email": str(payload.email),
+            "password": payload.password,
+            "options": {
+                "data": {"name": payload.name, "company": payload.company},
+                "email_redirect_to": f"{settings.FRONTEND_URL.rstrip('/')}/confirm-email",
+            },
+        })
     except AuthApiError as exc:
         logger.warning("Supabase signup rejected request: code=%s status=%s", exc.code, exc.status)
         provider_messages = {
@@ -188,6 +199,16 @@ async def signup(payload: SignupRequest, response: Response, db: Annotated[Async
     session_id = await _create_session(db, user, result.session)
     _set_cookie(response, session_id)
     return AuthResponse(user={"id": user.id, "company_id": user.company_id, "name": user.name, "email": user.email, "role": user.role.value})
+
+
+@router.post("/confirm-email", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_email(payload: ConfirmEmailRequest):
+    """Consume the Supabase email token before sending the user to login."""
+    try:
+        get_supabase_client().auth.verify_otp({"token_hash": payload.token_hash, "type": "email"})
+    except Exception as exc:
+        logger.info("Email confirmation failed: %s", exc)
+        raise HTTPException(status_code=400, detail="This confirmation link is invalid or has expired.") from exc
 
 
 @router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
