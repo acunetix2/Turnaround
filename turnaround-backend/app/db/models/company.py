@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.db.models.vehicle import Vehicle
     from app.db.models.location import Location
     from app.db.models.insight import Insight
+    from app.db.models.fleet_staff import FleetStaff
 
 
 class Company(Base):
@@ -36,6 +37,7 @@ class Company(Base):
     address: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, server_default='Kenya')
+    operating_zone: Mapped[str] = mapped_column(String(32), nullable=False, server_default='east_africa')
 
     # ── Regional settings ─────────────────────────────────────────────────
     currency: Mapped[str] = mapped_column(String(10), nullable=False, server_default='KES')
@@ -63,3 +65,4 @@ class Company(Base):
     vehicles: Mapped[List["Vehicle"]] = relationship("Vehicle", back_populates="company", cascade="all, delete-orphan")
     locations: Mapped[List["Location"]] = relationship("Location", back_populates="company", cascade="all, delete-orphan")
     insights: Mapped[List["Insight"]] = relationship("Insight", back_populates="company", cascade="all, delete-orphan")
+    fleet_staff: Mapped[List["FleetStaff"]] = relationship("FleetStaff", back_populates="company", cascade="all, delete-orphan")

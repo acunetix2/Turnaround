@@ -95,7 +95,9 @@ const sleep = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Helper for fetch headers
 function getHeaders(): HeadersInit {
-  const token = localStorage.getItem('supabase_session_jwt') || 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager';
+  const token = USE_MOCKS
+    ? localStorage.getItem('supabase_session_jwt') || 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager'
+    : localStorage.getItem('supabase_session_jwt');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -146,7 +148,7 @@ export const apiClient = {
     return (await res.json()).user;
   },
 
-  async signup(data: { email: string; password: string; name: string; company: string; role: string }): Promise<{ user: import('./types').User; requires_email_confirmation?: boolean }> {
+  async signup(data: { email: string; password: string; name: string; company: string }): Promise<{ user: import('./types').User; requires_email_confirmation?: boolean }> {
     const res = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
     });
@@ -220,6 +222,29 @@ export const apiClient = {
     return Array.isArray(data) ? data : (data.items || []);
   },
 
+  async getFleetStaff(): Promise<import('./types').FleetStaff[]> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch fleet staff');
+    return res.json();
+  },
+
+  async createFleetStaff(data: Omit<import('./types').FleetStaff, 'id' | 'company_id' | 'created_at' | 'assigned_vehicle_count'>): Promise<import('./types').FleetStaff> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Failed to add fleet staff');
+    return res.json();
+  },
+
+  async updateFleetStaff(id: string, data: Partial<import('./types').FleetStaff>): Promise<import('./types').FleetStaff> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff/${id}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Failed to update fleet staff');
+    return res.json();
+  },
+
+  async deleteFleetStaff(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff/${id}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to remove fleet staff');
+  },
+
   async getVehicleById(id: string): Promise<Vehicle> {
     if (USE_MOCKS) {
       await sleep(100);
@@ -249,6 +274,12 @@ export const apiClient = {
         capacity: Number(data.capacity),
         hourly_operating_cost: Number(data.hourly_operating_cost),
         status: normalizedStatus,
+        fuel_level: data.fuel_level,
+        fuel_tank_capacity_liters: data.fuel_tank_capacity_liters,
+        fuel_consumption_liters_per_100km: data.fuel_consumption_liters_per_100km,
+        odometer_km: data.odometer_km,
+        maintenance_status: data.maintenance_status,
+        next_inspection_date: data.next_inspection_date,
         created_at: new Date().toISOString(),
         current_location_name: 'Unassigned Loading Bay',
         today_excess_dwell_minutes: 0
@@ -262,7 +293,26 @@ export const apiClient = {
       vehicle_type: data.vehicle_type,
       capacity: Number(data.capacity),
       hourly_operating_cost: Number(data.hourly_operating_cost),
-      status: normalizedStatus
+      status: normalizedStatus,
+      image_url: data.image_url,
+      driver_name: data.driver_name,
+      driver_phone: data.driver_phone,
+      driver_license: data.driver_license,
+      driver_status: data.driver_status,
+      driver_id: data.driver_id,
+      co_driver_id: data.co_driver_id,
+      trailer_number: data.trailer_number,
+      container_number: data.container_number,
+      container_type: data.container_type,
+      cargo_type: data.cargo_type,
+      telematics_provider: data.telematics_provider,
+      tracker_imei: data.tracker_imei,
+      fuel_level: data.fuel_level,
+      fuel_tank_capacity_liters: data.fuel_tank_capacity_liters,
+      fuel_consumption_liters_per_100km: data.fuel_consumption_liters_per_100km,
+      odometer_km: data.odometer_km,
+      maintenance_status: data.maintenance_status,
+      next_inspection_date: data.next_inspection_date,
     };
 
     const res = await fetch(`${API_BASE_URL}/vehicles`, {

@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import type { Trip, Insight, LocationStats, TrendDataPoint } from '../../lib/api/types'
+import { useCompany } from '../../lib/CompanyContext'
+import { getOperatingZone } from '../../lib/operatingZones'
 
 type Tone = 'violet' | 'orange' | 'green' | 'blue'
 
@@ -52,7 +54,7 @@ const Sparkline: React.FC<{ values: number[]; color: string }> = ({ values, colo
 
 const statusLabel = (status?: string) => status === 'in_transit' ? 'In Transit' : status === 'completed' ? 'Delivered' : status === 'delayed' ? 'Delayed' : 'Pending'
 
-const GlobalShipmentsMap: React.FC<{ locations: Array<{ id: string; latitude: number; longitude: number }> }> = ({ locations }) => {
+const GlobalShipmentsMap: React.FC<{ locations: Array<{ id: string; latitude: number; longitude: number }>; operatingZone: ReturnType<typeof getOperatingZone> }> = ({ locations, operatingZone }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
 
@@ -60,7 +62,7 @@ const GlobalShipmentsMap: React.FC<{ locations: Array<{ id: string; latitude: nu
     if (!containerRef.current || mapRef.current) return
     const map = new maplibregl.Map({
       container: containerRef.current,
-      center: [35, 4], zoom: 2.2, minZoom: 1.5, maxZoom: 6,
+      center: operatingZone.center, zoom: operatingZone.zoom, minZoom: 1.5, maxZoom: 10,
       attributionControl: false,
       style: {
         version: 8,
@@ -69,9 +71,33 @@ const GlobalShipmentsMap: React.FC<{ locations: Array<{ id: string; latitude: nu
       },
     })
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+    map.on('load', () => {
+      map.addSource('operating-zone', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [operatingZone.polygon] } } })
+      map.addSource('operating-zone-line', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: operatingZone.polygon } } })
+      map.addLayer({ id: 'operating-zone-fill', type: 'fill', source: 'operating-zone', paint: { 'fill-color': '#ED642B', 'fill-opacity': 0.12 } })
+      map.addLayer({ id: 'operating-zone-outline', type: 'line', source: 'operating-zone-line', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#ED642B', 'line-width': 4, 'line-dasharray': [2, 1], 'line-opacity': 1 } })
+    })
     mapRef.current = map
     return () => { map.remove(); mapRef.current = null }
-  }, [])
+  }, [operatingZone])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const updateBoundary = () => {
+      const source = map.getSource('operating-zone') as maplibregl.GeoJSONSource | undefined
+      const lineSource = map.getSource('operating-zone-line') as maplibregl.GeoJSONSource | undefined
+      if (!source || !lineSource) return
+      source.setData({ type: 'Feature', properties: { name: operatingZone.label }, geometry: { type: 'Polygon', coordinates: [operatingZone.polygon] } })
+      lineSource.setData({ type: 'Feature', properties: { name: operatingZone.label }, geometry: { type: 'LineString', coordinates: operatingZone.polygon } })
+      map.flyTo({ center: operatingZone.center, zoom: operatingZone.zoom, duration: 700 })
+    }
+    if (!map.isStyleLoaded()) {
+      map.once('load', updateBoundary)
+      return () => map.off('load', updateBoundary)
+    }
+    updateBoundary()
+  }, [operatingZone])
 
   useEffect(() => {
     const map = mapRef.current
@@ -90,6 +116,8 @@ const GlobalShipmentsMap: React.FC<{ locations: Array<{ id: string; latitude: nu
 
 export const DashboardReference: React.FC = () => {
   const { user } = useAuth()
+  const { config: companyConfig } = useCompany()
+  const operatingZone = getOperatingZone(companyConfig?.operating_zone)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [range, setRange] = useState(30)
   const { data: stats } = useQuery({ queryKey: ['dashboardStats'], queryFn: apiClient.getDashboardStats })
@@ -134,7 +162,7 @@ export const DashboardReference: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
         <Card className="xl:col-span-3"><SectionTitle title="Shipment Overview" action="View all shipments" to="/trips" /><div className="flex items-center gap-3"><Donut values={[delivered, inTransit, pending]} colors={['#10B981', '#8b5cf6', '#ED642B']} total={tripList.length.toLocaleString()} /><div className="space-y-2 text-[10px]">{[['Delivered', delivered, '#10B981'], ['In Transit', inTransit, '#8b5cf6'], ['Pending', pending, '#ED642B']].map(([label, value, color]) => <div key={String(label)} className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ backgroundColor: String(color) }} /><span className="text-text-secondary">{label}</span><strong className="ml-auto text-text-primary">{value}</strong></div>)}</div></div></Card>
-        <Card className="xl:col-span-6"><div className="mb-3 flex items-center justify-between"><div><h2 className="text-xs font-bold text-text-primary">Global Shipments</h2><p className="text-[10px] text-text-secondary">Live corridor activity</p></div><Link to="/map" className="text-[10px] font-semibold text-[#8b5cf6]">Live View <span className="text-emerald-500">*</span></Link></div><GlobalShipmentsMap locations={locations} /></Card>
+        <Card className="xl:col-span-6"><div className="mb-3 flex items-center justify-between"><div><h2 className="text-xs font-bold text-text-primary">Operating Zone Shipments</h2><p className="text-[10px] text-text-secondary">{operatingZone.label} corridor activity</p></div><Link to="/map" className="text-[10px] font-semibold text-[#8b5cf6]">Live View <span className="text-emerald-500">*</span></Link></div><GlobalShipmentsMap locations={locations} operatingZone={operatingZone} /></Card>
         <Card className="xl:col-span-3"><SectionTitle title="Alerts & Notifications" action="View all" to="/notifications" /><div className="space-y-3">{(alertItems.length ? alertItems : notificationItems).map((item: Insight | { title?: string; message?: string }, index) => <div key={item.id || index} className="flex gap-2"><div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${toneStyles[index === 0 ? 'orange' : index === 1 ? 'violet' : 'green']}`}><AlertTriangle size={12} /></div><div className="min-w-0"><p className="truncate text-[10px] font-bold text-text-primary">{'title' in item ? item.title : 'System alert'}</p><p className="line-clamp-2 text-[9px] text-text-secondary">{'description' in item ? item.description : item.message || 'Operational update available.'}</p></div></div>)}{!alertItems.length && !notificationItems.length && <p className="text-[10px] text-text-tertiary">No active alerts.</p>}</div></Card>
       </div>
 

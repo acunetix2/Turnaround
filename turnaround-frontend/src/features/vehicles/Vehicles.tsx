@@ -12,7 +12,7 @@ import {
   Table as TableIcon, LayoutGrid, X, Radio, User, Camera,
   Package, Settings, AlertCircle, Navigation2
 } from 'lucide-react';
-import type { Vehicle } from '../../lib/api/types';
+import type { FleetStaff, Vehicle } from '../../lib/api/types';
 import { ASSET_TYPE_OPTIONS } from '../../lib/api/types';
 import { Select } from '../../components/ui/Select';
 import {
@@ -28,6 +28,8 @@ import { CarrierAssetsReference } from './CarrierAssetsReference';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { EmptyStatePresentational } from '../../components/ui/EmptyStatePresentational';
 import { LoadingStatus } from '../../components/common/Loader';
+import { Upload, Download } from 'lucide-react';
+import { parseVehicleCsv } from './vehicleCsv';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import {
   MetricCard,
@@ -69,6 +71,8 @@ const vehicleSchema = zod.object({
   driver_phone:         zod.string().optional(),
   driver_license:       zod.string().optional(),
   driver_status:        zod.enum(['on_duty', 'resting', 'driving']).optional(),
+  driver_id:            zod.string().optional(),
+  co_driver_id:         zod.string().optional(),
   // Container / Cargo
   trailer_number:       zod.string().optional(),
   container_number:     zod.string().optional(),
@@ -82,6 +86,8 @@ const vehicleSchema = zod.object({
   next_inspection_date: zod.string().optional(),
   odometer_km:          zod.number().optional(),
   fuel_level:           zod.number().min(0).max(100).optional(),
+  fuel_tank_capacity_liters: zod.number().positive().optional(),
+  fuel_consumption_liters_per_100km: zod.number().positive().optional(),
 });
 
 type VehicleFormValues = zod.infer<typeof vehicleSchema>;
@@ -178,6 +184,8 @@ export const Vehicles: React.FC = () => {
   const [imageDataUrl,     setImageDataUrl]     = useState<string | undefined>();
   const [activeTab,        setActiveTab]        = useState<'specs' | 'driver' | 'cargo' | 'telematics'>('specs');
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
+  const assetFileRef = useRef<HTMLInputElement | null>(null);
+  const assetCsvTemplate = `registration_number,vehicle_type,capacity,hourly_operating_cost,status,fuel_level,fuel_tank_capacity_liters,fuel_consumption_liters_per_100km,odometer_km,maintenance_status,next_inspection_date\nKDA 123A,Truck,28,7500,idle,65,300,32,120000,good,2026-10-01`;
 
   const { data: vehicles, isLoading, isError, refetch } = useQuery({
     queryKey:        ['vehicles'],
@@ -200,6 +208,12 @@ export const Vehicles: React.FC = () => {
     queryFn:         apiClient.getLiveGPSEvents,
     refetchInterval: 15000,
     enabled:         !!vehicles && vehicles.length > 0,
+  });
+
+  const { data: fleetStaff = [] } = useQuery<FleetStaff[]>({
+    queryKey: ['fleetStaff'],
+    queryFn: apiClient.getFleetStaff,
+    enabled: role === 'admin' || role === 'fleet_manager',
   });
 
   const createMutation = useMutation({
@@ -238,6 +252,47 @@ export const Vehicles: React.FC = () => {
     },
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (rows: ReturnType<typeof parseVehicleCsv>) => {
+      const created: Vehicle[] = [];
+      for (const row of rows) created.push(await apiClient.createVehicle(row as any));
+      return created;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      toast({ variant: 'success', title: `${created.length} assets uploaded`, message: 'Fleet assets were registered from the CSV.' });
+    },
+    onError: (error: any) => toast({ variant: 'error', title: 'Asset CSV import failed', message: error.message }),
+  });
+
+  const downloadAssetTemplate = () => {
+    const url = URL.createObjectURL(new Blob([assetCsvTemplate], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'turnaround-asset-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importAssets = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const rows = parseVehicleCsv(await file.text());
+      if (!rows.length) throw new Error('No valid asset rows found.');
+      const duplicate = rows.find((row, index) => rows.findIndex((item) => item.registration_number.toUpperCase() === row.registration_number.toUpperCase()) !== index);
+      if (duplicate) throw new Error(`Duplicate registration ${duplicate.registration_number} in CSV.`);
+      const existing = new Set((vehicles ?? []).map((vehicle) => vehicle.registration_number.toUpperCase()));
+      const alreadyRegistered = rows.find((row) => existing.has(row.registration_number.toUpperCase()));
+      if (alreadyRegistered) throw new Error(`${alreadyRegistered.registration_number} is already registered.`);
+      bulkImportMutation.mutate(rows);
+    } catch (error: any) {
+      toast({ variant: 'error', title: 'Asset CSV import failed', message: error.message });
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const {
     register, handleSubmit, reset, setValue, watch,
     formState: { errors, isSubmitting },
@@ -259,6 +314,8 @@ export const Vehicles: React.FC = () => {
       driver_phone: '',
       driver_license: '',
       driver_status: 'on_duty',
+      driver_id: '',
+      co_driver_id: '',
       trailer_number: '',
       container_number: '',
       container_type: '',
@@ -287,6 +344,8 @@ export const Vehicles: React.FC = () => {
       driver_phone:         v.driver_phone || '',
       driver_license:       v.driver_license || '',
       driver_status:        (v.driver_status as any) || 'on_duty',
+      driver_id:            v.driver_id || '',
+      co_driver_id:         v.co_driver_id || '',
       trailer_number:       v.trailer_number || '',
       container_number:     v.container_number || '',
       container_type:       v.container_type || '',
@@ -464,6 +523,9 @@ export const Vehicles: React.FC = () => {
             <button onClick={() => setViewMode('table')} title="Table" className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${viewMode === 'table' ? 'bg-[#ED642B] text-white' : 'text-text-tertiary hover:text-text-primary'}`}><TableIcon size={13} /></button>
           </div>
           {canMutate && (
+            <>
+            <Button variant="outline" size="small" icon={<Download size={13} />} onClick={downloadAssetTemplate}>CSV template</Button>
+            <Button variant="outline" size="small" icon={<Upload size={13} />} loading={bulkImportMutation.isPending} onClick={() => assetFileRef.current?.click()}>Upload CSV</Button>
             <Button
               variant="primary"
               size="small"
@@ -472,6 +534,8 @@ export const Vehicles: React.FC = () => {
             >
               Register Asset
             </Button>
+            <input ref={assetFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importAssets} />
+            </>
           )}
         </div>
       </div>
@@ -1167,6 +1231,33 @@ export const Vehicles: React.FC = () => {
               {/* DRIVER TAB */}
               {activeTab === 'driver' && (
                 <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Assigned Driver</label>
+                      <Select
+                        value={watch('driver_id') || 'unassigned'}
+                        onValueChange={(value) => {
+                          const person = fleetStaff.find((entry) => entry.id === value);
+                          setValue('driver_id', value === 'unassigned' ? '' : value);
+                          if (person) {
+                            setValue('driver_name', person.name);
+                            setValue('driver_phone', person.phone || '');
+                            setValue('driver_license', person.license_number || '');
+                          }
+                        }}
+                        options={[{ value: 'unassigned', label: 'No driver assigned' }, ...fleetStaff.filter((entry) => entry.staff_type === 'driver' && entry.status === 'active').map((entry) => ({ value: entry.id, label: entry.name }))]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Assigned Co-driver</label>
+                      <Select
+                        value={watch('co_driver_id') || 'unassigned'}
+                        onValueChange={(value) => setValue('co_driver_id', value === 'unassigned' ? '' : value)}
+                        options={[{ value: 'unassigned', label: 'No co-driver assigned' }, ...fleetStaff.filter((entry) => entry.staff_type === 'co_driver' && entry.status === 'active').map((entry) => ({ value: entry.id, label: entry.name }))]}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-text-tertiary">Manage the driver pool from Drivers & Staff. Assignment copies the roster contact details to the asset record for trip and gate-pass documents.</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Driver Full Name</label>

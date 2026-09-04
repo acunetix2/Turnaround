@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../lib/api/client'
 import { useTheme } from '../../lib/ThemeContext'
 import { useCompany } from '../../lib/CompanyContext'
@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Compass,
   Truck,
+  UserRound,
   AlertOctagon,
   BarChart3,
   LogOut,
@@ -29,10 +30,15 @@ import {
   Bell,
   Building2,
   Download,
+  Check,
+  ArrowRight,
+  X,
+  Wrench,
 } from 'lucide-react'
 import { BrandLogo } from '../common/BrandLogo'
 import { RouteProgressBar } from '../common/Loader'
 import { CompanyWelcome } from '../common/CompanyWelcome'
+import { formatDateTime } from '../../lib/format'
 import {
   SidebarProvider,
   Sidebar,
@@ -73,10 +79,41 @@ const TopAppBar: React.FC = () => {
   const location = useLocation()
   const { user } = useAuth()
   const { config: companyConfig } = useCompany()
+  const queryClient = useQueryClient()
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const notificationsRef = useRef<HTMLDivElement>(null)
   const pageTitle = location.pathname === '/ai-advisor' ? 'AI Analyst' : 'Turnaround Operations'
+  const { data: notificationsData } = useQuery({
+    queryKey: ['notifications', 'navbar'],
+    queryFn: () => apiClient.getNotifications({ limit: 8 }),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  })
+  const notifications = notificationsData?.items ?? []
+  const unreadNotifications = notificationsData?.unread ?? 0
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [])
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => apiClient.markNotificationRead(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => apiClient.markAllNotificationsRead(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  })
 
   return (
-    <header className="sticky top-0 z-0 flex min-h-[72px] items-center gap-4 border-b border-border-default/80 bg-bg-surface/90 px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-md sm:px-6">
+    <header className="sticky top-0 z-40 flex min-h-[72px] items-center gap-4 border-b border-border-default/80 bg-bg-surface/90 px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-md sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         {companyConfig?.logo_url ? (
           <div className="hidden h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border-default bg-white sm:flex">
@@ -102,14 +139,57 @@ const TopAppBar: React.FC = () => {
           />
           <span className="text-[10px]">⌘K</span>
         </label>
-        <button
-          type="button"
-          onClick={() => navigate('/notifications')}
-          className="relative rounded-lg border border-border-default bg-bg-surface p-2 text-text-secondary transition-colors hover:text-text-primary"
-          title="Notifications"
-        >
-          <Bell size={15} />
-        </button>
+        <div ref={notificationsRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setNotificationsOpen((open) => !open)}
+            className="relative cursor-pointer p-2 text-text-secondary transition-colors hover:text-text-primary"
+            title="Notifications"
+            aria-label="Notifications"
+            aria-expanded={notificationsOpen}
+          >
+            <Bell size={15} className={unreadNotifications > 0 ? 'animate-notification-bell' : ''} />
+            {unreadNotifications > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ED642B] px-1 text-[9px] font-bold text-white">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
+          </button>
+
+          {notificationsOpen && (
+            <div className="absolute right-0 top-11 z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border-default bg-bg-surface shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border-default px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Bell size={15} className="text-[#ED642B]" />
+                  <div>
+                  <p className="text-sm font-bold text-text-primary">Notifications</p>
+                  <p className="text-[10px] text-text-tertiary">{unreadNotifications} unread</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadNotifications > 0 && <button type="button" onClick={() => markAllReadMutation.mutate()} disabled={markAllReadMutation.isPending} className="text-[10px] font-bold text-[#ED642B] hover:underline disabled:opacity-50">Mark all read</button>}
+                  <button type="button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications" title="Close" className="rounded-md p-1 text-text-tertiary hover:bg-bg-surface-raised hover:text-text-primary"><X size={15} /></button>
+                </div>
+              </div>
+              <div className="max-h-[390px] overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-8 text-center"><Bell size={22} className="mx-auto mb-2 text-text-tertiary opacity-40" /><p className="text-xs font-semibold text-text-secondary">No notifications yet</p></div>
+                ) : notifications.map((notification: any) => (
+                  <div key={notification.id} className={`border-b border-border-default px-4 py-3 last:border-b-0 ${notification.read ? 'opacity-60' : 'bg-[#ED642B]/[0.04]'}`}>
+                    <div className="flex items-start gap-2.5">
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.read ? 'bg-text-tertiary/40' : 'bg-[#ED642B]'}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2"><p className="text-xs font-bold text-text-primary">{notification.title}</p><span className="shrink-0 text-[9px] text-text-tertiary">{formatDateTime(notification.created_at)}</span></div>
+                        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary">{notification.description}</p>
+                        <div className="mt-2 flex items-center gap-3">
+                          {notification.link && <Link to={notification.link} onClick={() => setNotificationsOpen(false)} className="inline-flex items-center gap-1 text-[10px] font-bold text-[#ED642B]">View <ArrowRight size={10} /></Link>}
+                          {!notification.read && <button type="button" onClick={() => markReadMutation.mutate(notification.id)} disabled={markReadMutation.isPending} className="inline-flex items-center gap-1 text-[10px] font-semibold text-text-tertiary hover:text-text-primary disabled:opacity-50"><Check size={10} /> Mark read</button>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-border-default p-2"><button type="button" onClick={() => { setNotificationsOpen(false); navigate('/notifications') }} className="flex w-full items-center justify-center gap-1 rounded-lg bg-bg-surface-raised px-3 py-2 text-[11px] font-bold text-text-primary hover:text-[#ED642B]">View all notifications <ArrowRight size={12} /></button></div>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => window.print()}
@@ -210,6 +290,7 @@ function SidebarNavContent() {
     ...(['admin','fleet_manager'].includes(user?.role || '') ? [
       { name: 'Carrier Assets',  path: '/vehicles',     icon: Truck, badgeCount: totalFleet > 0 ? totalFleet : undefined },
       { name: 'Freight Stations', path: '/locations',   icon: Warehouse },
+      ...(!isAdmin ? [{ name: 'Maintenance & Fuel', path: '/admin/maintenance', icon: Wrench }] : []),
     ] : []),
     // ── Analytics (all staff) ────────────────────────────────────────────
     { name: 'Delay Alerts',     path: '/insights',      icon: AlertOctagon },
@@ -220,12 +301,14 @@ function SidebarNavContent() {
     ...(['admin','fleet_manager'].includes(user?.role || '') ? [
       { name: 'Settings',        path: '/settings',     icon: Sliders },
     ] : []),
-    // ── /admin/* — admin only ────────────────────────────────────────────
-    ...(isAdmin ? [
-      { name: 'Team',            path: '/admin/team',   icon: Users },
-      { name: 'Configuration',   path: '/admin/config', icon: Building2 },
-    ] : []),
   ]
+
+  const adminNavItems: NavItem[] = isAdmin ? [
+    { name: 'Company Executives', path: '/admin/team',        icon: Users },
+    { name: 'Drivers & Staff',  path: '/admin/drivers',     icon: UserRound },
+    { name: 'Maintenance & Fuel', path: '/admin/maintenance', icon: Wrench },
+    { name: 'Configuration',    path: '/admin/config',      icon: Building2 },
+  ] : []
 
   const handleLogout = async () => {
     try {
@@ -334,6 +417,27 @@ function SidebarNavContent() {
               </SidebarMenuItem>
             )
           })}
+          {adminNavItems.length > 0 && (
+            <>
+              {!isCollapsed && <li className="mt-3 border-t border-border-default px-3 pb-1 pt-3 text-[9px] font-bold uppercase tracking-[0.16em] text-text-tertiary">Administration</li>}
+              {adminNavItems.map((item) => {
+                const isActive = location.pathname.startsWith(item.path)
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <NavLink to={item.path} className="block w-full">
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        tooltip={isCollapsed ? item.name : undefined}
+                      >
+                        <item.icon size={15} className={isActive ? 'text-white shrink-0' : 'text-text-tertiary shrink-0'} />
+                        {!isCollapsed && <span>{item.name}</span>}
+                      </SidebarMenuButton>
+                    </NavLink>
+                  </SidebarMenuItem>
+                )
+              })}
+            </>
+          )}
         </SidebarMenu>
       </SidebarContent>
 

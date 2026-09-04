@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
@@ -5,7 +6,10 @@ from pydantic import Field
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Resolve the backend env file from this module, not the shell's cwd.
+        # This keeps `python turnaround-backend/run.py` and IDE launches
+        # from silently falling back to the placeholder production defaults.
+        env_file=Path(__file__).resolve().parent.parent / ".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )

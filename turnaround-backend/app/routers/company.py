@@ -35,6 +35,7 @@ class CompanyConfigResponse(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    operating_zone: str = 'east_africa'
     currency: str = 'KES'
     timezone: str = 'Africa/Nairobi'
     default_corridor: Optional[str] = None
@@ -68,6 +69,7 @@ class CompanyConfigUpdate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    operating_zone: Optional[str] = None
     currency: Optional[str] = None
     timezone: Optional[str] = None
     default_corridor: Optional[str] = None

@@ -24,6 +24,7 @@ import {
   Archive, ChevronDown, MoreVertical,
 } from 'lucide-react';
 import type { Trip } from '../../lib/api/types';
+import { getAssignmentConflict } from './assignmentAvailability';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import {
@@ -586,7 +587,13 @@ export const Trips: React.FC = () => {
   });
 
   const reassignTripMutation = useMutation({
-    mutationFn: ({ id, vehicle_id }: { id: string; vehicle_id: string }) => { setBusyTripId(id); return apiClient.reassignTrip(id, { vehicle_id }); },
+    mutationFn: ({ id, vehicle_id }: { id: string; vehicle_id: string }) => {
+      const target = trips.find((trip) => trip.id === id);
+      const conflict = target ? getAssignmentConflict(trips, { vehicle_id, planned_departure: target.planned_departure, planned_arrival: target.planned_arrival, driver_name: '' }, 'vehicle', id) : null;
+      if (conflict) throw new Error(conflict);
+      setBusyTripId(id);
+      return apiClient.reassignTrip(id, { vehicle_id });
+    },
     onSettled: () => setBusyTripId(null),
     onSuccess: () => { invalidateTrips(); setReassignTarget(null); toast({ variant: 'success', title: 'Trip Reassigned' }); },
     onError: (e: any) => toast({ variant: 'error', title: 'Reassign Failed', message: e?.message }),
@@ -596,6 +603,9 @@ export const Trips: React.FC = () => {
 
   const editDatesMutation = useMutation({
     mutationFn: ({ id, planned_departure, planned_arrival }: { id: string; planned_departure: string; planned_arrival: string }) => {
+      const target = trips.find((trip) => trip.id === id);
+      const conflict = target ? getAssignmentConflict(trips, { vehicle_id: target.vehicle_id, planned_departure, planned_arrival, driver_name: target.driver_name || '' }, 'vehicle', id) : null;
+      if (conflict) throw new Error(conflict);
       setBusyTripId(id);
       return apiClient.updateTrip(id, { planned_departure, planned_arrival });
     },
@@ -713,6 +723,17 @@ export const Trips: React.FC = () => {
         }
       ]
     };
+
+    const conflict = getAssignmentConflict(trips, {
+      vehicle_id: values.vehicle_id,
+      planned_departure: payload.planned_departure,
+      planned_arrival: payload.planned_arrival,
+      driver_name: vehicle?.driver_name || '',
+    }, 'vehicle');
+    if (conflict) {
+      toast({ variant: 'error', title: 'Vehicle unavailable', message: conflict });
+      return;
+    }
 
     createTripMutation.mutate(payload);
   };

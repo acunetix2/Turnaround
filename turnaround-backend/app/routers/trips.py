@@ -21,6 +21,37 @@ router = APIRouter(prefix="/trips", tags=["Trips"])
 
 WRITE_ROLES = require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER, UserRole.DISPATCHER)
 
+ACTIVE_ASSIGNMENT_STATUSES = (TripStatus.PLANNED, TripStatus.IN_PROGRESS, TripStatus.IN_TRANSIT, TripStatus.DELAYED)
+
+
+async def _ensure_vehicle_available(
+    db: AsyncSession,
+    company_id: str,
+    vehicle_id: str,
+    departure,
+    arrival,
+    exclude_trip_id: Optional[str] = None,
+) -> None:
+    if not departure or not arrival or arrival <= departure:
+        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_TIME_WINDOW", "message": "Planned arrival must be after planned departure."}})
+
+    query = (
+        select(Trip)
+        .join(Vehicle, Trip.vehicle_id == Vehicle.id)
+        .where(
+            Vehicle.company_id == company_id,
+            Trip.vehicle_id == vehicle_id,
+            Trip.status.in_(ACTIVE_ASSIGNMENT_STATUSES),
+            Trip.planned_departure < arrival,
+            Trip.planned_arrival > departure,
+        )
+    )
+    if exclude_trip_id:
+        query = query.where(Trip.id != exclude_trip_id)
+    conflict = (await db.execute(query)).scalar_one_or_none()
+    if conflict:
+        raise HTTPException(status_code=409, detail={"error": {"code": "RESOURCE_UNAVAILABLE", "message": "Vehicle is already assigned to an overlapping active trip."}})
+
 
 # ── Checkpoint builder ────────────────────────────────────────────────────────
 
@@ -190,6 +221,10 @@ async def create_trip(
     if not v_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
 
+    await _ensure_vehicle_available(
+        db, company_id, payload.vehicle_id, payload.planned_departure, payload.planned_arrival
+    )
+
     trip = Trip(id=str(uuid.uuid4()), **payload.model_dump())
     db.add(trip)
     await db.commit()
@@ -222,6 +257,13 @@ async def update_trip(
 
     previous_status = trip.status
     update_data = payload.model_dump(exclude_unset=True)
+    candidate_vehicle_id = update_data.get("vehicle_id", trip.vehicle_id)
+    candidate_departure = update_data.get("planned_departure", trip.planned_departure)
+    candidate_arrival = update_data.get("planned_arrival", trip.planned_arrival)
+    if {"vehicle_id", "planned_departure", "planned_arrival"} & update_data.keys():
+        await _ensure_vehicle_available(
+            db, company_id, candidate_vehicle_id, candidate_departure, candidate_arrival, exclude_trip_id=trip.id
+        )
     for key, value in update_data.items():
         setattr(trip, key, value)
 

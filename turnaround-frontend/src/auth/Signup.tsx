@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle, Building2, Users, BarChart3 } from 'lucide-react';
+import { ArrowRight, CheckCircle, Building2, Users, BarChart3, Moon, Sun } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { useAuth } from './AuthProvider';
-import type { UserRole } from '../lib/api/types';
+import { useTheme } from '../lib/ThemeContext';
 
 const PERKS = [
   { icon: BarChart3, title: 'Real-time dwell intelligence', desc: 'Know exactly where time and money are lost across every location.' },
@@ -20,15 +20,9 @@ const FLEET_SIZE_OPTIONS = [
   { value: '200+',    label: '200+ trucks',      description: 'National / cross-border operator' },
 ];
 
-const ROLE_OPTIONS = [
-  { value: 'fleet_manager', label: 'Fleet Manager', description: 'Manage fleet operations, vehicles & routes' },
-  { value: 'admin',         label: 'Administrator', description: 'Full organisation and system administration' },
-  { value: 'dispatcher',   label: 'Dispatcher',    description: 'Real-time route assignment & live monitoring' },
-  { value: 'analyst',      label: 'Data Analyst',  description: 'Performance benchmarking & reporting' },
-];
-
 export const Signup: React.FC = () => {
   const { signup } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -41,7 +35,6 @@ export const Signup: React.FC = () => {
     email: '',
     company: '',
     fleetSize: '11-50',
-    role: 'fleet_manager',
     password: '',
     confirmPassword: '',
   });
@@ -78,7 +71,6 @@ export const Signup: React.FC = () => {
         password: form.password,
         name: `${form.firstName} ${form.lastName}`.trim(),
         company: form.company,
-        role: form.role as UserRole,
         fleetSize: form.fleetSize
       });
       setRequiresEmailConfirmation(Boolean(result.requires_email_confirmation));
@@ -94,7 +86,7 @@ export const Signup: React.FC = () => {
   const labelCls = 'block text-xs font-semibold text-text-secondary mb-1.5';
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A051B] text-[#F4F5F7]">
+    <div className={`flex min-h-screen w-screen overflow-x-hidden text-[#F4F5F7] ${theme === 'dark' ? 'bg-[#0A051B]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
 
       {/* ── LEFT: info panel with photography and animated background ── */}
       <div className="relative hidden lg:flex lg:w-[45%] flex-col overflow-hidden">
@@ -156,13 +148,19 @@ export const Signup: React.FC = () => {
       </div>
 
       {/* ── RIGHT: Form panel ── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 overflow-y-auto bg-[#0E0724]/90">
+      <div className={`flex min-h-screen flex-1 flex-col items-center justify-start px-6 py-8 overflow-y-auto lg:justify-center lg:py-10 ${theme === 'dark' ? 'bg-[#0E0724]/90' : 'bg-white/90'}`}>
         {/* Mobile logo */}
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-6">
           <BrandLogo size={34} showText={true} />
         </Link>
 
-        <div className="w-full max-w-[440px]">
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
+
+        <div className={`w-full max-w-[440px] rounded-2xl border p-6 shadow-2xl backdrop-blur-md sm:p-8 ${theme === 'dark' ? 'border-white/10 bg-[#0B0928]/80' : 'border-[#250C77]/15 bg-white/90'}`}>
+          <div className="mb-7 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#250C77] ring-8 ring-[#250C77]/20"><BrandLogo size={48} showText={false} /></div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#ED642B]">Create your workspace</p>
+          </div>
 
           {done ? (
             /* Success confirmation state */
@@ -177,10 +175,10 @@ export const Signup: React.FC = () => {
                   : 'Welcome to Turnaround. Your organisation profile is ready to explore.'}
               </p>
               <button
-                onClick={() => navigate(requiresEmailConfirmation ? '/login' : '/dashboard')}
+                onClick={() => navigate('/login')}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 transition-all cursor-pointer"
               >
-                {requiresEmailConfirmation ? 'Back to Sign In' : 'Go to Dashboard'}
+                {requiresEmailConfirmation ? 'Back to Sign In' : 'Continue to Sign In'}
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -270,7 +268,7 @@ export const Signup: React.FC = () => {
                       required
                       value={form.email}
                       onChange={set('email')}
-                      placeholder="james.mwangi@haulage.co.ke"
+                        placeholder="james.mwangi@turnaround.com"
                       className={inputCls}
                     />
                     {fieldErrors.email && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.email}</p>}
@@ -289,21 +287,13 @@ export const Signup: React.FC = () => {
                     {fieldErrors.company && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.company}</p>}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div>
                     <div>
                       <label className={labelCls}>Fleet size</label>
                       <Select
                         value={form.fleetSize}
                         onChange={v => setForm(p => ({ ...p, fleetSize: v }))}
                         options={FLEET_SIZE_OPTIONS}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Your primary role</label>
-                      <Select
-                        value={form.role}
-                        onChange={v => setForm(p => ({ ...p, role: v }))}
-                        options={ROLE_OPTIONS}
                       />
                     </div>
                   </div>

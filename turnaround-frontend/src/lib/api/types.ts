@@ -1,4 +1,13 @@
-export type UserRole = 'admin' | 'fleet_manager' | 'dispatcher' | 'analyst';
+export type UserRole =
+  | 'admin'
+  | 'fleet_manager'
+  | 'dispatcher'
+  | 'operations_manager'
+  | 'maintenance_technician'
+  | 'supervisor'
+  | 'analyst'
+  | 'driver'
+  | 'viewer';
 
 export type LocationType =
   | 'warehouse'
@@ -43,6 +52,7 @@ export interface CompanyConfig extends Company {
   address?: string;
   city?: string;
   country?: string;
+  operating_zone?: string;
   currency: string;
   timezone: string;
   default_corridor?: string;
@@ -64,7 +74,7 @@ export interface User {
   company_name?: string;
   name: string;
   email: string;
-  role: UserRole | 'driver' | 'viewer';
+  role: UserRole;
   phone?: string;
   status: 'active' | 'inactive' | 'suspended';
   last_login?: string;
@@ -88,6 +98,10 @@ export interface Vehicle {
   driver_license?: string;
   driver_avatar?: string;
   driver_status?: 'on_duty' | 'resting' | 'driving';
+  driver_id?: string;
+  co_driver_id?: string;
+  driver?: FleetStaff;
+  co_driver?: FleetStaff;
   trailer_number?: string;
   container_number?: string;
   container_type?: string;
@@ -95,12 +109,30 @@ export interface Vehicle {
   telematics_provider?: string;
   tracker_imei?: string;
   fuel_level?: number; // 0-100 percentage
+  fuel_tank_capacity_liters?: number;
+  fuel_consumption_liters_per_100km?: number;
+  estimated_range_km?: number;
   odometer_km?: number;
   maintenance_status?: 'good' | 'due_soon' | 'in_service';
   next_inspection_date?: string;
   // Computed client-side helper fields if joined
   current_location_name?: string;
   today_excess_dwell_minutes?: number;
+}
+
+export interface FleetStaff {
+  id: string;
+  company_id: string;
+  name: string;
+  phone?: string;
+  license_number?: string;
+  license_expiry_date?: string;
+  availability_status?: 'available' | 'on_leave' | 'driving' | 'assigned' | 'unavailable';
+  staff_type: 'driver' | 'co_driver' | 'maintenance_technician' | 'engineer' | 'supervisor';
+  status: 'active' | 'inactive';
+  notes?: string;
+  created_at: string;
+  assigned_vehicle_count?: number;
 }
 
 export interface Location {

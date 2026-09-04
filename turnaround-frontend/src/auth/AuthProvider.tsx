@@ -12,7 +12,7 @@ interface AuthContextType {
   loading: boolean;
   loadingAction: 'checking-session' | 'logging-in' | 'logging-out' | 'signing-up' | null;
   login: (email: string, password?: string, role?: UserRole) => Promise<void>;
-  signup: (params: { email: string; password: string; name: string; company: string; role: UserRole; fleetSize?: string }) => Promise<{ requires_email_confirmation?: boolean }>;
+  signup: (params: { email: string; password: string; name: string; company: string; fleetSize?: string }) => Promise<{ requires_email_confirmation?: boolean }>;
   logout: () => Promise<void>;
   simulateRole: (role: UserRole) => void;
   isMockMode: boolean;
@@ -64,33 +64,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password,
     name,
     company,
-    role
   }: {
     email: string;
     password: string;
     name: string;
     company: string;
-    role: UserRole;
     fleetSize?: string;
   }): Promise<{ requires_email_confirmation?: boolean }> => {
     setLoading(true);
     setLoadingAction('signing-up');
     try {
       if (USE_MOCKS) {
+        const newCompanyId = `company-${crypto.randomUUID()}`;
         const mockSessionUser: User = {
           ...mockUser,
           email,
           name,
-          role,
+          role: 'admin',
           company_name: company,
-          company_id: 'seed-company-siginon-001'
+          company_id: newCompanyId
         };
         setUser(mockSessionUser);
         localStorage.setItem('supabase_mock_session', JSON.stringify(mockSessionUser));
-        localStorage.setItem('supabase_session_jwt', 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager');
+        localStorage.setItem('supabase_session_jwt', `demo-token:${crypto.randomUUID()}:${newCompanyId}:admin`);
         return {};
       } else {
-        const result = await apiClient.signup({ email, password, name, company, role });
+        localStorage.removeItem('supabase_session_jwt');
+        const result = await apiClient.signup({ email, password, name, company });
         if (result.user) setUser(result.user);
         return { requires_email_confirmation: result.requires_email_confirmation };
       }
@@ -117,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('supabase_session_jwt', 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager');
       } else {
         if (!password) throw new Error('Password is required');
+        localStorage.removeItem('supabase_session_jwt');
         setUser(await apiClient.login(email, password));
       }
     } finally {
@@ -135,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('supabase_session_jwt');
       } else {
         await apiClient.logout();
+        localStorage.removeItem('supabase_session_jwt');
         setUser(null);
       }
     } finally {

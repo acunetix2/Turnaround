@@ -257,6 +257,23 @@ export const CompanyConfig: React.FC = () => {
               </div>
             </Section>
 
+            <Section title="Operating Zone" description="Choose the geographic area where your company operates. Maps use this setting to show the active operating boundary.">
+              <Field label="Company Operating Zone">
+                <Select
+                  value={form.operating_zone || 'east_africa'}
+                  onValueChange={value => set('operating_zone', value)}
+                  options={[
+                    { value: 'east_africa', label: 'East Africa' },
+                    { value: 'great_lakes', label: 'Great Lakes Region' },
+                    { value: 'kenya', label: 'Kenya' },
+                    { value: 'uganda', label: 'Uganda' },
+                    { value: 'tanzania', label: 'Tanzania' },
+                    { value: 'rwanda', label: 'Rwanda' },
+                  ]}
+                />
+              </Field>
+            </Section>
+
             <Section title="Regional Settings" description="Currency and timezone affect all financial displays and timestamps across the app.">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Currency" hint="Used in all cost and demurrage displays">

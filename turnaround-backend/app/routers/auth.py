@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -17,8 +18,10 @@ from app.db.models.user import User, UserRole
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.db.supabase_client import get_supabase_client
+from supabase_auth.errors import AuthApiError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger("turnaround.auth")
 
 
 def _cipher() -> Fernet:
@@ -59,7 +62,6 @@ class SignupRequest(BaseModel):
     password: str = Field(min_length=8)
     name: str = Field(min_length=2, max_length=255)
     company: str = Field(min_length=2, max_length=255)
-    role: str = "fleet_manager"
 
 
 class PasswordResetRequest(BaseModel):
@@ -79,13 +81,13 @@ class SessionResponse(BaseModel):
     current: bool
 
 
-async def _local_user(db: AsyncSession, supabase_user, fallback_company: Optional[str] = None, fallback_name: Optional[str] = None, fallback_role: Optional[str] = None) -> User:
+async def _local_user(db: AsyncSession, supabase_user, fallback_company: Optional[str] = None, fallback_name: Optional[str] = None, fallback_role: Optional[str] = None, explicit_company_id: Optional[str] = None) -> User:
     metadata = supabase_user.user_metadata or {}
     app_metadata = supabase_user.app_metadata or {}
     user_id = supabase_user.id
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    company_id = app_metadata.get("company_id") or metadata.get("company_id") or (f"company-{uuid.uuid4()}" if fallback_company else "demo-company-1")
+    company_id = explicit_company_id or app_metadata.get("company_id") or metadata.get("company_id") or (str(uuid.uuid4()) if fallback_company else "demo-company-1")
     if not user:
         company_result = await db.execute(select(Company).where(Company.id == company_id))
         company = company_result.scalar_one_or_none()
@@ -139,13 +141,47 @@ async def login(payload: LoginRequest, response: Response, db: Annotated[AsyncSe
 
 @router.post("/signup", response_model=AuthResponse)
 async def signup(payload: SignupRequest, response: Response, db: Annotated[AsyncSession, Depends(get_db)]):
+    # Signup must never inherit the browser's previous tenant session. This is
+    # especially important when Supabase requires email confirmation and no
+    # replacement session is returned below.
+    response.delete_cookie(
+        settings.AUTH_COOKIE_NAME,
+        path="/",
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite="none" if settings.AUTH_COOKIE_SECURE else "lax",
+    )
     try:
-        result = get_supabase_client().auth.sign_up({"email": str(payload.email), "password": payload.password, "options": {"data": {"name": payload.name, "company": payload.company, "role": payload.role}}})
+        result = get_supabase_client().auth.sign_up({"email": str(payload.email), "password": payload.password, "options": {"data": {"name": payload.name, "company": payload.company}}})
+    except AuthApiError as exc:
+        logger.warning("Supabase signup rejected request: code=%s status=%s", exc.code, exc.status)
+        provider_messages = {
+            "user_already_exists": "An account with this email already exists. Please sign in instead.",
+            "email_exists": "An account with this email already exists. Please sign in instead.",
+            "signup_disabled": "New account registration is currently disabled.",
+            "weak_password": "Choose a stronger password with at least 8 characters.",
+        }
+        provider_message = str(exc).lower()
+        if exc.status == 429 or "rate limit" in provider_message or "too many" in provider_message:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Signup email delivery is temporarily rate-limited by the authentication provider. Please wait a few minutes and try again.",
+                headers={"Retry-After": "300"},
+            ) from exc
+        message = provider_messages.get(str(exc.code), "Unable to create account. Check your details and try again.")
+        raise HTTPException(status_code=400, detail=message) from exc
     except Exception as exc:
+        logger.exception("Unexpected Supabase signup failure")
         raise HTTPException(status_code=400, detail="Unable to create account") from exc
     if not result.user:
         raise HTTPException(status_code=400, detail="Unable to create account")
-    user = await _local_user(db, result.user, fallback_company=payload.company, fallback_name=payload.name, fallback_role=payload.role)
+    existing_user = (await db.execute(select(User).where(User.id == result.user.id))).scalar_one_or_none()
+    if existing_user:
+        raise HTTPException(status_code=409, detail="An account already exists. Please sign in instead.")
+    # A public signup is always a new tenant. Never trust user metadata or a
+    # requested role to attach an account to an existing company.
+    new_company_id = str(uuid.uuid4())
+    user = await _local_user(db, result.user, fallback_company=payload.company, fallback_name=payload.name, fallback_role=UserRole.ADMIN.value, explicit_company_id=new_company_id)
+    user.role = UserRole.ADMIN
     if not result.session:
         await db.commit()
         return AuthResponse(user={"id": user.id, "company_id": user.company_id, "name": user.name, "email": user.email, "role": user.role.value}, requires_email_confirmation=True)

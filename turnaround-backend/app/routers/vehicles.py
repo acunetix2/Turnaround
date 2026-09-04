@@ -8,6 +8,7 @@ from app.db.models.vehicle import Vehicle
 from app.db.models.gps_event import GPSEvent
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.user import UserRole, User
+from app.db.models.fleet_staff import FleetStaff
 from app.deps import get_current_user, get_current_company
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleResponse
 from app.schemas.gps_event import GPSEventResponse
@@ -183,6 +184,11 @@ async def create_vehicle(
     company_id: Annotated[str, Depends(get_current_company)],
     _rbac: bool = Depends(WRITE_ROLES),
 ):
+    if payload.driver_id or payload.co_driver_id:
+        assigned_ids = [value for value in (payload.driver_id, payload.co_driver_id) if value]
+        assigned = (await db.execute(select(FleetStaff).where(FleetStaff.id.in_(assigned_ids), FleetStaff.company_id == company_id, FleetStaff.status == 'active'))).scalars().all()
+        if len(assigned) != len(set(assigned_ids)):
+            raise HTTPException(status_code=400, detail="Assigned driver or co-driver is not an active member of this company")
     vehicle = Vehicle(id=str(uuid.uuid4()), company_id=company_id, **payload.model_dump())
     db.add(vehicle)
     await db.commit()
@@ -205,6 +211,12 @@ async def update_vehicle(
     vehicle = result.scalar_one_or_none()
     if not vehicle:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
+
+    assignment_ids = [value for value in (payload.driver_id, payload.co_driver_id) if value]
+    if assignment_ids:
+        assigned = (await db.execute(select(FleetStaff).where(FleetStaff.id.in_(assignment_ids), FleetStaff.company_id == company_id, FleetStaff.status == 'active'))).scalars().all()
+        if len(assigned) != len(set(assignment_ids)):
+            raise HTTPException(status_code=400, detail="Assigned driver or co-driver is not an active member of this company")
 
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(vehicle, field, value)

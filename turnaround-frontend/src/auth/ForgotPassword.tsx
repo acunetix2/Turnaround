@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Mail, ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck, Moon, Sun } from 'lucide-react';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { apiClient } from '../lib/api/client';
+import { useTheme } from '../lib/ThemeContext';
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const { theme, toggleTheme } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +34,7 @@ export const ForgotPassword: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A051B] text-[#F4F5F7]">
+    <div className={`flex h-screen w-screen overflow-hidden text-[#F4F5F7] ${theme === 'dark' ? 'bg-[#0A051B]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
 
       {/* ── LEFT PANEL: Hero photography + animated moving fleet ── */}
       <div className="relative hidden lg:flex lg:w-[50%] flex-col overflow-hidden">
@@ -76,7 +78,8 @@ export const ForgotPassword: React.FC = () => {
       </div>
 
       {/* ── RIGHT PANEL: Recovery form ── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto bg-[#0E0724]/90">
+      <div className={`relative flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto ${theme === 'dark' ? 'bg-[#0E0724]/90' : 'bg-white/90'}`}>
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
           <BrandLogo size={34} showText={true} />
         </Link>
@@ -132,7 +135,7 @@ export const ForgotPassword: React.FC = () => {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="dispatcher@haulage.co.ke"
+                      placeholder="dispatcher@turnaround.com"
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
                     />
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />

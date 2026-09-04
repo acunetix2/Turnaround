@@ -7,6 +7,8 @@ import { useLocations } from '../../hooks/useLocations';
 import { useLiveGPSEvents } from '../../hooks/useLiveMap';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
+import { useCompany } from '../../lib/CompanyContext';
+import { getOperatingZone } from '../../lib/operatingZones';
 import { formatMinutes } from '../../lib/format';
 import type { Vehicle, VehicleStatus } from '../../lib/api/types';
 import {
@@ -187,6 +189,8 @@ export const LiveMap: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [vehicleCardExpanded, setVehicleCardExpanded] = useState<boolean>(false);
+  const { config: companyConfig } = useCompany();
+  const operatingZone = getOperatingZone(companyConfig?.operating_zone);
 
   // Queries
   const { data: vehicles } = useVehicles();
@@ -207,8 +211,8 @@ export const LiveMap: React.FC = () => {
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: initialStyleObj as any,
-      center: [37.2, -0.8],
-      zoom: 6.8,
+      center: operatingZone.center,
+      zoom: operatingZone.zoom,
       pitch: 20,
       bearing: 0,
       attributionControl: false,
@@ -226,6 +230,31 @@ export const LiveMap: React.FC = () => {
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     map.on('load', () => {
+      map.addSource('operating-zone', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: { name: operatingZone.label },
+          geometry: { type: 'Polygon', coordinates: [operatingZone.polygon] },
+        },
+      });
+      map.addSource('operating-zone-line', {
+        type: 'geojson',
+        data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: operatingZone.polygon } },
+      });
+      map.addLayer({
+        id: 'operating-zone-fill',
+        type: 'fill',
+        source: 'operating-zone',
+        paint: { 'fill-color': '#ED642B', 'fill-opacity': 0.12 },
+      });
+      map.addLayer({
+        id: 'operating-zone-outline',
+        type: 'line',
+        source: 'operating-zone-line',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#ED642B', 'line-width': 4, 'line-dasharray': [2, 1], 'line-opacity': 1 },
+      });
       // Add delivery routes
       if (!map.getSource('corridor-routes')) {
         map.addSource('corridor-routes', {
@@ -278,7 +307,30 @@ export const LiveMap: React.FC = () => {
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [operatingZone]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const updateBoundary = () => {
+      const source = map.getSource('operating-zone') as maplibregl.GeoJSONSource | undefined;
+      const lineSource = map.getSource('operating-zone-line') as maplibregl.GeoJSONSource | undefined;
+      if (!source || !lineSource) return;
+      const boundary = {
+        type: 'Feature',
+        properties: { name: operatingZone.label },
+        geometry: { type: 'Polygon', coordinates: [operatingZone.polygon] },
+      } as GeoJSON.Feature<GeoJSON.Polygon>;
+      source.setData(boundary);
+      lineSource.setData({ type: 'Feature', properties: { name: operatingZone.label }, geometry: { type: 'LineString', coordinates: operatingZone.polygon } });
+      map.flyTo({ center: operatingZone.center, zoom: operatingZone.zoom, duration: 800 });
+    };
+    if (!map.isStyleLoaded()) {
+      map.once('load', updateBoundary);
+      return () => map.off('load', updateBoundary);
+    }
+    updateBoundary();
+  }, [operatingZone]);
 
   // Toggle corridor routes visibility
   useEffect(() => {

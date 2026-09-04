@@ -23,8 +23,10 @@ import { Demurrage as DelayCharges } from '../features/demurrage/Demurrage';
 import { GatePassPage } from '../features/gate-pass/GatePassPage';
 import { GatePassList } from '../features/gate-pass/GatePassList';
 import { UserManagement } from '../features/users/UserManagement';
+import { DriverRoster } from '../features/drivers/DriverRoster';
 import { Notifications } from '../features/notifications/Notifications';
 import { CompanyConfig } from '../features/admin/CompanyConfig';
+import { MaintenanceFuel } from '../features/maintenance/MaintenanceFuel';
 import { PrivacyPolicyPage } from '../features/legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from '../features/legal/TermsOfServicePage';
 import { RouteErrorBoundary } from '../components/common/RouteErrorBoundary';
@@ -33,8 +35,8 @@ import type { UserRole } from '../lib/api/types';
 // Role sets
 const ADMIN:         UserRole[] = ['admin'];
 const ADMIN_MANAGER: UserRole[] = ['admin', 'fleet_manager'];
-const OPERATIONS:    UserRole[] = ['admin', 'fleet_manager', 'dispatcher'];
-const ALL_STAFF:     UserRole[] = ['admin', 'fleet_manager', 'dispatcher', 'driver', 'viewer', 'analyst'];
+const OPERATIONS:    UserRole[] = ['admin', 'fleet_manager', 'dispatcher', 'operations_manager', 'supervisor'];
+const ALL_STAFF:     UserRole[] = ['admin', 'fleet_manager', 'dispatcher', 'operations_manager', 'maintenance_technician', 'supervisor', 'driver', 'viewer', 'analyst'];
 
 // Wrap element in a role-checked ProtectedRoute
 function guard(element: React.ReactElement, roles: UserRole[]) {
@@ -79,6 +81,7 @@ export const router = createBrowserRouter([
       // ── Fleet management (fleet manager and above) ────────────────────────
       { path: '/vehicles',         element: guard(<Vehicles />, ADMIN_MANAGER),        errorElement: <RouteErrorBoundary /> },
       { path: '/vehicles/:id',     element: guard(<VehicleDetail />, ADMIN_MANAGER),   errorElement: <RouteErrorBoundary /> },
+      { path: '/admin/maintenance', element: guard(<MaintenanceFuel />, ['admin', 'fleet_manager', 'maintenance_technician', 'supervisor']), errorElement: <RouteErrorBoundary /> },
       { path: '/locations',        element: guard(<Locations />, ADMIN_MANAGER),       errorElement: <RouteErrorBoundary /> },
       { path: '/locations/:id',    element: guard(<LocationDetail />, ADMIN_MANAGER),  errorElement: <RouteErrorBoundary /> },
 
@@ -92,6 +95,7 @@ export const router = createBrowserRouter([
 
       // ── /admin/* — admin only ─────────────────────────────────────────────
       { path: '/admin/team',       element: guard(<UserManagement />, ADMIN),          errorElement: <RouteErrorBoundary /> },
+      { path: '/admin/drivers',    element: guard(<DriverRoster />, ADMIN),            errorElement: <RouteErrorBoundary /> },
       { path: '/admin/config',     element: guard(<CompanyConfig />, ADMIN),           errorElement: <RouteErrorBoundary /> },
 
       // Legacy redirects so old bookmarks don't 404

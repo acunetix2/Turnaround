@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, Search, Plus, Shield, Truck, Eye, Edit2, Trash2,
   Ban, RefreshCw, ChevronDown, X, UserCheck,
   Mail, Phone, Calendar, MoreVertical, Filter, UserRoundPlus,
+  Download, Upload,
 } from 'lucide-react';
 import { apiClient } from '../../lib/api/client';
 import { useAuth } from '../../auth/AuthProvider';
@@ -13,16 +14,21 @@ import { formatDateTime } from '../../lib/format';
 import type { User } from '../../lib/api/types';
 import { MetricCard, MetricCardHeader, MetricCardLabel, MetricCardContent, MetricCardValue, MetricCardDifferential, MetricCardSparkline } from '../../components/ui/MetricCard';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../components/ui/Select';
+import { parseTeamMembersCsv } from './teamMembersCsv';
+
+const teamCsvTemplate = `name,email,role,phone,status
+Jane Doe,jane@company.com,admin,+254700000001,active
+Alex Maina,alex@company.com,fleet_manager,+254700000002,inactive`;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const ROLE_CFG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  admin:         { label: 'Admin',         color: 'bg-[#250C77]/15 text-[#250C77] border-[#250C77]/30',      icon: <Shield size={10} /> },
-  fleet_manager: { label: 'Fleet Manager', color: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',   icon: <Truck size={10} /> },
-  dispatcher:    { label: 'Dispatcher',    color: 'bg-[#ED642B]/15 text-[#ED642B] border-[#ED642B]/30',      icon: <RefreshCw size={10} /> },
-  driver:        { label: 'Driver',        color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', icon: <Truck size={10} /> },
-  viewer:        { label: 'Viewer',        color: 'bg-gray-500/15 text-gray-500 border-gray-500/30',          icon: <Eye size={10} /> },
-  analyst:       { label: 'Analyst',       color: 'bg-purple-500/15 text-purple-500 border-purple-500/30',   icon: <Shield size={10} /> },
+  admin:                  { label: 'Admin',                 color: 'bg-[#250C77]/15 text-[#250C77] border-[#250C77]/30',       icon: <Shield size={10} /> },
+  fleet_manager:          { label: 'Fleet Manager',         color: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',    icon: <Truck size={10} /> },
+  dispatcher:             { label: 'Dispatcher',            color: 'bg-[#ED642B]/15 text-[#ED642B] border-[#ED642B]/30',       icon: <RefreshCw size={10} /> },
+  driver:                 { label: 'Driver',                color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', icon: <Truck size={10} /> },
+  viewer:                 { label: 'Viewer',                color: 'bg-gray-500/15 text-gray-500 border-gray-500/30',           icon: <Eye size={10} /> },
+  analyst:                { label: 'Analyst',               color: 'bg-purple-500/15 text-purple-500 border-purple-500/30',    icon: <Shield size={10} /> },
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; dot: string }> = {
@@ -83,7 +89,7 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
               <Users size={15} className="text-[#ED642B]" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-text-primary">{isEdit ? 'Edit Team Member' : 'Add Team Member'}</h3>
+              <h3 className="text-base font-bold text-text-primary">{isEdit ? 'Edit Executive' : 'Add Executive'}</h3>
               <p className="text-[11px] text-text-tertiary">{isEdit ? `Update ${user.name}'s role and access` : 'Invite a new member to your company workspace'}</p>
             </div>
           </div>
@@ -209,12 +215,14 @@ export const UserManagement: React.FC = () => {
   const { role: myRole } = useAuth();
   const { toast } = useToast();
   const isAdmin = myRole === 'admin';
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState<'create' | User | null>(null);
   const [confirm, setConfirm] = useState<{ action: string; user: User } | null>(null);
+  const [openActions, setOpenActions] = useState<string | null>(null);
 
   // ── queries ──
   const { data, isLoading } = useQuery({
@@ -263,6 +271,57 @@ export const UserManagement: React.FC = () => {
     onError: (e: any) => toast({ variant: 'error', title: 'Failed', message: e?.message }),
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (rows: Array<{ name: string; email?: string; role: string; phone?: string; status: 'active' | 'inactive' }>) => {
+      const created: User[] = [];
+      for (const row of rows) {
+        const payload = {
+          email: row.email || `${row.name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '')}@company.local`,
+          name: row.name,
+          role: row.role,
+          phone: row.phone || undefined,
+          status: row.status,
+        };
+        created.push(await apiClient.createUser(payload));
+      }
+      return created;
+    },
+    onSuccess: (created) => {
+      invalidate();
+      toast({ variant: 'success', title: `${created.length} executives uploaded`, message: 'Company executives were registered from the CSV.' });
+    },
+    onError: (e: any) => toast({ variant: 'error', title: 'CSV import failed', message: e?.message }),
+  });
+
+  const handleDownloadTemplate = () => {
+    const blob = new Blob([teamCsvTemplate], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'turnaround-team-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const rows = parseTeamMembersCsv(await file.text());
+      if (!rows.length) {
+        toast({ variant: 'error', title: 'No valid rows found', message: 'Check the CSV headers and values, then try again.' });
+        event.target.value = '';
+        return;
+      }
+      bulkImportMutation.mutate(rows);
+    } catch (error: any) {
+      toast({ variant: 'error', title: 'CSV import failed', message: error.message || 'The file could not be read.' });
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   // ── stats ──
   const totalUsers = users.length;
   const activeCount = users.filter(u => u.status === 'active').length;
@@ -280,13 +339,16 @@ export const UserManagement: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Teams</h1>
-          <p className="text-sm text-text-secondary mt-1">Manage your team members, roles and access permissions</p>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Company Executives</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage company executives, leadership access, and permissions</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="small" icon={<Download size={13} />} onClick={handleDownloadTemplate}>CSV template</Button>
+          <Button variant="outline" size="small" icon={<Upload size={13} />} loading={bulkImportMutation.isPending} onClick={() => fileInputRef.current?.click()}>Upload CSV</Button>
           <Button variant="outline" size="small" icon={<Filter size={13} />}>Filters</Button>
-          {isAdmin && <Button variant="primary" size="small" icon={<Plus size={13} />} onClick={() => setShowForm('create')}>Add Team Member</Button>}
+          {isAdmin && <Button variant="primary" size="small" icon={<Plus size={13} />} onClick={() => setShowForm('create')}>Add Executive</Button>}
         </div>
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
       </div>
 
       {/* KPI strip */}
@@ -334,8 +396,8 @@ export const UserManagement: React.FC = () => {
                   <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
                   <td className="px-4 py-3 text-[11px] text-text-secondary"><div className="flex items-center gap-1.5"><Phone size={11} />{user.phone || '—'}</div><div className="flex items-center gap-1.5 mt-1 text-[10px] text-text-tertiary"><Mail size={11} />{user.email}</div></td>
                   <td className="px-4 py-3 text-[11px] text-text-secondary"><div className="flex items-center gap-1.5"><Calendar size={11} />{formatDateTime(user.created_at)}</div><div className="text-[10px] text-text-tertiary mt-1">{user.status === 'inactive' ? 'Pending invitation' : 'Member'}</div></td>
-                  <td className="px-4 py-3"><div className="flex items-center justify-end gap-1">
-                    {isAdmin && <><button title="Edit member" onClick={() => setShowForm(user)} className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised cursor-pointer"><Edit2 size={13} /></button><button title={user.status === 'suspended' ? 'Activate member' : 'Suspend member'} onClick={() => setConfirm({ action: user.status === 'suspended' ? 'activate' : 'suspend', user })} className="p-1.5 rounded-lg text-text-tertiary hover:text-[#ED642B] hover:bg-bg-surface-raised cursor-pointer">{user.status === 'suspended' ? <UserCheck size={13} /> : <Ban size={13} />}</button><button title="Delete member" onClick={() => setConfirm({ action: 'delete', user })} className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-500/10 cursor-pointer"><MoreVertical size={14} /></button></>}
+                  <td className="relative px-4 py-3"><div className="flex items-center justify-end gap-1">
+                    {isAdmin && <div className="relative"><button title="User actions" aria-label={`Actions for ${user.name}`} onClick={() => setOpenActions(openActions === user.id ? null : user.id)} className="cursor-pointer rounded-lg p-1.5 text-text-tertiary hover:bg-bg-surface-raised hover:text-text-primary"><MoreVertical size={15} /></button>{openActions === user.id && <div className="absolute right-0 top-9 z-20 min-w-36 overflow-hidden rounded-lg border border-border-default bg-bg-surface p-1 shadow-xl"><button type="button" onClick={() => { setOpenActions(null); setShowForm(user); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary hover:bg-bg-surface-raised hover:text-text-primary"><Edit2 size={12} /> Edit member</button><button type="button" onClick={() => { setOpenActions(null); setConfirm({ action: user.status === 'suspended' ? 'activate' : 'suspend', user }); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary hover:bg-bg-surface-raised hover:text-[#ED642B]">{user.status === 'suspended' ? <UserCheck size={12} /> : <Ban size={12} />}{user.status === 'suspended' ? 'Activate member' : 'Suspend member'}</button><button type="button" onClick={() => { setOpenActions(null); setConfirm({ action: 'delete', user }); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary hover:bg-red-500/10 hover:text-red-500"><Trash2 size={12} /> Delete member</button></div>}</div>}
                   </div></td>
                 </tr>;
               })}
@@ -366,7 +428,7 @@ export const UserManagement: React.FC = () => {
         <div className="rounded-xl border border-border-default bg-bg-surface p-12 text-center">
           <Users size={28} className="mx-auto mb-3 opacity-20 text-[#250C77]" />
           <p className="text-sm font-semibold text-text-secondary">No users found</p>
-          <p className="text-xs text-text-tertiary mt-1">Adjust filters or add a new team member.</p>
+          <p className="text-xs text-text-tertiary mt-1">Adjust filters or add a company executive.</p>
           {isAdmin && (
             <Button variant="outline" size="small" className="mt-4" icon={<Plus size={12} />} onClick={() => setShowForm('create')}>
               Add First User

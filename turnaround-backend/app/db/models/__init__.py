@@ -15,9 +15,10 @@ from app.db.models.demurrage_claim import DemurrageClaim
 from app.db.models.gate_pass import GatePass
 from app.db.models.notification import Notification, NotificationDevice
 from app.db.models.auth_session import AuthSession
+from app.db.models.fleet_staff import FleetStaff
 
 __all__ = [
     "Company", "User", "Vehicle", "Location",
     "Trip", "GPSEvent", "DwellEvent", "Insight",
-    "DemurrageClaim", "GatePass", "Notification", "AuthSession",
+    "DemurrageClaim", "GatePass", "Notification", "AuthSession", "FleetStaff",
 ]

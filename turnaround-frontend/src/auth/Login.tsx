@@ -69,7 +69,6 @@ export const Login: React.FC = () => {
           {/* Headline */}
           <div className="space-y-6">
             <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 rounded-lg border border-[#ED642B]/30 bg-[#250C77]/60 px-3 py-1.5 text-[11px] font-semibold text-white/90"><span className="h-1.5 w-1.5 rounded-full bg-[#ED642B]" /> Logistics. Optimized.</span>
               <h1 className="mt-5 text-4xl xl:text-[42px] font-extrabold text-white leading-tight tracking-tight">
                 Delivering Excellence.<br />
                 <span className="text-[#ED642B]">Connecting East Africa.</span>
@@ -109,7 +108,12 @@ export const Login: React.FC = () => {
         </Link>
 
         <div className="w-full max-w-[458px] rounded-xl border border-white/10 bg-[#0B0928]/80 p-6 shadow-2xl backdrop-blur-md sm:p-7">
-          <div className="mb-7 text-center"><div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#250C77] ring-8 ring-[#250C77]/20"><Lock size={23} className="text-white" /></div><h2 className="text-2xl font-extrabold text-white tracking-tight">Welcome back</h2><p className="mt-1.5 text-sm text-text-secondary">Sign in to your Turnaround account</p></div>
+          <div className="mb-7 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#250C77] ring-8 ring-[#250C77]/20">
+              <BrandLogo size={48} showText={false} />
+            </div>
+            <h2 className="text-2xl font-extrabold text-white tracking-tight">Welcome back</h2><p className="mt-1.5 text-sm text-text-secondary">Sign in to your Turnaround account</p>
+          </div>
 
           {/* Error */}
           {error && (
@@ -130,7 +134,7 @@ export const Login: React.FC = () => {
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="operations@siginon.com"
+                  placeholder="operations@turnaround.com"
                   className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
                 />
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
@@ -194,9 +198,7 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3 text-[11px] text-text-tertiary"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div>
-          <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] py-3 text-sm font-semibold text-white hover:bg-white/[0.07] cursor-pointer"><span className="font-bold text-[#4285F4]">G</span> Sign in with Google</button>
-          <p className="mt-6 text-center text-sm text-text-tertiary">Don't have an account? <Link to="/signup" className="font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors">Contact your administrator</Link>
+          <p className="mt-6 text-center text-sm text-text-tertiary">Don't have an account? <Link to="/signup" className="font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors">Create an account</Link>
           </p>
           <p className="mt-5 text-center text-[11px] text-text-tertiary">
             <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>

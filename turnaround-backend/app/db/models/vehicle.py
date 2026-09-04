@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.db.models.dwell_event import DwellEvent
     from app.db.models.demurrage_claim import DemurrageClaim
     from app.db.models.gate_pass import GatePass
+    from app.db.models.fleet_staff import FleetStaff
 
 
 class VehicleStatus(str, enum.Enum):
@@ -63,6 +64,8 @@ class Vehicle(Base):
         SQLEnum(DriverStatus, values_callable=lambda obj: [e.value for e in obj], name="driverstatus"),
         nullable=True
     )
+    driver_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("fleet_staff.id", ondelete="SET NULL"), nullable=True, index=True)
+    co_driver_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("fleet_staff.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # ── Container / Cargo ────────────────────────────────────────────────────
     trailer_number: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
@@ -76,6 +79,8 @@ class Vehicle(Base):
 
     # ── Operational State ────────────────────────────────────────────────────
     fuel_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # 0-100 %
+    fuel_tank_capacity_liters: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    fuel_consumption_liters_per_100km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odometer_km: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     maintenance_status: Mapped[Optional[MaintenanceStatus]] = mapped_column(
         SQLEnum(MaintenanceStatus, values_callable=lambda obj: [e.value for e in obj], name="maintenancestatus"),
@@ -91,3 +96,5 @@ class Vehicle(Base):
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="vehicle", cascade="all, delete-orphan")
     demurrage_claims: Mapped[List["DemurrageClaim"]] = relationship("DemurrageClaim", back_populates="vehicle")
     gate_passes: Mapped[List["GatePass"]] = relationship("GatePass", back_populates="vehicle")
+    driver: Mapped[Optional["FleetStaff"]] = relationship("FleetStaff", foreign_keys=[driver_id], back_populates="assigned_vehicles")
+    co_driver: Mapped[Optional["FleetStaff"]] = relationship("FleetStaff", foreign_keys=[co_driver_id], back_populates="co_driven_vehicles")
