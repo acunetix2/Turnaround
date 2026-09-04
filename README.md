@@ -53,34 +53,37 @@ Containers are modeled as cargo equipment and are not assigned drivers. Powered 
 | ORM and migrations | SQLAlchemy 2, asyncpg, Alembic |
 | Authentication | Supabase Auth with backend-managed sessions |
 | Notifications | Firebase Cloud Messaging |
-| Deployment | Vercel frontend and Render backend |
 
-## 📡 GPS Integration
+## 📡 GPS Intelligence Flow
 
-Turnaround receives telemetry from a tracker or external provider through the GPS ingestion endpoint:
+Turnaround turns location signals into practical operational decisions without requiring dispatchers to interpret raw tracking data.
 
 ```text
-POST /api/v1/gps/events
+Vehicle movement
+   ↓
+Location awareness
+   ↓
+Facility and corridor recognition
+   ↓
+Arrival, dwell, and departure understanding
+   ↓
+Expected time comparison
+   ↓
+Delay, cost, and risk visibility
+   ↓
+Faster dispatcher action
 ```
 
-Example payload:
+### How the flow works
 
-```json
-{
-   "events": [
-      {
-         "vehicle_id": "vehicle-uuid",
-         "latitude": -1.2921,
-         "longitude": 36.8219,
-         "speed": 42,
-         "heading": 90,
-         "recorded_at": "2026-09-04T18:00:00Z"
-      }
-   ]
-}
-```
+1. **Movement is observed:** The system receives location signals from connected fleet assets.
+2. **Context is added:** Each position is understood in relation to ports, depots, warehouses, border posts, weighbridges, and planned routes.
+3. **Operational states are identified:** The platform distinguishes movement, arrival, active dwell, and departure.
+4. **Performance is compared:** Actual time at a facility is compared with the expected operating baseline.
+5. **Business impact is explained:** Excess time is translated into delay exposure, operating cost, SLA risk, and possible demurrage.
+6. **Teams take action:** Dispatchers and fleet managers use the shared operating picture to prioritize the next intervention.
 
-The live map reads the latest position for every vehicle from `GET /api/v1/vehicles/live`. GPS events are deduplicated and used to evaluate geofences and dwell state. A direct Traccar, Teltonika, Samsara, or Cartrack connection still requires configuring that provider to forward telemetry to the ingestion endpoint.
+The goal is simple: transform an invisible delay into a visible, understandable, and actionable event.
 
 ## ✉️ Email Confirmation
 
@@ -93,30 +96,6 @@ Production signup uses Supabase email confirmation:
 5. The user continues to `/login`.
 
 Add the deployed frontend origin and `/confirm-email` to the Supabase Authentication URL allow list. Set the backend `FRONTEND_URL` to the same frontend origin.
-
-## ☁️ Deployment
-
-### Render backend
-
-The root `render.yaml` configures the backend with:
-
-```text
-Build:   pip install -r requirements.txt
-Release: alembic upgrade heads
-Start:   python run.py
-Health:  /health
-```
-
-Required production values include `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`, `FRONTEND_URL`, and `CORS_ORIGINS`.
-
-### Vercel frontend
-
-Set the Vercel project root to `turnaround-frontend`, then configure:
-
-```dotenv
-VITE_USE_MOCKS=false
-VITE_API_BASE_URL=https://<your-render-service>/api/v1
-```
 
 ## 🧪 Demo Workflow
 
