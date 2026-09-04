@@ -3,6 +3,8 @@
 # 🚛 Turnaround
 ### Operational Intelligence Platform for Commercial Fleet & Corridor Logistics
 
+<img src="Designs/turnaround-cyber-passport.svg" alt="Animated cyber logistics identity with green scan strips" width="900" />
+
 <img src="https://readme-typing-svg.demolab.com?font=Space+Grotesk&weight=700&size=20&duration=3200&pause=900&color=ED642B&center=true&vCenter=true&width=720&lines=Make+every+delay+visible.;Make+every+minute+actionable.;Fleet+intelligence+for+East+African+corridors." alt="Animated Turnaround tagline" />
 
 <br />
@@ -20,7 +22,7 @@
 
 *Real-time fleet dwell monitoring, geofence cost tracking, and turnaround analytics for commercial trucking corridors across East Africa.*
 
-[Product Capabilities](#-product-capabilities) • [GPS Integration](#-gps-integration) • [System Architecture](#-system-architecture) • [Core Engine Modules](#-core-engine-modules) • [Data Lifecycle & Pipeline](#-data-lifecycle--pipeline) • [Role-Based Access Control](#-role-based-access-control-rbac)
+[Product Capabilities](#-product-capabilities) • [GPS Intelligence Flow](#-gps-intelligence-flow) • [System Architecture](#-system-architecture) • [Core Engine Modules](#-core-engine-modules) • [Data Lifecycle & Pipeline](#-data-lifecycle--pipeline) • [Role-Based Access Control](#-role-based-access-control-rbac)
 
 </div>
 
@@ -287,6 +289,18 @@ Turnaround is purpose-built for the northern and central logistics corridors acr
 - **Nairobi Inland Container Depot (ICD)**: Last-mile haulage and rail-to-road turnaround auditing.
 - **Malaba & Busia One-Stop Border Posts (OSBP)**: Cross-border customs, transit bond, and axle-load verification dwell management.
 - **Athi River & Gilgil Weighbridges**: Transit weighbridge delay quantification.
+
+---
+
+## ⚡ Animated Signal to Action
+
+<div align="center">
+
+<img src="Designs/turnaround-signal-flow.svg" alt="Animated signal to action flow from fleet movement to operational decision" width="900" />
+
+**Signal → Context → Dwell → Action**
+
+</div>
 
 ---
 
