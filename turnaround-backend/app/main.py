@@ -21,7 +21,7 @@ from app.middleware.database import DatabaseMiddleware, QueryTimeoutMiddleware
 from app.routers import (
     health, vehicles, locations, trips,
     gps_events, dwell_events, analytics, insights, predictions, ai,
-    demurrage, gate_passes, users, account, notifications, company, fleet_staff
+    demurrage, gate_passes, users, account, notifications, company, fleet_staff, containers
 )
 from app.tasks.expiry_sweep import start_expiry_sweep_loop
 from app.routers import auth
@@ -208,6 +208,7 @@ app.include_router(demurrage.router, prefix=API_PREFIX)
 app.include_router(gate_passes.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(fleet_staff.router, prefix=API_PREFIX)
+app.include_router(containers.router, prefix=API_PREFIX)
 app.include_router(account.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(company.router, prefix=API_PREFIX)

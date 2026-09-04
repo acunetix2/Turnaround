@@ -16,9 +16,10 @@ from app.db.models.gate_pass import GatePass
 from app.db.models.notification import Notification, NotificationDevice
 from app.db.models.auth_session import AuthSession
 from app.db.models.fleet_staff import FleetStaff
+from app.db.models.container import Container
 
 __all__ = [
     "Company", "User", "Vehicle", "Location",
     "Trip", "GPSEvent", "DwellEvent", "Insight",
-    "DemurrageClaim", "GatePass", "Notification", "AuthSession", "FleetStaff",
+    "DemurrageClaim", "GatePass", "Notification", "AuthSession", "FleetStaff", "Container",
 ]

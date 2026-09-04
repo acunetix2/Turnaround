@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from app.db.models.trip import TripStatus
 from app.schemas.location import LocationResponse
 from app.schemas.vehicle import VehicleResponse
+from app.schemas.container import ContainerResponse
 
 
 class TripCheckpoint(BaseModel):
@@ -22,6 +23,7 @@ class TripCheckpoint(BaseModel):
 
 class TripBase(BaseModel):
     vehicle_id: str = Field(..., description="Assigned vehicle ID")
+    container_id: Optional[str] = None
     origin_id: str = Field(..., description="Origin facility ID")
     destination_id: str = Field(..., description="Destination facility ID")
     planned_departure: Optional[datetime] = None
@@ -38,11 +40,12 @@ class TripBase(BaseModel):
 
 
 class TripCreate(TripBase):
-    pass
+    container_id: str = Field(..., description="Registered container assigned to this trip")
 
 
 class TripUpdate(BaseModel):
     vehicle_id: Optional[str] = None
+    container_id: Optional[str] = None
     origin_id: Optional[str] = None
     destination_id: Optional[str] = None
     planned_departure: Optional[datetime] = None
@@ -64,6 +67,7 @@ class TripResponse(TripBase):
     origin: Optional[LocationResponse] = None
     destination: Optional[LocationResponse] = None
     vehicle: Optional[VehicleResponse] = None
+    container: Optional[ContainerResponse] = None
     # Computed from real DwellEvent records — empty list when no dwell data exists yet
     checkpoints: List[TripCheckpoint] = []
 

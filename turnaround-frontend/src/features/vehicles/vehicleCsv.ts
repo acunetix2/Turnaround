@@ -1,9 +1,19 @@
 export type VehicleCsvRow = {
   registration_number: string;
+  image_filename?: string;
+  image_url?: string;
   vehicle_type: string;
   capacity: number;
   hourly_operating_cost: number;
   status: 'active' | 'idle' | 'maintenance' | 'in_transit' | 'delayed';
+  driver_id?: string;
+  co_driver_id?: string;
+  trailer_number?: string;
+  container_number?: string;
+  container_type?: string;
+  cargo_type?: string;
+  telematics_provider?: string;
+  tracker_imei?: string;
   fuel_level?: number;
   fuel_tank_capacity_liters?: number;
   fuel_consumption_liters_per_100km?: number;
@@ -52,15 +62,25 @@ export const parseVehicleCsv = (csv: string): VehicleCsvRow[] => {
     headers.forEach((header, index) => { record[header] = fields[index] ?? ''; });
 
     const registration_number = text(record.registration_number || record.registration || record.plate_number || record.plate || record.reg_no);
+    const image_filename = text(record.image_filename || record.image_file || record.photo || record.image) || undefined;
     const vehicle_type = text(record.vehicle_type || record.asset_type || record.type) || 'Truck';
     if (!registration_number) return null;
 
     return {
       registration_number,
+      image_filename,
       vehicle_type,
       capacity: number(record.capacity || record.capacity_tonnes, 0),
       hourly_operating_cost: number(record.hourly_operating_cost || record.operating_cost, 0),
       status: normalizeStatus(record.status || record.asset_status),
+      driver_id: text(record.driver_id || record.assigned_driver_id) || undefined,
+      co_driver_id: text(record.co_driver_id || record.assigned_co_driver_id) || undefined,
+      trailer_number: text(record.trailer_number || record.trailer || record.chassis_number) || undefined,
+      container_number: text(record.container_number || record.container) || undefined,
+      container_type: text(record.container_type || record.container_size) || undefined,
+      cargo_type: text(record.cargo_type || record.cargo || record.load_type) || undefined,
+      telematics_provider: text(record.telematics_provider || record.telematics || record.gps_provider) || undefined,
+      tracker_imei: text(record.tracker_imei || record.imei || record.tracker_serial) || undefined,
       fuel_level: optionalNumber(record.fuel_level || record.fuel_percent || record.fuel_percentage),
       fuel_tank_capacity_liters: optionalNumber(record.fuel_tank_capacity_liters || record.tank_capacity_liters || record.tank_liters),
       fuel_consumption_liters_per_100km: optionalNumber(record.fuel_consumption_liters_per_100km || record.fuel_consumption || record.liters_per_100km),

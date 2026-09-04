@@ -165,6 +165,7 @@ export interface TripCheckpoint {
 export interface Trip {
   id: string;
   vehicle_id: string;
+  container_id?: string;
   origin_id: string;
   destination_id: string;
   planned_departure: string;
@@ -182,6 +183,7 @@ export interface Trip {
   cargo_weight_tonnes?: number;
   checkpoints?: TripCheckpoint[];
   vehicle?: Vehicle;
+  container?: Container;
   // Denormalised display fields (derived from joined origin/destination on backend)
   vehicle_reg?: string;
   vehicle_type?: string;
@@ -194,6 +196,16 @@ export interface Trip {
   current_speed_kmh?: number;
   current_latitude?: number;
   current_longitude?: number;
+}
+
+export interface Container {
+  id: string;
+  company_id: string;
+  container_number: string;
+  container_type?: string;
+  status: 'available' | 'maintenance' | 'retired';
+  notes?: string;
+  created_at: string;
 }
 
 export type ClaimStatus = 'flagged' | 'invoiced' | 'disputed' | 'settled' | 'written_off';

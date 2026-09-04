@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.db.models.location import Location
     from app.db.models.dwell_event import DwellEvent
     from app.db.models.gate_pass import GatePass
+    from app.db.models.container import Container
 
 
 class TripStatus(str, enum.Enum):
@@ -27,6 +28,7 @@ class Trip(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False, index=True)
+    container_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("containers.id", ondelete="SET NULL"), nullable=True, index=True)
     origin_id: Mapped[str] = mapped_column(String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=False)
     destination_id: Mapped[str] = mapped_column(String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=False)
     
@@ -50,6 +52,7 @@ class Trip(Base):
 
     # Relationships
     vehicle: Mapped["Vehicle"] = relationship("Vehicle", back_populates="trips")
+    container: Mapped[Optional["Container"]] = relationship("Container", back_populates="trips")
     origin: Mapped["Location"] = relationship("Location", foreign_keys=[origin_id], back_populates="origin_trips")
     destination: Mapped["Location"] = relationship("Location", foreign_keys=[destination_id], back_populates="destination_trips")
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="trip")

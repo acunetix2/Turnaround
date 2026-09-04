@@ -4,7 +4,7 @@ import { apiClient } from '../../lib/api/client';
 import { formatCurrency } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
 import { Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
 import {
@@ -30,6 +30,7 @@ import { EmptyStatePresentational } from '../../components/ui/EmptyStatePresenta
 import { LoadingStatus } from '../../components/common/Loader';
 import { Upload, Download } from 'lucide-react';
 import { parseVehicleCsv } from './vehicleCsv';
+import JSZip from 'jszip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import {
   MetricCard,
@@ -112,6 +113,8 @@ const driverStatusColor = (s?: string) =>
   s === 'driving' ? 'text-status-good' :
   s === 'resting' ? 'text-yellow-500'  : 'text-text-tertiary';
 
+const isPoweredAssetType = (type?: string) => /truck|minitruck|tanker|tractor/i.test(type || '');
+
 const toDateInputValue = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -185,7 +188,7 @@ export const Vehicles: React.FC = () => {
   const [activeTab,        setActiveTab]        = useState<'specs' | 'driver' | 'cargo' | 'telematics'>('specs');
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const assetFileRef = useRef<HTMLInputElement | null>(null);
-  const assetCsvTemplate = `registration_number,vehicle_type,capacity,hourly_operating_cost,status,fuel_level,fuel_tank_capacity_liters,fuel_consumption_liters_per_100km,odometer_km,maintenance_status,next_inspection_date\nKDA 123A,Truck,28,7500,idle,65,300,32,120000,good,2026-10-01`;
+  const assetCsvTemplate = `registration_number,image_filename,vehicle_type,capacity,hourly_operating_cost,status,driver_id,co_driver_id,trailer_number,container_number,container_type,cargo_type,telematics_provider,tracker_imei,fuel_level,fuel_tank_capacity_liters,fuel_consumption_liters_per_100km,odometer_km,maintenance_status,next_inspection_date\nKDA 123A,kda-482t.jpg,Truck,28,7500,idle,,,TRL-001,MSCU1234567,40ft Dry,General Cargo,Teltonika,352093080000001,65,300,32,120000,good,2026-10-01`;
 
   const { data: vehicles, isLoading, isError, refetch } = useQuery({
     queryKey:        ['vehicles'],
@@ -214,6 +217,15 @@ export const Vehicles: React.FC = () => {
     queryKey: ['fleetStaff'],
     queryFn: apiClient.getFleetStaff,
     enabled: role === 'admin' || role === 'fleet_manager',
+  });
+
+  const availableStaffFor = (staffType: FleetStaff['staff_type']) => fleetStaff.filter((entry) => {
+    if (entry.staff_type !== staffType || entry.status !== 'active') return false;
+    const assignedElsewhere = (vehicles ?? []).some((vehicle) =>
+      vehicle.id !== editingVehicle?.id &&
+      (vehicle.driver_id === entry.id || vehicle.co_driver_id === entry.id)
+    );
+    return !assignedElsewhere;
   });
 
   const createMutation = useMutation({
@@ -260,6 +272,7 @@ export const Vehicles: React.FC = () => {
     },
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      setShowAddModal(false);
       toast({ variant: 'success', title: `${created.length} assets uploaded`, message: 'Fleet assets were registered from the CSV.' });
     },
     onError: (error: any) => toast({ variant: 'error', title: 'Asset CSV import failed', message: error.message }),
@@ -278,8 +291,30 @@ export const Vehicles: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const rows = parseVehicleCsv(await file.text());
+      let csvText = await file.text();
+      const imageData = new Map<string, string>();
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file);
+        const csvEntry = Object.values(zip.files).find((entry) => !entry.dir && entry.name.toLowerCase().endsWith('.csv'));
+        if (!csvEntry) throw new Error('ZIP must contain one CSV file.');
+        csvText = await csvEntry.async('text');
+        await Promise.all(Object.values(zip.files).filter((entry) => !entry.dir && /\.(png|jpe?g|webp)$/i.test(entry.name)).map(async (entry) => {
+          const base64 = await entry.async('base64');
+          const extension = entry.name.split('.').pop()?.toLowerCase() || 'jpeg';
+          const mime = extension === 'jpg' ? 'jpeg' : extension;
+          imageData.set(entry.name.toLowerCase(), `data:image/${mime};base64,${base64}`);
+          imageData.set(entry.name.split('/').pop()?.toLowerCase() || entry.name.toLowerCase(), `data:image/${mime};base64,${base64}`);
+        }));
+      }
+      const rows = parseVehicleCsv(csvText).map((row) => ({
+        ...row,
+        image_url: row.image_filename ? imageData.get(row.image_filename.toLowerCase()) : undefined,
+      }));
       if (!rows.length) throw new Error('No valid asset rows found.');
+      const missingImage = rows.find((row) => row.image_filename && !row.image_url);
+      if (missingImage) throw new Error(`Image ${missingImage.image_filename} for ${missingImage.registration_number} was not found in the ZIP.`);
+      const invalid = rows.find((row) => row.capacity <= 0 || row.hourly_operating_cost <= 0);
+      if (invalid) throw new Error(`${invalid.registration_number} must have a positive capacity and hourly operating cost.`);
       const duplicate = rows.find((row, index) => rows.findIndex((item) => item.registration_number.toUpperCase() === row.registration_number.toUpperCase()) !== index);
       if (duplicate) throw new Error(`Duplicate registration ${duplicate.registration_number} in CSV.`);
       const existing = new Set((vehicles ?? []).map((vehicle) => vehicle.registration_number.toUpperCase()));
@@ -294,12 +329,17 @@ export const Vehicles: React.FC = () => {
   };
 
   const {
-    register, handleSubmit, reset, setValue, watch,
+    register, handleSubmit, reset, setValue, watch, control,
     formState: { errors, isSubmitting },
   } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: { status: 'idle', capacity: 28, hourly_operating_cost: 7500, driver_status: 'on_duty', maintenance_status: 'good' },
   });
+
+  const selectedAssetType = useWatch({ control, name: 'vehicle_type' });
+  const isPoweredAsset = ['truck', 'minitruck', 'tanker', 'tractor'].includes(selectedAssetType);
+  const isContainerAsset = selectedAssetType === 'container';
+  const hasDriverTab = isPoweredAsset;
 
   const handleOpenAdd = () => {
     setSubmitError(''); setActiveTab('specs');
@@ -326,6 +366,8 @@ export const Vehicles: React.FC = () => {
       next_inspection_date: '',
       odometer_km: undefined,
       fuel_level: undefined,
+      fuel_tank_capacity_liters: undefined,
+      fuel_consumption_liters_per_100km: undefined,
     });
     setImageDataUrl(undefined);
     setShowAddModal(true);
@@ -356,6 +398,8 @@ export const Vehicles: React.FC = () => {
       next_inspection_date: v.next_inspection_date || '',
       odometer_km:          v.odometer_km ?? undefined,
       fuel_level:           v.fuel_level ?? undefined,
+      fuel_tank_capacity_liters: v.fuel_tank_capacity_liters ?? undefined,
+      fuel_consumption_liters_per_100km: v.fuel_consumption_liters_per_100km ?? undefined,
     });
   };
 
@@ -398,6 +442,17 @@ export const Vehicles: React.FC = () => {
     }
 
     const payload = { ...data, image_url: imageDataUrl } as any;
+    if (selectedAssetType === 'container') {
+      payload.container_number = payload.registration_number;
+    }
+    if (!['truck', 'minitruck', 'tanker', 'tractor'].includes(selectedAssetType || '')) {
+      delete payload.driver_id;
+      delete payload.co_driver_id;
+      delete payload.driver_name;
+      delete payload.driver_phone;
+      delete payload.driver_license;
+      delete payload.driver_status;
+    }
     // status is already the correct backend enum value — no mapping needed
     // Strip undefined/null/empty-string/NaN fields so PATCH only sends changed values
     Object.keys(payload).forEach(k => {
@@ -472,7 +527,7 @@ export const Vehicles: React.FC = () => {
   const sortedTypes = Object.entries(typeGroups).sort((a, b) => b[1] - a[1]);
 
   // Drivers on duty
-  const driversOnDuty = vehicles.filter(v => v.driver_name).length;
+  const driversOnDuty = vehicles.filter(v => isPoweredAssetType(v.vehicle_type) && v.driver_name).length;
 
   // Containers in system
   const containersTracked = vehicles.filter(v => v.container_number).length;
@@ -499,7 +554,9 @@ export const Vehicles: React.FC = () => {
   return (
     <>
       <CarrierAssetsReference
-        vehicles={vehicles}
+        vehicles={vehicles.map((vehicle) => isPoweredAssetType(vehicle.vehicle_type)
+          ? vehicle
+          : { ...vehicle, driver_name: 'Not applicable' })}
         gpsData={gpsData}
         canMutate={canMutate}
         onAdd={handleOpenAdd}
@@ -525,7 +582,7 @@ export const Vehicles: React.FC = () => {
           {canMutate && (
             <>
             <Button variant="outline" size="small" icon={<Download size={13} />} onClick={downloadAssetTemplate}>CSV template</Button>
-            <Button variant="outline" size="small" icon={<Upload size={13} />} loading={bulkImportMutation.isPending} onClick={() => assetFileRef.current?.click()}>Upload CSV</Button>
+            <Button variant="outline" size="small" icon={<Upload size={13} />} loading={bulkImportMutation.isPending} onClick={() => assetFileRef.current?.click()}>Import CSV / ZIP</Button>
             <Button
               variant="primary"
               size="small"
@@ -534,7 +591,7 @@ export const Vehicles: React.FC = () => {
             >
               Register Asset
             </Button>
-            <input ref={assetFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importAssets} />
+            <input ref={assetFileRef} type="file" accept=".csv,.zip,text/csv,application/zip" className="hidden" onChange={importAssets} />
             </>
           )}
         </div>
@@ -807,7 +864,7 @@ export const Vehicles: React.FC = () => {
                   </div>
 
                   {/* Driver Info */}
-                  {vh.driver_name ? (
+                  {isPoweredAssetType(vh.vehicle_type) && vh.driver_name ? (
                     <div className="flex items-center gap-2 p-2.5 rounded-xl bg-bg-surface-raised border border-border-default">
                       <div className="h-7 w-7 rounded-lg bg-[#250C77] text-white font-bold text-xs flex items-center justify-center shrink-0">
                         {vh.driver_name.charAt(0).toUpperCase()}
@@ -822,12 +879,12 @@ export const Vehicles: React.FC = () => {
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#250C77]/10 text-[#250C77] font-mono font-bold shrink-0">{vh.driver_license}</span>
                       )}
                     </div>
-                  ) : (
+                  ) : isPoweredAssetType(vh.vehicle_type) ? (
                     <div className="flex items-center gap-2 p-2.5 rounded-xl bg-bg-surface-raised border border-dashed border-border-default text-text-tertiary">
                       <User size={13} />
                       <span className="text-[11px]">No driver assigned</span>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Container / Cargo — with weight */}
                   {(vh.container_number || vh.cargo_type) && (
@@ -983,13 +1040,15 @@ export const Vehicles: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {vh.driver_name ? (
+                        {isPoweredAssetType(vh.vehicle_type) && vh.driver_name ? (
                           <div>
                             <p className="font-medium text-xs text-text-primary">{vh.driver_name}</p>
                             <p className="text-[10px] text-text-tertiary">{vh.driver_phone || '—'}</p>
                           </div>
-                        ) : (
+                        ) : isPoweredAssetType(vh.vehicle_type) ? (
                           <span className="text-text-tertiary text-[11px]">Unassigned</span>
+                        ) : (
+                          <span className="text-text-tertiary text-[11px]">Not applicable</span>
                         )}
                       </TableCell>
                       <TableCell className="font-mono">
@@ -1082,9 +1141,15 @@ export const Vehicles: React.FC = () => {
                   Vehicle specs, driver assignment, container tracking, and telematics.
                 </p>
               </div>
-              <button onClick={() => { setShowAddModal(false); setEditingVehicle(null); }} className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised cursor-pointer transition-colors">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                {!editingVehicle && <>
+                  <Button variant="outline" size="small" icon={<Download size={12} />} onClick={downloadAssetTemplate}>CSV Template</Button>
+                  <Button variant="outline" size="small" icon={<Upload size={12} />} loading={bulkImportMutation.isPending} onClick={() => assetFileRef.current?.click()}>Import CSV / ZIP</Button>
+                </>}
+                <button onClick={() => { setShowAddModal(false); setEditingVehicle(null); }} className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised cursor-pointer transition-colors" aria-label="Close asset registration">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {submitError && (
@@ -1096,12 +1161,12 @@ export const Vehicles: React.FC = () => {
 
             {/* Tab Navigation */}
             <div className="flex gap-1 border-b border-border-default pb-px overflow-x-auto">
-              {[
-                { id: 'specs',      label: 'Vehicle Specs', icon: <Truck size={12} /> },
-                { id: 'driver',     label: 'Driver',        icon: <User size={12} /> },
-                { id: 'cargo',      label: 'Cargo & Container', icon: <Package size={12} /> },
-                { id: 'telematics', label: 'Telematics',    icon: <Navigation2 size={12} /> },
-              ].map(tab => (
+                {[
+                  { id: 'specs',      label: isContainerAsset ? 'Container Details' : 'Asset Specs', icon: isContainerAsset ? <Container size={12} /> : <Truck size={12} /> },
+                  ...(hasDriverTab ? [{ id: 'driver', label: 'Driver', icon: <User size={12} /> }] : []),
+                  { id: 'cargo',      label: isContainerAsset ? 'Cargo Details' : 'Cargo & Container', icon: <Package size={12} /> },
+                  { id: 'telematics', label: 'Telematics',    icon: <Navigation2 size={12} /> },
+                ].map(tab => (
                 <button
                   key={tab.id}
                   type="button"
@@ -1138,15 +1203,25 @@ export const Vehicles: React.FC = () => {
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Registration Plate *</label>
-                      <input {...register('registration_number')} placeholder="e.g. KDF 489X" className={`${inputCls} uppercase font-numeric font-bold`} />
+                      <label className="block text-xs font-medium text-text-secondary mb-1">{isContainerAsset ? 'Container Number *' : 'Registration Plate *'}</label>
+                      <input {...register('registration_number')} placeholder={isContainerAsset ? 'e.g. MSCU1234567' : 'e.g. KDF 489X'} className={`${inputCls} uppercase font-numeric font-bold`} />
                       {errors.registration_number && <p className="text-[11px] text-red-500 mt-1">{errors.registration_number.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Vehicle Classification *</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Asset Category *</label>
                       <Select
-                        value={watch('vehicle_type') ?? ''}
-                        onValueChange={(value) => setValue('vehicle_type', value, { shouldValidate: true })}
+                        value={selectedAssetType ?? ''}
+                        onValueChange={(value) => {
+                          setValue('vehicle_type', value, { shouldValidate: true });
+                          if (!['truck', 'minitruck', 'tanker', 'tractor'].includes(value)) {
+                            setValue('driver_id', '');
+                            setValue('co_driver_id', '');
+                            setValue('driver_name', '');
+                            setValue('driver_phone', '');
+                            setValue('driver_license', '');
+                          }
+                          setActiveTab('specs');
+                        }}
                         options={[
                           { value: '', label: 'Select asset type' },
                           ...ASSET_TYPE_OPTIONS.map(option => ({ value: option.value, label: option.label })),
@@ -1156,12 +1231,11 @@ export const Vehicles: React.FC = () => {
                       {errors.vehicle_type && <p className="text-[11px] text-red-500 mt-1">{errors.vehicle_type.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Payload Capacity (Tonnes) *</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">{isContainerAsset ? 'Maximum Payload (Tonnes) *' : 'Payload Capacity (Tonnes) *'}</label>
                       <input type="number" step="0.1" {...register('capacity', { valueAsNumber: true })} className={inputCls} />
-                      {errors.capacity && <p className="text-[11px] text-red-500 mt-1">{errors.capacity.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Idle Rate (KES/hr) *</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">{isContainerAsset ? 'Handling Rate (KES/hr) *' : 'Idle Rate (KES/hr) *'}</label>
                       <input type="number" step="100" {...register('hourly_operating_cost', { valueAsNumber: true })} className={inputCls} />
                       {errors.hourly_operating_cost && <p className="text-[11px] text-red-500 mt-1">{errors.hourly_operating_cost.message}</p>}
                     </div>
@@ -1193,10 +1267,22 @@ export const Vehicles: React.FC = () => {
                         placeholder="Select maintenance status"
                       />
                     </div>
-                    <div>
+                    {isPoweredAsset && <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Odometer (km)</label>
                       <input type="number" {...register('odometer_km', { valueAsNumber: true })} placeholder="e.g. 120000" className={inputCls} />
-                    </div>
+                    </div>}
+                    {isPoweredAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Fuel Level (%)</label>
+                      <input type="number" min="0" max="100" {...register('fuel_level', { valueAsNumber: true })} placeholder="e.g. 65" className={inputCls} />
+                    </div>}
+                    {isPoweredAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Tank Capacity (litres)</label>
+                      <input type="number" min="1" step="1" {...register('fuel_tank_capacity_liters', { valueAsNumber: true })} placeholder="e.g. 300" className={inputCls} />
+                    </div>}
+                    {isPoweredAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Consumption (L/100 km)</label>
+                      <input type="number" min="0.1" step="0.1" {...register('fuel_consumption_liters_per_100km', { valueAsNumber: true })} placeholder="e.g. 32" className={inputCls} />
+                    </div>}
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Next Inspection Date</label>
                       <DatePicker>
@@ -1229,7 +1315,7 @@ export const Vehicles: React.FC = () => {
               )}
 
               {/* DRIVER TAB */}
-              {activeTab === 'driver' && (
+              {activeTab === 'driver' && hasDriverTab && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
@@ -1245,7 +1331,7 @@ export const Vehicles: React.FC = () => {
                             setValue('driver_license', person.license_number || '');
                           }
                         }}
-                        options={[{ value: 'unassigned', label: 'No driver assigned' }, ...fleetStaff.filter((entry) => entry.staff_type === 'driver' && entry.status === 'active').map((entry) => ({ value: entry.id, label: entry.name }))]}
+                        options={[{ value: 'unassigned', label: 'No driver assigned' }, ...availableStaffFor('driver').map((entry) => ({ value: entry.id, label: entry.name }))]}
                       />
                     </div>
                     <div>
@@ -1253,7 +1339,7 @@ export const Vehicles: React.FC = () => {
                       <Select
                         value={watch('co_driver_id') || 'unassigned'}
                         onValueChange={(value) => setValue('co_driver_id', value === 'unassigned' ? '' : value)}
-                        options={[{ value: 'unassigned', label: 'No co-driver assigned' }, ...fleetStaff.filter((entry) => entry.staff_type === 'co_driver' && entry.status === 'active').map((entry) => ({ value: entry.id, label: entry.name }))]}
+                        options={[{ value: 'unassigned', label: 'No co-driver assigned' }, ...availableStaffFor('co_driver').map((entry) => ({ value: entry.id, label: entry.name }))]}
                       />
                     </div>
                   </div>
@@ -1292,10 +1378,10 @@ export const Vehicles: React.FC = () => {
               {activeTab === 'cargo' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Container Number</label>
+                    {!isContainerAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Loaded Container Number</label>
                       <input {...register('container_number')} placeholder="e.g. MSCU1234567" className={`${inputCls} font-mono uppercase`} />
-                    </div>
+                    </div>}
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Container Type</label>
                       <Select
@@ -1367,9 +1453,12 @@ export const Vehicles: React.FC = () => {
                   variant="primary"
                   size="small"
                   type="submit"
-                  loading={isSubmitting}
+                  loading={isSubmitting || createMutation.isPending || updateMutation.isPending}
+                  disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}
                 >
-                  {editingVehicle ? 'Update Asset' : 'Register Asset'}
+                  {editingVehicle
+                    ? updateMutation.isPending ? 'Updating Asset...' : 'Update Asset'
+                    : createMutation.isPending ? 'Registering Asset...' : 'Register Asset'}
                 </Button>
               </div>
             </form>

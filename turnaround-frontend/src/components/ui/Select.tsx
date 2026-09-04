@@ -23,6 +23,16 @@ const SelectContext = createContext<SelectContextType>({
   setSelectedLabel: () => {},
 })
 
+const getNodeText = (node: React.ReactNode): string => React.Children.toArray(node)
+  .map((child) => {
+    if (typeof child === 'string' || typeof child === 'number') return String(child)
+    if (React.isValidElement<{ children?: React.ReactNode }>(child)) return getNodeText(child.props.children)
+    return ''
+  })
+  .join(' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
 // ── COMPOUND OR COMPACT SELECT ──
 export interface SelectOption {
   value: string
@@ -252,7 +262,7 @@ export const SelectContent: React.FC<SelectContentProps> = ({
 
   return (
     <div
-      className={`absolute z-50 mt-1 min-w-[140px] max-h-60 w-full overflow-y-auto rounded-lg border border-border-default bg-bg-surface p-1 shadow-lg animate-in fade-in zoom-in-95 duration-100 ${alignStyles[align]} ${className}`}
+      className={`absolute z-[100] mt-1 min-w-[140px] max-h-60 w-full overflow-y-auto rounded-lg border border-border-default bg-bg-surface p-1 shadow-lg animate-in fade-in zoom-in-95 duration-100 ${alignStyles[align]} ${className}`}
     >
       {children}
     </div>
@@ -291,17 +301,18 @@ export const SelectItem = React.forwardRef<HTMLDivElement, SelectItemProps>(
   ({ value, children, disabled = false, className = '', ...props }, ref) => {
     const { value: selectedValue, onValueChange, setSelectedLabel } = useContext(SelectContext)
     const isSelected = selectedValue === value
+    const label = getNodeText(children)
 
     useEffect(() => {
-      if (isSelected && typeof children === 'string') {
-        setSelectedLabel(children)
+      if (isSelected && label) {
+        setSelectedLabel(label)
       }
-    }, [isSelected, children, setSelectedLabel])
+    }, [isSelected, label, setSelectedLabel])
 
     const handleClick = () => {
       if (disabled) return
-      if (typeof children === 'string') {
-        setSelectedLabel(children)
+      if (label) {
+        setSelectedLabel(label)
       }
       onValueChange?.(value)
     }

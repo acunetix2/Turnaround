@@ -929,6 +929,12 @@ export const apiClient = {
   },
 
   // --- Trips / Dispatch ---
+  async getContainers(): Promise<import('./types').Container[]> {
+    const res = await fetch(`${API_BASE_URL}/containers`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch containers');
+    return res.json();
+  },
+
   async getTrips(): Promise<Trip[]> {
     if (USE_MOCKS) {
       await sleep(200);

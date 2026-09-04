@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.db.models.trip import Trip, TripStatus
 from app.db.models.vehicle import Vehicle
 from app.db.models.location import Location
+from app.db.models.container import Container
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.user import UserRole
 from app.deps import get_current_company
@@ -51,6 +52,32 @@ async def _ensure_vehicle_available(
     conflict = (await db.execute(query)).scalar_one_or_none()
     if conflict:
         raise HTTPException(status_code=409, detail={"error": {"code": "RESOURCE_UNAVAILABLE", "message": "Vehicle is already assigned to an overlapping active trip."}})
+
+
+async def _ensure_container_available(
+    db: AsyncSession,
+    company_id: str,
+    container_id: str,
+    departure,
+    arrival,
+    exclude_trip_id: Optional[str] = None,
+) -> None:
+    container = (await db.execute(select(Container).where(Container.id == container_id, Container.company_id == company_id))).scalar_one_or_none()
+    if not container:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Container not found"}})
+    if container.status != 'available':
+        raise HTTPException(status_code=409, detail={"error": {"code": "CONTAINER_UNAVAILABLE", "message": "Container is not available for assignment"}})
+    query = select(Trip).join(Vehicle, Trip.vehicle_id == Vehicle.id).where(
+        Vehicle.company_id == company_id,
+        Trip.container_id == container_id,
+        Trip.status.in_(ACTIVE_ASSIGNMENT_STATUSES),
+        Trip.planned_departure < arrival,
+        Trip.planned_arrival > departure,
+    )
+    if exclude_trip_id:
+        query = query.where(Trip.id != exclude_trip_id)
+    if (await db.execute(query)).scalar_one_or_none():
+        raise HTTPException(status_code=409, detail={"error": {"code": "CONTAINER_UNAVAILABLE", "message": "Container is already assigned to an overlapping active trip"}})
 
 
 # ── Checkpoint builder ────────────────────────────────────────────────────────
@@ -154,6 +181,7 @@ def _trip_query(company_id: str):
         .where(Vehicle.company_id == company_id)
         .options(
             selectinload(Trip.vehicle),
+            selectinload(Trip.container),
             selectinload(Trip.origin),
             selectinload(Trip.destination),
             selectinload(Trip.dwell_events).selectinload(DwellEvent.location),
@@ -224,6 +252,9 @@ async def create_trip(
     await _ensure_vehicle_available(
         db, company_id, payload.vehicle_id, payload.planned_departure, payload.planned_arrival
     )
+    await _ensure_container_available(
+        db, company_id, payload.container_id, payload.planned_departure, payload.planned_arrival
+    )
 
     trip = Trip(id=str(uuid.uuid4()), **payload.model_dump())
     db.add(trip)
@@ -263,6 +294,11 @@ async def update_trip(
     if {"vehicle_id", "planned_departure", "planned_arrival"} & update_data.keys():
         await _ensure_vehicle_available(
             db, company_id, candidate_vehicle_id, candidate_departure, candidate_arrival, exclude_trip_id=trip.id
+        )
+    candidate_container_id = update_data.get("container_id", trip.container_id)
+    if candidate_container_id and ({"container_id", "planned_departure", "planned_arrival"} & update_data.keys()):
+        await _ensure_container_available(
+            db, company_id, candidate_container_id, candidate_departure, candidate_arrival, exclude_trip_id=trip.id
         )
     for key, value in update_data.items():
         setattr(trip, key, value)

@@ -16,10 +16,13 @@ const statusMeta: Record<string, { label: string; color: string; dot: string }> 
 }
 
 const palette = ['#6d3fd8', '#ed642b', '#1687c7', '#f2b51d', '#10b981']
-const category = (vehicle: Vehicle) => /ship|vessel/i.test(vehicle.vehicle_type) ? 'Sea Vessels' : /trailer|chassis/i.test(vehicle.vehicle_type) ? 'Trailers' : /container/i.test(vehicle.vehicle_type) ? 'Containers' : /equipment|tanker/i.test(vehicle.vehicle_type) ? 'Equipment' : 'Land Vehicles'
+const assetType = (vehicle: Vehicle) => vehicle.vehicle_type?.toLowerCase() || ''
+const isContainer = (vehicle: Vehicle) => assetType(vehicle) === 'container' || assetType(vehicle).includes('container') && !assetType(vehicle).includes('chassis')
+const isPowered = (vehicle: Vehicle) => /truck|minitruck|tanker|tractor/.test(assetType(vehicle))
+const category = (vehicle: Vehicle) => /ship|vessel/.test(assetType(vehicle)) ? 'Sea Vessels' : isContainer(vehicle) ? 'Containers' : /trailer|chassis/.test(assetType(vehicle)) ? 'Trailers' : /equipment|tanker/.test(assetType(vehicle)) ? 'Equipment' : 'Land Vehicles'
 const status = (vehicle: Vehicle) => statusMeta[vehicle.status] || statusMeta.idle
-const utilization = (vehicle: Vehicle, gps?: GPS) => Math.min(100, Math.max(0, Math.round(gps?.speed ? gps.speed / 1.2 : vehicle.driver_name ? vehicle.status === 'in_transit' ? 78 : 62 : 0)))
-const plateNumber = (vehicle: Vehicle) => vehicle.registration_number?.trim() || 'Plate not assigned'
+const utilization = (vehicle: Vehicle, gps?: GPS) => Math.min(100, Math.max(0, Math.round(gps?.speed ? gps.speed / 1.2 : isPowered(vehicle) ? vehicle.status === 'in_transit' ? 78 : 62 : 0)))
+const plateNumber = (vehicle: Vehicle) => isContainer(vehicle) ? vehicle.container_number?.trim() || vehicle.registration_number?.trim() || 'Container number not assigned' : vehicle.registration_number?.trim() || 'Asset ID not assigned'
 const locationLabel = (vehicle: Vehicle, gps?: GPS) => gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)
   ? `${gps.latitude?.toFixed(2)}, ${gps.longitude?.toFixed(2)}`
   : vehicle.current_location_name?.trim() || 'Location not reported'
@@ -52,7 +55,7 @@ export const CarrierAssetsReference: React.FC<Props> = ({ vehicles, gpsData, can
   const groups = Object.entries(vehicles.reduce<Record<string, number>>((acc, vehicle) => { const key = category(vehicle); acc[key] = (acc[key] || 0) + 1; return acc }, {})).sort((a, b) => b[1] - a[1])
   const filtered = vehicles.filter((vehicle) => {
     const query = search.toLowerCase()
-    return (!query || plateNumber(vehicle).toLowerCase().includes(query) || vehicle.vehicle_type.toLowerCase().includes(query) || (vehicle.driver_name || '').toLowerCase().includes(query)) && (statusFilter === 'all' || vehicle.status === statusFilter) && (typeFilter === 'all' || category(vehicle) === typeFilter)
+    return (!query || plateNumber(vehicle).toLowerCase().includes(query) || vehicle.vehicle_type.toLowerCase().includes(query) || (isPowered(vehicle) && (vehicle.driver_name || '').toLowerCase().includes(query))) && (statusFilter === 'all' || vehicle.status === statusFilter) && (typeFilter === 'all' || category(vehicle) === typeFilter)
   })
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize)

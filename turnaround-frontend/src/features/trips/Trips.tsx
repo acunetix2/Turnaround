@@ -54,6 +54,7 @@ import {
 
 const createTripSchema = zod.object({
   vehicle_id: zod.string().min(1, 'Select a vehicle'),
+  container_id: zod.string().min(1, 'Select a registered container'),
   origin_id: zod.string().min(1, 'Select origin facility'),
   destination_id: zod.string().min(1, 'Select destination facility'),
   planned_departure: zod.string().min(1, 'Select departure time'),
@@ -520,6 +521,11 @@ export const Trips: React.FC = () => {
   const { data: locationsData } = useQuery({
     queryKey: ['locations'],
     queryFn: () => apiClient.getLocations(),
+  });
+
+  const { data: containersData, isLoading: loadingContainers, isError: containersError } = useQuery({
+    queryKey: ['containers'],
+    queryFn: apiClient.getContainers,
   });
 
   const createTripMutation = useMutation({
@@ -1414,13 +1420,26 @@ export const Trips: React.FC = () => {
                 <h4 className="font-bold text-xs uppercase tracking-wider text-text-tertiary">Manifest & Customs Compliance</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block font-medium text-text-secondary mb-1">ISO Container #</label>
-                    <input
-                      type="text"
-                      {...register('container_number')}
-                      placeholder="e.g. MSKU-8821901"
-                      className="w-full bg-bg-surface border border-border-default rounded-lg px-2.5 py-1.5 text-xs text-text-primary font-mono uppercase"
-                    />
+                    <label className="block font-medium text-text-secondary mb-1">Assigned Container *</label>
+                    <Select value={watch('container_id') || ''} onValueChange={(value) => setValue('container_id', value, { shouldValidate: true })}>
+                      <SelectTrigger className="w-full bg-bg-surface border-border-default"><SelectValue placeholder="Select registered container" /></SelectTrigger>
+                      <SelectContent className="bottom-full mt-0 mb-1">
+                        {loadingContainers ? (
+                          <SelectItem value="__loading_containers" disabled>Loading containers...</SelectItem>
+                        ) : containersError ? (
+                          <SelectItem value="__containers_error" disabled>Unable to load containers</SelectItem>
+                        ) : (containersData || []).filter((container) => container.status === 'available').length === 0 ? (
+                          <SelectItem value="__no_available_containers" disabled>No available containers</SelectItem>
+                        ) : (
+                          (containersData || []).filter((container) => container.status === 'available').map((container) => (
+                            <SelectItem key={container.id} value={container.id}>
+                              {container.container_number} {container.container_type ? `(${container.container_type})` : ''}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {errors.container_id && <p className="text-[11px] text-red-500 mt-1">{errors.container_id.message}</p>}
                   </div>
                   <div>
                     <label className="block font-medium text-text-secondary mb-1">Customs Seal #</label>
