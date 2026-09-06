@@ -632,7 +632,14 @@ export const apiClient = {
     const res = await fetch(`${API_BASE_URL}/users`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to create user');
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const detail = body?.detail;
+      const message = typeof detail === 'string'
+        ? detail
+        : detail?.message || detail?.[0]?.msg || 'Failed to create user';
+      throw new Error(message);
+    }
     return res.json();
   },
 

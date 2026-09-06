@@ -25,14 +25,14 @@ MANAGE_ROLES  = require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER)
 class UserCreateRequest(BaseModel):
     email: str
     name: str
-    role: str = Field(..., pattern="^(admin|fleet_manager|dispatcher|driver|viewer)$")
+    role: str = Field(..., pattern="^(admin|fleet_manager|dispatcher|operations_manager|maintenance_technician|supervisor|driver|viewer|analyst)$")
     phone: Optional[str] = None
     status: str = Field(default="active", pattern="^(active|inactive|suspended)$")
 
 
 class UserUpdateRequest(BaseModel):
     name: Optional[str] = None
-    role: Optional[str] = Field(None, pattern="^(admin|fleet_manager|dispatcher|driver|viewer)$")
+    role: Optional[str] = Field(None, pattern="^(admin|fleet_manager|dispatcher|operations_manager|maintenance_technician|supervisor|driver|viewer|analyst)$")
     phone: Optional[str] = None
     status: Optional[str] = Field(None, pattern="^(active|inactive|suspended)$")
 

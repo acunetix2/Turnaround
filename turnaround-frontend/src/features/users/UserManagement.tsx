@@ -167,13 +167,16 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
               size="small"
               loading={isSaving}
               icon={isEdit ? <Edit2 size={12} /> : <Plus size={12} />}
-              onClick={() => onSave({
-                ...(isEdit ? {} : { email: form.email }),
-                name: form.name,
-                role: form.role,
-                phone: form.phone || undefined,
-                ...(isEdit ? { status: form.status } : {}),
-              })}
+              onClick={() => {
+                if (!isEdit && (!form.email.trim() || !form.name.trim())) return;
+                onSave({
+                  ...(isEdit ? {} : { email: form.email.trim() }),
+                  name: form.name.trim(),
+                  role: form.role,
+                  phone: form.phone.trim() || undefined,
+                  ...(isEdit ? { status: form.status } : {}),
+                });
+              }}
             >
               {isEdit ? 'Save Changes' : 'Add User'}
             </Button>
