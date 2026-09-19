@@ -38,8 +38,8 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       const message = err?.message || '';
       setError(message.includes('fetch') || message.includes('NetworkError') || message.includes('getaddrinfo')
-        ? 'Unable to connect to the authentication service. Check your internet connection and Supabase URL, then try again.'
-        : message || 'Invalid email or password. Please try again.');
+        ? 'Authentication failed! Check your internet connection and try again.'
+        : message || 'Incorrect email or password. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -94,7 +94,7 @@ export const Login: React.FC = () => {
           </div>
 
           <p className="text-xs text-white/50">
-            © 2025 Turnaround Logistics. All rights reserved.
+            &copy; {new Date().getFullYear()} Turnaround Logistics. All rights reserved.
           </p>
         </div>
       </div>

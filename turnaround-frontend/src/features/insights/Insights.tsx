@@ -76,7 +76,7 @@ export const Insights: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center bg-bg-surface border border-border-default rounded-xl">
         <Brain size={36} className="text-status-danger" />
-        <h2 className="text-sm font-bold text-text-primary mt-3">Unable to load delay reports</h2>
+        <h2 className="text-sm font-bold text-text-primary mt-3">Oops! unable to load delay reports</h2>
         <p className="text-xs text-text-secondary mt-1">Please check your connection and try again.</p>
         <button
           onClick={() => refetch()}
@@ -273,7 +273,6 @@ export const Insights: React.FC = () => {
                   </div>
                 )}
 
-                {/* Footer: Financial Waste & Quick Jump */}
                 <div className="pt-3 border-t border-border-default flex items-center justify-between">
                   {ins.financial_impact ? (
                     <div>
@@ -288,7 +287,7 @@ export const Insights: React.FC = () => {
                     to="/ai-advisor"
                     className="flex items-center gap-1 text-xs font-semibold text-brand-400 hover:text-brand-300 transition-colors"
                   >
-                    <span>Simulate in Advisor</span>
+                    <span>Advisor</span>
                     <ArrowRight size={12} />
                   </Link>
                 </div>

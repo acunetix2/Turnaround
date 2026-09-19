@@ -823,7 +823,7 @@ export const Landing: React.FC = () => {
 
           {/* Bottom copyright & legal */}
           <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B7280]">
-            <p>© 2026 Turnaround Logistics Systems. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Turnaround Logistics Systems. All rights reserved.</p>
             <div className="flex items-center gap-6">
               <Link to="/privacy" className="hover:text-[#9CA3AF] transition-colors">Privacy policy</Link>
               <Link to="/terms" className="hover:text-[#9CA3AF] transition-colors">Terms of service</Link>

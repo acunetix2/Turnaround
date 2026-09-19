@@ -12,7 +12,7 @@ import { Select } from '../../components/ui/Select';
 import { LoadingStatus } from '../../components/common/Loader';
 import type { CompanyConfig as CC } from '../../lib/api/types';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers 
 
 const inputCls = "w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none";
 
@@ -49,7 +49,7 @@ const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label
   </div>
 );
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── Main 
 
 export const CompanyConfig: React.FC = () => {
   const { config, isLoading, update, refresh } = useCompany();

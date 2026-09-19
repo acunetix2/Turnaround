@@ -21,10 +21,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ── Asset image ───────────────────────────────────────────────────────────
+    # ── Asset image
     op.add_column('vehicles', sa.Column('image_url', sa.Text(), nullable=True))
 
-    # ── Driver assignment ─────────────────────────────────────────────────────
+    # ── Driver assignment 
     op.add_column('vehicles', sa.Column('driver_name', sa.String(length=150), nullable=True))
     op.add_column('vehicles', sa.Column('driver_phone', sa.String(length=30), nullable=True))
     op.add_column('vehicles', sa.Column('driver_license', sa.String(length=60), nullable=True))
@@ -35,18 +35,18 @@ def upgrade() -> None:
         nullable=True
     ))
 
-    # ── Container / cargo ─────────────────────────────────────────────────────
+    # ── Container / cargo 
     op.add_column('vehicles', sa.Column('trailer_number', sa.String(length=60), nullable=True))
     op.add_column('vehicles', sa.Column('container_number', sa.String(length=30), nullable=True))
     op.add_column('vehicles', sa.Column('container_type', sa.String(length=50), nullable=True))
     op.add_column('vehicles', sa.Column('cargo_type', sa.String(length=150), nullable=True))
     op.create_index(op.f('ix_vehicles_container_number'), 'vehicles', ['container_number'], unique=False)
 
-    # ── Telematics ────────────────────────────────────────────────────────────
+    # ── Telematics 
     op.add_column('vehicles', sa.Column('telematics_provider', sa.String(length=50), nullable=True))
     op.add_column('vehicles', sa.Column('tracker_imei', sa.String(length=30), nullable=True))
 
-    # ── Operational state ─────────────────────────────────────────────────────
+    # ── Operational state ─
     op.add_column('vehicles', sa.Column('fuel_level', sa.Integer(), nullable=True))
     op.add_column('vehicles', sa.Column('odometer_km', sa.Integer(), nullable=True))
     op.add_column('vehicles', sa.Column(

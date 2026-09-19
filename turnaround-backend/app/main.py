@@ -26,7 +26,7 @@ from app.routers import (
 from app.tasks.expiry_sweep import start_expiry_sweep_loop
 from app.routers import auth
 
-# ── Structured Logging ──────────────────────────────────────────────────────
+# ── Structured Logging 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
@@ -50,7 +50,7 @@ QUIET_ROUTES = {
 }
 
 
-# ── Lifespan ────────────────────────────────────────────────────────────────
+# ── Lifespan 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Turnaround API — connecting to Supabase PostgreSQL")
@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-# ── App Factory ─────────────────────────────────────────────────────────────
+# ── App Factory 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -101,7 +101,7 @@ app = FastAPI(
 async def root_status():
     return {"service": "turnaround-backend", "status": "ok"}
 
-# ── Request / Access Logging Middleware ────────────────────────────────────
+# ── Request / Access Logging Middleware 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     if not settings.LOG_REQUESTS:
@@ -138,7 +138,7 @@ async def log_requests(request: Request, call_next):
         raise e
 
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# ── CORS 
 allowed_cors_origins = list({
     *settings.CORS_ORIGINS,
     "https://turnaroundlogistics.vercel.app",
@@ -153,14 +153,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Database Connection Middleware ──────────────────────────────────────────
+# ── Database Connection Middleware 
 # NOTE: Pure-ASGI middleware classes are registered directly on the ASGI stack,
 # not via add_middleware (which wraps them in BaseHTTPMiddleware and breaks them).
 # Connection health is handled by pool_pre_ping=True in session.py.
 # These are intentionally left out of add_middleware to avoid 503 crashes.
 
 
-# ── Global Exception Handler ────────────────────────────────────────────────
+# ── Global Exception Handler 
 @app.exception_handler(SQLAlchemyTimeoutError)
 async def database_timeout_handler(request: Request, exc: SQLAlchemyTimeoutError):
     logger.error("Database timeout on path=%s: %s", request.url.path, exc)
@@ -191,7 +191,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ── Router Registration ──────────────────────────────────────────────────────
+# ── Router Registration 
 API_PREFIX = "/api/v1"
 
 app.include_router(health.router)

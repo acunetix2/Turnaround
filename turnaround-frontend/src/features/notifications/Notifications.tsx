@@ -18,7 +18,6 @@ import {
   isMessagingConfigured,
 } from '../../lib/firebaseMessaging';
 
-// ── Config ─────────────────────────────────────────────────────────────────
 
 const SEV_CFG = {
   high:   { cls: 'bg-red-500/10 border-red-500/25',          icon: <AlertTriangle size={14} className="text-red-500" />,    dot: 'bg-red-500'     },
@@ -42,8 +41,6 @@ const CAT_LABEL: Record<string, string> = {
 };
 
 type FilterVal = 'all' | 'unread' | 'high' | 'medium' | 'delay' | 'demurrage' | 'gate_pass' | 'trip' | 'user';
-
-// ── Component ───────────────────────────────────────────────────────────────
 
 export const Notifications: React.FC = () => {
   const qc = useQueryClient();
@@ -286,7 +283,6 @@ export const Notifications: React.FC = () => {
   );
 };
 
-// ── Simple button helper (no import needed) ────────────────────────────────
 const Button: React.FC<{ onClick: () => void; loading?: boolean; children: React.ReactNode }> = ({ onClick, loading, children }) => (
   <button onClick={onClick} disabled={loading}
     className="flex items-center px-3 py-1.5 rounded-lg border border-border-default text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50">

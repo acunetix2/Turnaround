@@ -13,7 +13,6 @@ import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import { formatDateTime } from '../../lib/format';
 
-// ── Tab types ─────────────────────────────────────────────────────────────────
 
 type Tab = 'profile' | 'security' | 'notifications' | 'preferences' | 'sessions' | 'api';
 
@@ -26,7 +25,6 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'api',           label: 'API Access',    icon: <KeyRound size={14} /> },
 ];
 
-// ── Toggle Switch ─────────────────────────────────────────────────────────────
 
 const Toggle: React.FC<{
   checked: boolean;
@@ -55,7 +53,6 @@ const Toggle: React.FC<{
   </div>
 );
 
-// ── Profile Tab ───────────────────────────────────────────────────────────────
 
 const ProfileTab: React.FC = () => {
   const { user } = useAuth();
@@ -188,7 +185,6 @@ const ProfileTab: React.FC = () => {
   );
 };
 
-// ── Security Tab ──────────────────────────────────────────────────────────────
 
 const SecurityTab: React.FC = () => {
   const { toast } = useToast();
@@ -290,7 +286,6 @@ const SecurityTab: React.FC = () => {
   );
 };
 
-// ── Notifications Tab ─────────────────────────────────────────────────────────
 
 const NotificationsTab: React.FC = () => {
   const { toast } = useToast();
@@ -349,7 +344,6 @@ const NotificationsTab: React.FC = () => {
   );
 };
 
-// ── Appearance Tab ────────────────────────────────────────────────────────────
 
 const AppearanceTab: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -425,7 +419,6 @@ const SessionsTab: React.FC = () => {
   return <div className="space-y-4"><div><h2 className="text-sm font-bold text-text-primary">Active Sessions</h2><p className="mt-1 text-xs text-text-secondary">Manage devices currently signed in to your account.</p></div>{isLoading ? <div className="h-20 animate-pulse rounded-xl bg-bg-surface-raised" /> : sessions.length === 0 ? <div className="rounded-xl border border-border-default p-6 text-center text-xs text-text-tertiary">No active sessions found.</div> : <div className="divide-y divide-border-default rounded-xl border border-border-default">{sessions.map(session => <div key={session.id} className="flex items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="text-xs font-semibold text-text-primary">{session.current ? 'Current browser session' : 'Other active session'}</p><p className="mt-1 text-[10px] text-text-secondary">Last active {formatDateTime(session.last_used_at)} · Created {formatDateTime(session.created_at)}</p><p className="mt-1 text-[10px] text-text-tertiary">Expires {formatDateTime(session.expires_at)}</p></div>{session.current ? <span className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-500">Current</span> : <Button variant="outline" size="tiny" loading={revokeMutation.isPending && revokeMutation.variables === session.id} onClick={() => revokeMutation.mutate(session.id)}>Revoke</Button>}</div>)}</div>}</div>;
 };
 
-// ── Main Component ────────────────────────────────────────────────────────────
 
 export const AccountSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('profile');

@@ -14,7 +14,6 @@ import { Button } from '../../components/ui/Button';
 import type { GatePassData } from '../../lib/api/types';
 import { GatePassReference } from './GatePassReference';
 
-// ── Smart status ──────────────────────────────────────────────────────────────
 
 function resolvePassStatus(pass: GatePassData): string {
   const now = Date.now();
@@ -45,8 +44,7 @@ function fmtShort(d: string) {
   });
 }
 
-// ── Confirm Dialog ────────────────────────────────────────────────────────────
-
+//  Confirm Dialog
 const ConfirmDialog: React.FC<{
   title: string; message: string; confirmLabel: string; danger?: boolean;
   onConfirm: () => void; onCancel: () => void;
@@ -63,7 +61,6 @@ const ConfirmDialog: React.FC<{
   </div>
 );
 
-// ── 3-dot Action Menu ─────────────────────────────────────────────────────────
 
 interface PassMenuProps {
   pass: GatePassData; resolvedStatus: string;
@@ -150,7 +147,6 @@ const PassActionMenu: React.FC<PassMenuProps> = ({
   );
 };
 
-// ── Main Component ────────────────────────────────────────────────────────────
 
 export const GatePassList: React.FC = () => {
   const navigate = useNavigate();

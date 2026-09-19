@@ -20,7 +20,7 @@ const teamCsvTemplate = `name,email,role,phone,status
 Jane Doe,jane@company.com,admin,+254700000001,active
 Alex Maina,alex@company.com,fleet_manager,+254700000002,inactive`;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers 
 
 const ROLE_CFG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   admin:                  { label: 'Admin',                 color: 'bg-[#250C77]/15 text-[#250C77] border-[#250C77]/30',       icon: <Shield size={10} /> },
@@ -58,7 +58,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── User Form Modal ───────────────────────────────────────────────────────────
+// ── User Form Modal 
 
 interface UserFormProps {
   user?: User;
@@ -187,7 +187,7 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
   );
 };
 
-// ── Confirm Dialog ────────────────────────────────────────────────────────────
+// ── Confirm Dialog 
 
 interface ConfirmProps {
   title: string;
@@ -211,7 +211,7 @@ const ConfirmDialog: React.FC<ConfirmProps> = ({ title, message, confirmLabel = 
   </div>
 );
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Main Component 
 
 export const UserManagement: React.FC = () => {
   const qc = useQueryClient();

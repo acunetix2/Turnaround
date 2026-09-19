@@ -60,7 +60,7 @@ export const AboutPage: React.FC = () => (
           <div className="max-w-2xl">
             <p className="mb-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.24em] text-[#ED642B]"><span className="h-px w-8 bg-[#ED642B]" /> About Turnaround</p>
             <h1 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-6xl">Make every delay visible. Make every minute actionable.</h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-white/72">Turnaround is operational intelligence for the people moving freight across East Africa. We connect fleet movement, facility dwell, dispatch decisions, and cost impact in one clear operating picture.</p>
+            <p className="mt-6 max-w-xl text-base leading-7 text-white/72">Turnaround is operational intelligence for the companies moving freight across East Africa. We connect fleet movement, facility dwell, dispatch decisions, and cost impact in one clear operating picture.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/signup" className="inline-flex items-center gap-2 rounded-xl bg-[#ED642B] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/20 hover:bg-[#D4521D]">Create a workspace <ArrowRight size={15} /></Link>
               <Link to="/login" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-bold text-white hover:bg-white/10">Explore the platform</Link>

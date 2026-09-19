@@ -17,7 +17,6 @@ import {
   StripeLogo,
 } from '../../components/ui/Interstitial';
 
-// ── TelematicsTab — real OAuth/API-key connections ────────────────────────────
 
 interface TelematicsTabProps {
   webhookUrl: string;
@@ -722,8 +721,6 @@ export const Settings: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* ── INTERSTITIAL AUTHORIZE MODAL — removed, replaced by TelematicsTab real flows ── */}
     </div>
   );
 };

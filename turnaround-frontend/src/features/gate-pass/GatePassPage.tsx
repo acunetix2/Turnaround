@@ -10,7 +10,6 @@ import { apiClient } from '../../lib/api/client';
 import type { GatePassData } from '../../lib/api/types';
 import { LoadingStatus } from '../../components/common/Loader';
 
-/* ── Field cell — module-level to avoid "component created during render" ── */
 const F = ({
   label,
   value,
@@ -29,8 +28,6 @@ const F = ({
     </p>
   </div>
 );
-
-/* ─────────────────────────────────────────────────────────────── */
 
 type PassStatus = 'pre_approved' | 'approved' | 'cleared' | 'inspected' | 'used' | 'expired' | 'revoked';
 
@@ -57,7 +54,6 @@ function fmtShort(d: string) {
   });
 }
 
-/* ─────────────────────────────────────────────────────────────── */
 
 export const GatePassPage: React.FC = () => {
   const navigate     = useNavigate();
@@ -121,7 +117,7 @@ export const GatePassPage: React.FC = () => {
     setCapturing(true);
     try {
       const canvas = await html2canvas(card, {
-        scale: 3,           // 3× for crisp high-res output
+        scale: 3,           
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -150,7 +146,6 @@ export const GatePassPage: React.FC = () => {
 
   /** Share or copy the image */
   const handleShare = async () => {
-    // Try image share first (mobile)
     if (navigator.share && navigator.canShare) {
       const canvas = await captureImage();
       if (canvas) {
@@ -163,7 +158,6 @@ export const GatePassPage: React.FC = () => {
               return;
             } catch { /* fall through */ }
           }
-          // Fallback: share text
           shareText();
         }, 'image/png');
         return;
@@ -213,7 +207,6 @@ export const GatePassPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ══════════════ GATE PASS CARD ══════════════ */}
       <div
         ref={cardRef}
         className="gp-card bg-white rounded-2xl shadow-lg overflow-hidden"
