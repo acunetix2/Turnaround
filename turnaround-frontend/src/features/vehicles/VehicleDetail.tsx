@@ -43,6 +43,7 @@ const TRACKER_MODELS = [
   { id: 'concox', name: 'Concox GT06N / Jimi JM-VL02 (Direct IMEI)' },
   { id: 'queclink', name: 'Queclink GV300 / GL300 (Direct IMEI)' },
   { id: 'tramigo', name: 'Tramigo T23 Fleet (Direct IMEI)' },
+  { id: 'flespi', name: 'Flespi Gateway / Normalized GPS Stream' },
   { id: 'samsara', name: 'Samsara Cloud Telematics (API Integration)' },
   { id: 'cartrack', name: 'Cartrack Fleet Telematics (API Integration)' },
   { id: 'driver_app', name: 'Turnaround Driver Mobile App (Live GPS Stream)' },
@@ -598,7 +599,9 @@ export const VehicleDetail: React.FC = () => {
                 <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Current Facility</span>
                 <span className="text-xs font-bold text-text-primary flex items-center gap-1 mt-1">
                   <MapPin size={12} className="text-[#ED642B]" />
-                  {vehicle.current_location_name || 'En Route (Northern Corridor)'}
+                  {gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)
+                    ? (vehicle.current_location_name?.trim() || 'Location not reported')
+                    : 'Location not reported'}
                 </span>
               </div>
             </div>

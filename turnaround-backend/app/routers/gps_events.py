@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -27,6 +27,72 @@ from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/gps", tags=["GPS Ingestion"])
 logger = logging.getLogger("turnaround.gps")
+
+
+def _first_present(*values) -> Optional[object]:
+    for value in values:
+        if value is not None and value != '':
+            return value
+    return None
+
+
+def _coerce_float(value: object) -> Optional[float]:
+    if value is None or value == '':
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_datetime(value: object) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc)
+
+
+async def _resolve_vehicle_for_telemify(db: AsyncSession, company_id: str, item: dict) -> Optional[Vehicle]:
+    candidate_id = _first_present(
+        item.get('vehicle_id'), item.get('vehicleId'), item.get('asset_id'), item.get('assetId'),
+        item.get('registration_number'), item.get('registrationNumber'), item.get('plate'), item.get('plate_number')
+    )
+    candidate_imei = _first_present(
+        item.get('imei'), item.get('tracker_imei'), item.get('trackerImei'), item.get('device_imei'),
+        item.get('deviceImei'), item.get('serial_number'), item.get('serialNumber'), item.get('device_id'), item.get('deviceId')
+    )
+
+    if candidate_id is not None:
+        candidate_value = str(candidate_id)
+        result = await db.execute(
+            select(Vehicle).where(
+                Vehicle.company_id == company_id,
+                (Vehicle.id == candidate_value) | (Vehicle.registration_number == candidate_value)
+            )
+        )
+        vehicle = result.scalar_one_or_none()
+        if vehicle:
+            return vehicle
+
+    if candidate_imei is not None:
+        result = await db.execute(
+            select(Vehicle).where(
+                Vehicle.company_id == company_id,
+                Vehicle.tracker_imei == str(candidate_imei)
+            )
+        )
+        vehicle = result.scalar_one_or_none()
+        if vehicle:
+            return vehicle
+
+    return None
 
 
 async def _get_active_trip_id(db: AsyncSession, vehicle_id: str) -> Optional[str]:
@@ -339,3 +405,120 @@ async def get_vehicle_gps_events(
     )
     events = result.scalars().all()
     return PaginatedResponse(items=list(events), total=total, limit=limit, offset=offset)
+
+
+@router.post("/flespi/webhook", status_code=status.HTTP_202_ACCEPTED,
+             summary="Accept normalized GPS payloads from a Flespi gateway")
+async def ingest_flespi_webhook(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[Optional[str], Query()] = None,
+    secret: Annotated[Optional[str], Query()] = None,
+):
+    """Accept a Flespi webhook payload, map it to a vehicle by IMEI/registration, and ingest GPS points.
+
+    This is the recommended architecture: Telemify or other trackers send raw device data to Flespi,
+    Flespi normalizes it, and Flespi streams the resulting JSON to this Render backend.
+    """
+    raw_payload = await request.json()
+    payload_dict = raw_payload if isinstance(raw_payload, dict) else {'items': raw_payload}
+
+    company_id_value = company_id or payload_dict.get('company_id') or payload_dict.get('tenant_id')
+    if not company_id_value:
+        raise HTTPException(status_code=400, detail='company_id is required for Flespi webhook ingestion')
+
+    company_res = await db.execute(select(Company).where(Company.id == company_id_value))
+    company = company_res.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail='Company not found')
+
+    integrations = company.integrations or {}
+    flespi_conf = integrations.get('flespi', {}) if isinstance(integrations, dict) else {}
+    if not isinstance(flespi_conf, dict):
+        flespi_conf = {}
+
+    expected_secret = flespi_conf.get('webhook_secret')
+    provided_secret = secret or request.headers.get('x-flespi-secret') or payload_dict.get('secret')
+    if expected_secret and provided_secret != expected_secret:
+        raise HTTPException(status_code=401, detail='Invalid Flespi webhook secret')
+
+    items: List[dict] = []
+    if isinstance(raw_payload, list):
+        items = [item for item in raw_payload if isinstance(item, dict)]
+    elif isinstance(raw_payload, dict):
+        for key in ('events', 'data', 'items', 'positions', 'devices', 'records', 'messages'):
+            value = raw_payload.get(key)
+            if isinstance(value, list):
+                items = [item for item in value if isinstance(item, dict)]
+                break
+        if not items:
+            items = [raw_payload]
+
+    if not items:
+        return IngestionResult(processed=0, duplicates_ignored=0, dwell_events_updated=0)
+
+    processed = 0
+    duplicates = 0
+    dwell_updates = 0
+
+    for item in items:
+        vehicle = await _resolve_vehicle_for_telemify(db, company_id_value, item)
+        if vehicle is None:
+            continue
+
+        latitude = _coerce_float(_first_present(
+            item.get('latitude'), item.get('lat'), item.get('gps_latitude'), item.get('latit'), item.get('y'),
+            item.get('position', {}).get('lat') if isinstance(item.get('position'), dict) else None,
+            item.get('location', {}).get('lat') if isinstance(item.get('location'), dict) else None,
+        ))
+        longitude = _coerce_float(_first_present(
+            item.get('longitude'), item.get('lng'), item.get('lon'), item.get('gps_longitude'), item.get('long'), item.get('x'),
+            item.get('position', {}).get('lng') if isinstance(item.get('position'), dict) else None,
+            item.get('position', {}).get('lon') if isinstance(item.get('position'), dict) else None,
+            item.get('location', {}).get('lng') if isinstance(item.get('location'), dict) else None,
+            item.get('location', {}).get('lon') if isinstance(item.get('location'), dict) else None,
+        ))
+        if latitude is None or longitude is None:
+            continue
+
+        speed = _coerce_float(_first_present(
+            item.get('speed'), item.get('speed_kmh'), item.get('velocity'), item.get('speed_km_h'),
+            item.get('position', {}).get('speed') if isinstance(item.get('position'), dict) else None,
+        )) or 0.0
+        heading = _coerce_float(_first_present(
+            item.get('heading'), item.get('bearing'), item.get('course'),
+            item.get('position', {}).get('heading') if isinstance(item.get('position'), dict) else None,
+        )) or 0.0
+        timestamp = _coerce_datetime(_first_present(
+            item.get('recorded_at'), item.get('timestamp'), item.get('time'), item.get('created_at'),
+            item.get('position', {}).get('timestamp') if isinstance(item.get('position'), dict) else None,
+        ))
+
+        event = GPSEventCreate(
+            vehicle_id=vehicle.id,
+            latitude=latitude,
+            longitude=longitude,
+            speed=speed,
+            heading=heading,
+            recorded_at=timestamp,
+        )
+        result = await _process_single_event(db, event, company_id_value)
+        if result['status'] == 'ok':
+            processed += 1
+            dwell_updates += result.get('dwell_updates', 0)
+        elif result['status'] == 'duplicate':
+            duplicates += 1
+
+    await db.commit()
+    return IngestionResult(processed=processed, duplicates_ignored=duplicates, dwell_events_updated=dwell_updates)
+
+
+@router.post("/telemify/webhook", status_code=status.HTTP_202_ACCEPTED,
+             summary="Backward-compatible alias for Telemify payloads")
+async def ingest_telemify_webhook_alias(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[Optional[str], Query()] = None,
+    secret: Annotated[Optional[str], Query()] = None,
+):
+    return await ingest_flespi_webhook(request, db, company_id, secret)

@@ -435,7 +435,7 @@ export const LiveMap: React.FC = () => {
 
     filteredVehicles.forEach((vh) => {
       const gps = gpsPositions ? gpsPositions[vh.id] : null;
-      if (!gps) return;
+      if (!gps || !Number.isFinite(gps.latitude) || !Number.isFinite(gps.longitude)) return;
 
       const isSelected = selectedVehicleId === vh.id;
       const isDelayed = vh.status === 'delayed';
@@ -475,7 +475,7 @@ export const LiveMap: React.FC = () => {
   const handleFocusVehicle = useCallback((vh: Vehicle) => {
     setSelectedVehicleId(vh.id);
     const gps = gpsPositions ? gpsPositions[vh.id] : null;
-    if (gps && mapInstanceRef.current) {
+    if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude) && mapInstanceRef.current) {
       mapInstanceRef.current.flyTo({
         center: [gps.longitude, gps.latitude],
         zoom: 13,
