@@ -37,18 +37,32 @@ def _first_present(*values) -> Optional[object]:
 
 
 def _lookup_nested_value(item: dict, *keys: str) -> Optional[object]:
-    for key in keys:
-        if item.get(key) not in (None, ''):
-            return item.get(key)
+    target_keys = {str(key).lower() for key in keys}
 
-    for nested_name in ('position', 'location', 'gps', 'geo', 'coordinates'):
-        container = item.get(nested_name)
-        if isinstance(container, dict):
-            for key in keys:
-                value = container.get(key)
+    def walk(node: object) -> Optional[object]:
+        if isinstance(node, dict):
+            for raw_key, value in node.items():
+                key_name = str(raw_key).lower()
                 if value not in (None, ''):
-                    return value
-    return None
+                    if key_name in target_keys:
+                        return value
+                    for target in target_keys:
+                        if key_name.endswith(f'.{target}'):
+                            return value
+
+                nested_value = walk(value)
+                if nested_value is not None:
+                    return nested_value
+
+        elif isinstance(node, list):
+            for entry in node:
+                nested_value = walk(entry)
+                if nested_value is not None:
+                    return nested_value
+
+        return None
+
+    return walk(item)
 
 
 def _collect_vehicle_match_candidates(item: dict) -> tuple[List[str], List[str]]:
