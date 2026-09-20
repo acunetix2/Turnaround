@@ -12,7 +12,7 @@ import { useTheme } from '../lib/ThemeContext';
 
 
 
-const DEMO_VIDEO_URL = import.meta.env.VITE_DEMO_VIDEO_URL || 'https://www.youtube.com/embed/e0bipF5qQls?si=1s0K-jJ284Rgg-pU';
+const DEMO_VIDEO_URL = 'https://www.youtube.com/embed/e0bipF5qQls?si=1s0K-jJ284Rgg-pU';
 
 const FEATURES = [
   {
