@@ -16,6 +16,7 @@ import {
   TurnaroundLogo,
   StripeLogo,
 } from '../../components/ui/Interstitial';
+import { useCompany } from '../../lib/CompanyContext';
 
 
 interface TelematicsTabProps {
@@ -31,7 +32,7 @@ const TRACCAR_URL   = 'https://www.traccar.org/demo/';
 const WIALON_URL    = `https://hosting.wialon.com/login.html?client_id=${import.meta.env.VITE_WIALON_CLIENT_ID || 'your_client_id'}&access_type=-1&activation_time=0&duration=604800&redirect_uri=${encodeURIComponent(window.location.origin + '/settings?tab=telematics&provider=wialon')}`;
 const GEOTAB_URL    = 'https://my.geotab.com/apidocs/';
 
-type Provider = 'traccar' | 'wialon' | 'geotab' | null;
+type Provider = 'traccar' | 'wialon' | 'geotab' | 'telemify' | null;
 
 const PROVIDERS = [
   {
@@ -74,6 +75,21 @@ const PROVIDERS = [
       { key: 'geotab_database', label: 'Database',  placeholder: 'YourCompanyName',    type: 'text' },
       { key: 'geotab_user',     label: 'Username',  placeholder: 'admin@company.com',  type: 'email' },
       { key: 'geotab_password', label: 'Password',  placeholder: '••••••••',           type: 'password' },
+    ],
+  },
+  {
+    id: 'telemify' as const,
+    name: 'Telemify',
+    desc: 'Direct GPS device tracking and webhook ingest — connect via API key and webhook secret',
+    badge: 'Webhook + API',
+    color: 'text-orange-500 bg-orange-500/10 border-orange-500/20',
+    icon: '📡',
+    authType: 'apikey' as const,
+    docsUrl: 'https://www.telemify.com/',
+    fields: [
+      { key: 'telemify_base_url', label: 'Base API URL', placeholder: 'https://api.telemify.com', type: 'url' },
+      { key: 'telemify_api_key', label: 'API Key', placeholder: 'Your Telemify API key', type: 'password' },
+      { key: 'telemify_webhook_secret', label: 'Webhook Secret', placeholder: 'Optional secret for inbound webhook verification', type: 'password' },
     ],
   },
 ];
@@ -262,6 +278,7 @@ const TelematicsTab: React.FC<TelematicsTabProps> = ({ webhookUrl, gpsPollingInt
 export const Settings: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { config: companyConfig, update: updateCompanyConfig } = useCompany();
   const [saving, setSaving] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'baselines' | 'rates' | 'telematics' | 'alerts'>('baselines');
@@ -300,13 +317,28 @@ export const Settings: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setSaving(false);
-    toast({
-      variant: 'success',
-      title: 'Settings Saved',
-      message: 'Account profile and operational parameters have been updated.'
-    });
+    try {
+      const integrations = (companyConfig?.integrations ?? {}) as Record<string, any>;
+      const telemifyConfig = {
+        ...(integrations.telemify ?? {}),
+        webhook_url: settings.webhookUrl,
+        polling_interval_seconds: Number(settings.gpsPollingInterval) || 8,
+      };
+      await updateCompanyConfig({ integrations: { ...integrations, telemify: telemifyConfig } });
+      toast({
+        variant: 'success',
+        title: 'Settings Saved',
+        message: 'Account profile and operational parameters have been updated.'
+      });
+    } catch (error) {
+      toast({
+        variant: 'error',
+        title: 'Failed to save settings',
+        message: error instanceof Error ? error.message : 'Please try again.'
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {

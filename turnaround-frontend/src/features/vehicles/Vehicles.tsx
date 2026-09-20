@@ -47,6 +47,7 @@ const TRACKER_MODELS = [
   { id: 'concox',      name: 'Concox GT06N / Jimi JM-VL02 (Direct IMEI)' },
   { id: 'queclink',    name: 'Queclink GV300 / GL300 (Direct IMEI)' },
   { id: 'tramigo',     name: 'Tramigo T23 Fleet (Direct IMEI)' },
+  { id: 'telemify',    name: 'Telemify GPS Devices (Webhook / API)' },
   { id: 'samsara',     name: 'Samsara Cloud Telematics (API Integration)' },
   { id: 'cartrack',    name: 'Cartrack Fleet Telematics (API Integration)' },
   { id: 'driver_app',  name: 'Turnaround Driver Mobile App (Live GPS Stream)' },
