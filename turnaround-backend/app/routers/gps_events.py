@@ -36,6 +36,38 @@ def _first_present(*values) -> Optional[object]:
     return None
 
 
+def _collect_vehicle_match_candidates(item: dict) -> tuple[List[str], List[str]]:
+    """Collect vehicle ID and IMEI candidates from nested Flespi/Telemify payloads."""
+    vehicle_ids: List[str] = []
+    imeis: List[str] = []
+
+    id_keys = {
+        'id', 'vehicle_id', 'vehicleid', 'asset_id', 'assetid',
+        'registration_number', 'registrationnumber', 'plate', 'plate_number', 'platenumber'
+    }
+    imei_keys = {
+        'imei', 'tracker_imei', 'trackerimei', 'device_imei', 'deviceimei',
+        'ident', 'serial', 'serial_number', 'serialnumber', 'device_id', 'deviceid'
+    }
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for key, nested_value in value.items():
+                normalized = str(key).lower()
+                if nested_value is not None and nested_value != '':
+                    if normalized in id_keys:
+                        vehicle_ids.append(str(nested_value))
+                    elif normalized in imei_keys:
+                        imeis.append(str(nested_value))
+                walk(nested_value)
+        elif isinstance(value, list):
+            for entry in value:
+                walk(entry)
+
+    walk(item)
+    return vehicle_ids, imeis
+
+
 def _coerce_float(value: object) -> Optional[float]:
     if value is None or value == '':
         return None
@@ -60,14 +92,9 @@ def _coerce_datetime(value: object) -> datetime:
 
 
 async def _resolve_vehicle_for_telemify(db: AsyncSession, company_id: str, item: dict) -> Optional[Vehicle]:
-    candidate_id = _first_present(
-        item.get('vehicle_id'), item.get('vehicleId'), item.get('asset_id'), item.get('assetId'),
-        item.get('registration_number'), item.get('registrationNumber'), item.get('plate'), item.get('plate_number')
-    )
-    candidate_imei = _first_present(
-        item.get('imei'), item.get('tracker_imei'), item.get('trackerImei'), item.get('device_imei'),
-        item.get('deviceImei'), item.get('serial_number'), item.get('serialNumber'), item.get('device_id'), item.get('deviceId')
-    )
+    vehicle_candidates, imei_candidates = _collect_vehicle_match_candidates(item)
+    candidate_id = _first_present(*vehicle_candidates)
+    candidate_imei = _first_present(*imei_candidates)
 
     if candidate_id is not None:
         candidate_value = str(candidate_id)
@@ -77,20 +104,37 @@ async def _resolve_vehicle_for_telemify(db: AsyncSession, company_id: str, item:
                 (Vehicle.id == candidate_value) | (Vehicle.registration_number == candidate_value)
             )
         )
-        vehicle = result.scalar_one_or_none()
-        if vehicle:
-            return vehicle
+        vehicles = result.scalars().all()
+        if len(vehicles) == 1:
+            return vehicles[0]
+        if len(vehicles) > 1:
+            logger.warning(
+                "Ambiguous vehicle match for company=%s via candidate_id=%s; found %d vehicles",
+                company_id,
+                candidate_value,
+                len(vehicles),
+            )
+            return None
 
     if candidate_imei is not None:
+        candidate_imei_value = str(candidate_imei)
         result = await db.execute(
             select(Vehicle).where(
                 Vehicle.company_id == company_id,
-                Vehicle.tracker_imei == str(candidate_imei)
+                Vehicle.tracker_imei == candidate_imei_value
             )
         )
-        vehicle = result.scalar_one_or_none()
-        if vehicle:
-            return vehicle
+        vehicles = result.scalars().all()
+        if len(vehicles) == 1:
+            return vehicles[0]
+        if len(vehicles) > 1:
+            logger.warning(
+                "Ambiguous IMEI match for company=%s imei=%s; found %d vehicles",
+                company_id,
+                candidate_imei_value,
+                len(vehicles),
+            )
+            return None
 
     return None
 
