@@ -498,17 +498,43 @@ async def ingest_flespi_webhook(
         if not items:
             items = [raw_payload]
 
+    logger.info(
+        "Flespi webhook received company_id=%s item_count=%s payload_keys=%s",
+        company_id_value,
+        len(items),
+        list(payload_dict.keys())[:20] if isinstance(payload_dict, dict) else type(payload_dict).__name__,
+    )
+
     if not items:
+        logger.warning("Flespi webhook produced no ingestible items for company_id=%s", company_id_value)
         return IngestionResult(processed=0, duplicates_ignored=0, dwell_events_updated=0)
 
     processed = 0
     duplicates = 0
     dwell_updates = 0
 
-    for item in items:
+    for idx, item in enumerate(items):
+        logger.info(
+            "Processing Flespi item %s for company=%s keys=%s",
+            idx,
+            company_id_value,
+            list(item.keys())[:20] if isinstance(item, dict) else type(item).__name__,
+        )
+
         vehicle = await _resolve_vehicle_for_telemify(db, company_id_value, item)
         if vehicle is None:
+            logger.warning(
+                "Flespi item skipped: no matching vehicle for company=%s item=%s",
+                company_id_value,
+                item,
+            )
             continue
+
+        logger.info(
+            "Resolved Flespi item to vehicle=%s company=%s",
+            vehicle.id,
+            company_id_value,
+        )
 
         latitude = _coerce_float(_first_present(
             item.get('latitude'), item.get('lat'), item.get('gps_latitude'), item.get('latit'), item.get('y'),
@@ -523,6 +549,12 @@ async def ingest_flespi_webhook(
             item.get('location', {}).get('lon') if isinstance(item.get('location'), dict) else None,
         ))
         if latitude is None or longitude is None:
+            logger.warning(
+                "Flespi item skipped: no valid lat/lng company=%s vehicle=%s payload=%s",
+                company_id_value,
+                vehicle.id,
+                item,
+            )
             continue
 
         speed = _coerce_float(_first_present(
