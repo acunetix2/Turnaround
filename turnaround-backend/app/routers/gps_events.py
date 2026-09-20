@@ -36,6 +36,53 @@ def _first_present(*values) -> Optional[object]:
     return None
 
 
+def _lookup_nested_value(item: dict, *keys: str) -> Optional[object]:
+    for key in keys:
+        if item.get(key) not in (None, ''):
+            return item.get(key)
+
+    for nested_name in ('position', 'location', 'gps', 'geo', 'coordinates'):
+        container = item.get(nested_name)
+        if isinstance(container, dict):
+            for key in keys:
+                value = container.get(key)
+                if value not in (None, ''):
+                    return value
+    return None
+
+
+def _collect_vehicle_match_candidates(item: dict) -> tuple[List[str], List[str]]:
+    """Collect vehicle ID and IMEI candidates from nested Flespi/Telemify payloads."""
+    vehicle_ids: List[str] = []
+    imeis: List[str] = []
+
+    id_keys = {
+        'id', 'vehicle_id', 'vehicleid', 'asset_id', 'assetid',
+        'registration_number', 'registrationnumber', 'plate', 'plate_number', 'platenumber'
+    }
+    imei_keys = {
+        'imei', 'tracker_imei', 'trackerimei', 'device_imei', 'deviceimei',
+        'ident', 'serial', 'serial_number', 'serialnumber', 'device_id', 'deviceid'
+    }
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for key, nested_value in value.items():
+                normalized = str(key).lower()
+                if nested_value is not None and nested_value != '':
+                    if normalized in id_keys:
+                        vehicle_ids.append(str(nested_value))
+                    elif normalized in imei_keys:
+                        imeis.append(str(nested_value))
+                walk(nested_value)
+        elif isinstance(value, list):
+            for entry in value:
+                walk(entry)
+
+    walk(item)
+    return vehicle_ids, imeis
+
+
 def _coerce_float(value: object) -> Optional[float]:
     if value is None or value == '':
         return None
@@ -60,14 +107,9 @@ def _coerce_datetime(value: object) -> datetime:
 
 
 async def _resolve_vehicle_for_telemify(db: AsyncSession, company_id: str, item: dict) -> Optional[Vehicle]:
-    candidate_id = _first_present(
-        item.get('vehicle_id'), item.get('vehicleId'), item.get('asset_id'), item.get('assetId'),
-        item.get('registration_number'), item.get('registrationNumber'), item.get('plate'), item.get('plate_number')
-    )
-    candidate_imei = _first_present(
-        item.get('imei'), item.get('tracker_imei'), item.get('trackerImei'), item.get('device_imei'),
-        item.get('deviceImei'), item.get('serial_number'), item.get('serialNumber'), item.get('device_id'), item.get('deviceId')
-    )
+    vehicle_candidates, imei_candidates = _collect_vehicle_match_candidates(item)
+    candidate_id = _first_present(*vehicle_candidates)
+    candidate_imei = _first_present(*imei_candidates)
 
     if candidate_id is not None:
         candidate_value = str(candidate_id)
@@ -77,20 +119,37 @@ async def _resolve_vehicle_for_telemify(db: AsyncSession, company_id: str, item:
                 (Vehicle.id == candidate_value) | (Vehicle.registration_number == candidate_value)
             )
         )
-        vehicle = result.scalar_one_or_none()
-        if vehicle:
-            return vehicle
+        vehicles = result.scalars().all()
+        if len(vehicles) == 1:
+            return vehicles[0]
+        if len(vehicles) > 1:
+            logger.warning(
+                "Ambiguous vehicle match for company=%s via candidate_id=%s; found %d vehicles",
+                company_id,
+                candidate_value,
+                len(vehicles),
+            )
+            return None
 
     if candidate_imei is not None:
+        candidate_imei_value = str(candidate_imei)
         result = await db.execute(
             select(Vehicle).where(
                 Vehicle.company_id == company_id,
-                Vehicle.tracker_imei == str(candidate_imei)
+                Vehicle.tracker_imei == candidate_imei_value
             )
         )
-        vehicle = result.scalar_one_or_none()
-        if vehicle:
-            return vehicle
+        vehicles = result.scalars().all()
+        if len(vehicles) == 1:
+            return vehicles[0]
+        if len(vehicles) > 1:
+            logger.warning(
+                "Ambiguous IMEI match for company=%s imei=%s; found %d vehicles",
+                company_id,
+                candidate_imei_value,
+                len(vehicles),
+            )
+            return None
 
     return None
 
@@ -454,41 +513,58 @@ async def ingest_flespi_webhook(
         if not items:
             items = [raw_payload]
 
+    logger.info(
+        "Flespi webhook received company_id=%s item_count=%s payload_keys=%s",
+        company_id_value,
+        len(items),
+        list(payload_dict.keys())[:20] if isinstance(payload_dict, dict) else type(payload_dict).__name__,
+    )
+
     if not items:
+        logger.warning("Flespi webhook produced no ingestible items for company_id=%s", company_id_value)
         return IngestionResult(processed=0, duplicates_ignored=0, dwell_events_updated=0)
 
     processed = 0
     duplicates = 0
     dwell_updates = 0
 
-    for item in items:
+    for idx, item in enumerate(items):
+        logger.info(
+            "Processing Flespi item %s for company=%s keys=%s",
+            idx,
+            company_id_value,
+            list(item.keys())[:20] if isinstance(item, dict) else type(item).__name__,
+        )
+
         vehicle = await _resolve_vehicle_for_telemify(db, company_id_value, item)
         if vehicle is None:
+            logger.warning(
+                "Flespi item skipped: no matching vehicle for company=%s item=%s",
+                company_id_value,
+                item,
+            )
             continue
 
-        latitude = _coerce_float(_first_present(
-            item.get('latitude'), item.get('lat'), item.get('gps_latitude'), item.get('latit'), item.get('y'),
-            item.get('position', {}).get('lat') if isinstance(item.get('position'), dict) else None,
-            item.get('location', {}).get('lat') if isinstance(item.get('location'), dict) else None,
-        ))
-        longitude = _coerce_float(_first_present(
-            item.get('longitude'), item.get('lng'), item.get('lon'), item.get('gps_longitude'), item.get('long'), item.get('x'),
-            item.get('position', {}).get('lng') if isinstance(item.get('position'), dict) else None,
-            item.get('position', {}).get('lon') if isinstance(item.get('position'), dict) else None,
-            item.get('location', {}).get('lng') if isinstance(item.get('location'), dict) else None,
-            item.get('location', {}).get('lon') if isinstance(item.get('location'), dict) else None,
-        ))
+        logger.info(
+            "Resolved Flespi item to vehicle=%s company=%s",
+            vehicle.id,
+            company_id_value,
+        )
+
+        latitude = _coerce_float(_lookup_nested_value(item, 'latitude', 'lat', 'gps_latitude', 'gpsLatitude', 'latit', 'y'))
+        longitude = _coerce_float(_lookup_nested_value(item, 'longitude', 'lng', 'lon', 'gps_longitude', 'gpsLongitude', 'long', 'x'))
+
         if latitude is None or longitude is None:
+            logger.warning(
+                "Flespi item skipped: no valid lat/lng company=%s vehicle=%s payload=%s",
+                company_id_value,
+                vehicle.id,
+                item,
+            )
             continue
 
-        speed = _coerce_float(_first_present(
-            item.get('speed'), item.get('speed_kmh'), item.get('velocity'), item.get('speed_km_h'),
-            item.get('position', {}).get('speed') if isinstance(item.get('position'), dict) else None,
-        )) or 0.0
-        heading = _coerce_float(_first_present(
-            item.get('heading'), item.get('bearing'), item.get('course'),
-            item.get('position', {}).get('heading') if isinstance(item.get('position'), dict) else None,
-        )) or 0.0
+        speed = _coerce_float(_lookup_nested_value(item, 'speed', 'speed_kmh', 'speed_km_h', 'velocity')) or 0.0
+        heading = _coerce_float(_lookup_nested_value(item, 'heading', 'bearing', 'course')) or 0.0
         timestamp = _coerce_datetime(_first_present(
             item.get('recorded_at'), item.get('timestamp'), item.get('time'), item.get('created_at'),
             item.get('position', {}).get('timestamp') if isinstance(item.get('position'), dict) else None,
