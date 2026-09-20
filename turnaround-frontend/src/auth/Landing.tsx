@@ -12,6 +12,8 @@ import { useTheme } from '../lib/ThemeContext';
 
 
 
+const DEMO_VIDEO_URL = import.meta.env.VITE_DEMO_VIDEO_URL || 'https://www.youtube.com/embed/e0bipF5qQls?si=1s0K-jJ284Rgg-pU';
+
 const FEATURES = [
   {
     icon: MapPin,
@@ -729,6 +731,39 @@ export const Landing: React.FC = () => {
       </section>
 
 
+
+      {/* ── DEMO VIDEO SECTION ── */}
+      <section id="demo" className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(237,100,43,0.18),_transparent_45%),linear-gradient(180deg,rgba(7,8,10,0.94),rgba(7,8,10,0.88))]" />
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-7xl px-6">
+          <div className="mx-auto max-w-3xl text-center mb-12 space-y-4">
+            <span className="text-xs font-mono font-bold text-[#ED642B] tracking-wider uppercase">See Turnaround in action</span>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+              A quick walkthrough of the Turnaround demo experience.
+            </h2>
+            <p className="text-sm sm:text-base text-white/75 leading-relaxed">
+              Watch how dispatchers and fleet teams use live dwell visibility, geofencing alerts, and financial impact summaries to stay ahead of terminal delays.
+            </p>
+          </div>
+
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[28px] border border-white/10 bg-black/60 p-3 shadow-2xl shadow-black/20">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+              <iframe
+                src={DEMO_VIDEO_URL}
+                title="Turnaround product demo"
+                className="aspect-video w-full"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── FINAL CTA: Clear Dusk Fleet Backdrop ── */}
       <section className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
