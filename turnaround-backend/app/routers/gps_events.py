@@ -36,6 +36,21 @@ def _first_present(*values) -> Optional[object]:
     return None
 
 
+def _lookup_nested_value(item: dict, *keys: str) -> Optional[object]:
+    for key in keys:
+        if item.get(key) not in (None, ''):
+            return item.get(key)
+
+    for nested_name in ('position', 'location', 'gps', 'geo', 'coordinates'):
+        container = item.get(nested_name)
+        if isinstance(container, dict):
+            for key in keys:
+                value = container.get(key)
+                if value not in (None, ''):
+                    return value
+    return None
+
+
 def _collect_vehicle_match_candidates(item: dict) -> tuple[List[str], List[str]]:
     """Collect vehicle ID and IMEI candidates from nested Flespi/Telemify payloads."""
     vehicle_ids: List[str] = []
@@ -536,18 +551,9 @@ async def ingest_flespi_webhook(
             company_id_value,
         )
 
-        latitude = _coerce_float(_first_present(
-            item.get('latitude'), item.get('lat'), item.get('gps_latitude'), item.get('latit'), item.get('y'),
-            item.get('position', {}).get('lat') if isinstance(item.get('position'), dict) else None,
-            item.get('location', {}).get('lat') if isinstance(item.get('location'), dict) else None,
-        ))
-        longitude = _coerce_float(_first_present(
-            item.get('longitude'), item.get('lng'), item.get('lon'), item.get('gps_longitude'), item.get('long'), item.get('x'),
-            item.get('position', {}).get('lng') if isinstance(item.get('position'), dict) else None,
-            item.get('position', {}).get('lon') if isinstance(item.get('position'), dict) else None,
-            item.get('location', {}).get('lng') if isinstance(item.get('location'), dict) else None,
-            item.get('location', {}).get('lon') if isinstance(item.get('location'), dict) else None,
-        ))
+        latitude = _coerce_float(_lookup_nested_value(item, 'latitude', 'lat', 'gps_latitude', 'gpsLatitude', 'latit', 'y'))
+        longitude = _coerce_float(_lookup_nested_value(item, 'longitude', 'lng', 'lon', 'gps_longitude', 'gpsLongitude', 'long', 'x'))
+
         if latitude is None or longitude is None:
             logger.warning(
                 "Flespi item skipped: no valid lat/lng company=%s vehicle=%s payload=%s",
@@ -557,14 +563,8 @@ async def ingest_flespi_webhook(
             )
             continue
 
-        speed = _coerce_float(_first_present(
-            item.get('speed'), item.get('speed_kmh'), item.get('velocity'), item.get('speed_km_h'),
-            item.get('position', {}).get('speed') if isinstance(item.get('position'), dict) else None,
-        )) or 0.0
-        heading = _coerce_float(_first_present(
-            item.get('heading'), item.get('bearing'), item.get('course'),
-            item.get('position', {}).get('heading') if isinstance(item.get('position'), dict) else None,
-        )) or 0.0
+        speed = _coerce_float(_lookup_nested_value(item, 'speed', 'speed_kmh', 'speed_km_h', 'velocity')) or 0.0
+        heading = _coerce_float(_lookup_nested_value(item, 'heading', 'bearing', 'course')) or 0.0
         timestamp = _coerce_datetime(_first_present(
             item.get('recorded_at'), item.get('timestamp'), item.get('time'), item.get('created_at'),
             item.get('position', {}).get('timestamp') if isinstance(item.get('position'), dict) else None,
