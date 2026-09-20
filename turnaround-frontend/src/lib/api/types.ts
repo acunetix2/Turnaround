@@ -1,4 +1,13 @@
-export type UserRole = 'admin' | 'fleet_manager' | 'dispatcher' | 'analyst';
+export type UserRole =
+  | 'admin'
+  | 'fleet_manager'
+  | 'dispatcher'
+  | 'operations_manager'
+  | 'maintenance_technician'
+  | 'supervisor'
+  | 'analyst'
+  | 'driver'
+  | 'viewer';
 
 export type LocationType =
   | 'warehouse'
@@ -11,12 +20,52 @@ export type LocationType =
 
 export type VehicleStatus = 'active' | 'idle' | 'maintenance' | 'in_transit' | 'delayed';
 
+export const ASSET_TYPE_OPTIONS = [
+  { value: 'truck', label: 'Truck' },
+  { value: 'trailer', label: 'Trailer' },
+  { value: 'container', label: 'Container' },
+  { value: 'minitruck', label: 'Mini Truck' },
+  { value: 'ship', label: 'Ship' },
+  { value: 'tanker', label: 'Tanker' },
+  { value: 'chassis', label: 'Container Chassis' },
+  { value: 'tractor', label: 'Tractor Unit' },
+] as const;
+
 export type SeverityType = 'low' | 'medium' | 'high';
 
 export interface Company {
   id: string;
   name: string;
   created_at: string;
+}
+
+export interface CompanyConfig extends Company {
+  registration_number?: string;
+  industry?: string;
+  logo_url?: string;
+  welcome_media_url?: string;
+  welcome_media_type?: 'image' | 'video';
+  welcome_motto?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  operating_zone?: string;
+  currency: string;
+  timezone: string;
+  default_corridor?: string;
+  sla_warning_threshold_minutes: number;
+  sla_breach_threshold_minutes: number;
+  hourly_operating_rate: number;
+  demurrage_rate_multiplier: number;
+  gps_polling_interval_seconds: number;
+  geofence_buffer_meters: number;
+  auto_revoke_expired_passes: boolean;
+  notify_on_delay: boolean;
+  notify_on_gate_pass: boolean;
+  integrations?: Record<string, unknown>;
 }
 
 export interface User {
@@ -26,6 +75,10 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  phone?: string;
+  status: 'active' | 'inactive' | 'suspended';
+  last_login?: string;
+  updated_at?: string;
   created_at: string;
 }
 
@@ -45,6 +98,10 @@ export interface Vehicle {
   driver_license?: string;
   driver_avatar?: string;
   driver_status?: 'on_duty' | 'resting' | 'driving';
+  driver_id?: string;
+  co_driver_id?: string;
+  driver?: FleetStaff;
+  co_driver?: FleetStaff;
   trailer_number?: string;
   container_number?: string;
   container_type?: string;
@@ -52,12 +109,30 @@ export interface Vehicle {
   telematics_provider?: string;
   tracker_imei?: string;
   fuel_level?: number; // 0-100 percentage
+  fuel_tank_capacity_liters?: number;
+  fuel_consumption_liters_per_100km?: number;
+  estimated_range_km?: number;
   odometer_km?: number;
   maintenance_status?: 'good' | 'due_soon' | 'in_service';
   next_inspection_date?: string;
   // Computed client-side helper fields if joined
   current_location_name?: string;
   today_excess_dwell_minutes?: number;
+}
+
+export interface FleetStaff {
+  id: string;
+  company_id: string;
+  name: string;
+  phone?: string;
+  license_number?: string;
+  license_expiry_date?: string;
+  availability_status?: 'available' | 'on_leave' | 'driving' | 'assigned' | 'unavailable';
+  staff_type: 'driver' | 'co_driver' | 'maintenance_technician' | 'engineer' | 'supervisor';
+  status: 'active' | 'inactive';
+  notes?: string;
+  created_at: string;
+  assigned_vehicle_count?: number;
 }
 
 export interface Location {
@@ -90,6 +165,7 @@ export interface TripCheckpoint {
 export interface Trip {
   id: string;
   vehicle_id: string;
+  container_id?: string;
   origin_id: string;
   destination_id: string;
   planned_departure: string;
@@ -106,6 +182,8 @@ export interface Trip {
   cargo_type?: string;
   cargo_weight_tonnes?: number;
   checkpoints?: TripCheckpoint[];
+  vehicle?: Vehicle;
+  container?: Container;
   // Denormalised display fields (derived from joined origin/destination on backend)
   vehicle_reg?: string;
   vehicle_type?: string;
@@ -118,6 +196,16 @@ export interface Trip {
   current_speed_kmh?: number;
   current_latitude?: number;
   current_longitude?: number;
+}
+
+export interface Container {
+  id: string;
+  company_id: string;
+  container_number: string;
+  container_type?: string;
+  status: 'available' | 'maintenance' | 'retired';
+  notes?: string;
+  created_at: string;
 }
 
 export type ClaimStatus = 'flagged' | 'invoiced' | 'disputed' | 'settled' | 'written_off';

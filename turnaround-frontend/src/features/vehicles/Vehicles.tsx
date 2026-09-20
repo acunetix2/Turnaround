@@ -4,7 +4,7 @@ import { apiClient } from '../../lib/api/client';
 import { formatCurrency } from '../../lib/format';
 import { useAuth } from '../../auth/AuthProvider';
 import { Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
 import {
@@ -12,12 +12,25 @@ import {
   Table as TableIcon, LayoutGrid, X, Radio, User, Camera,
   Package, Settings, AlertCircle, Navigation2
 } from 'lucide-react';
-import type { Vehicle } from '../../lib/api/types';
+import type { FleetStaff, Vehicle } from '../../lib/api/types';
+import { ASSET_TYPE_OPTIONS } from '../../lib/api/types';
 import { Select } from '../../components/ui/Select';
+import {
+  DatePicker,
+  DatePickerTrigger,
+  DatePickerButton,
+  DatePickerContent,
+} from '../../components/ui/DatePicker';
+import { Calendar } from '../../components/ui/Calendar';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
+import { CarrierAssetsReference } from './CarrierAssetsReference';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { EmptyStatePresentational } from '../../components/ui/EmptyStatePresentational';
+import { LoadingStatus } from '../../components/common/Loader';
+import { Upload, Download } from 'lucide-react';
+import { parseVehicleCsv } from './vehicleCsv';
+import JSZip from 'jszip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import {
   MetricCard,
@@ -59,6 +72,8 @@ const vehicleSchema = zod.object({
   driver_phone:         zod.string().optional(),
   driver_license:       zod.string().optional(),
   driver_status:        zod.enum(['on_duty', 'resting', 'driving']).optional(),
+  driver_id:            zod.string().optional(),
+  co_driver_id:         zod.string().optional(),
   // Container / Cargo
   trailer_number:       zod.string().optional(),
   container_number:     zod.string().optional(),
@@ -72,6 +87,8 @@ const vehicleSchema = zod.object({
   next_inspection_date: zod.string().optional(),
   odometer_km:          zod.number().optional(),
   fuel_level:           zod.number().min(0).max(100).optional(),
+  fuel_tank_capacity_liters: zod.number().positive().optional(),
+  fuel_consumption_liters_per_100km: zod.number().positive().optional(),
 });
 
 type VehicleFormValues = zod.infer<typeof vehicleSchema>;
@@ -95,6 +112,22 @@ const maintenanceBadge = (m?: string) => {
 const driverStatusColor = (s?: string) =>
   s === 'driving' ? 'text-status-good' :
   s === 'resting' ? 'text-yellow-500'  : 'text-text-tertiary';
+
+const isPoweredAssetType = (type?: string) => /truck|minitruck|tanker|tractor/i.test(type || '');
+
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const fromDateInputValue = (value?: string) => {
+  if (!value) return undefined;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+};
 
 // ── Image Upload component ──────────────────────────────────────────────────
 
@@ -154,6 +187,8 @@ export const Vehicles: React.FC = () => {
   const [imageDataUrl,     setImageDataUrl]     = useState<string | undefined>();
   const [activeTab,        setActiveTab]        = useState<'specs' | 'driver' | 'cargo' | 'telematics'>('specs');
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
+  const assetFileRef = useRef<HTMLInputElement | null>(null);
+  const assetCsvTemplate = `registration_number,image_filename,vehicle_type,capacity,hourly_operating_cost,status,driver_id,co_driver_id,trailer_number,container_number,container_type,cargo_type,telematics_provider,tracker_imei,fuel_level,fuel_tank_capacity_liters,fuel_consumption_liters_per_100km,odometer_km,maintenance_status,next_inspection_date\nKDA 123A,kda-482t.jpg,Truck,28,7500,idle,,,TRL-001,MSCU1234567,40ft Dry,General Cargo,Teltonika,352093080000001,65,300,32,120000,good,2026-10-01`;
 
   const { data: vehicles, isLoading, isError, refetch } = useQuery({
     queryKey:        ['vehicles'],
@@ -176,6 +211,21 @@ export const Vehicles: React.FC = () => {
     queryFn:         apiClient.getLiveGPSEvents,
     refetchInterval: 15000,
     enabled:         !!vehicles && vehicles.length > 0,
+  });
+
+  const { data: fleetStaff = [] } = useQuery<FleetStaff[]>({
+    queryKey: ['fleetStaff'],
+    queryFn: apiClient.getFleetStaff,
+    enabled: role === 'admin' || role === 'fleet_manager',
+  });
+
+  const availableStaffFor = (staffType: FleetStaff['staff_type']) => fleetStaff.filter((entry) => {
+    if (entry.staff_type !== staffType || entry.status !== 'active') return false;
+    const assignedElsewhere = (vehicles ?? []).some((vehicle) =>
+      vehicle.id !== editingVehicle?.id &&
+      (vehicle.driver_id === entry.id || vehicle.co_driver_id === entry.id)
+    );
+    return !assignedElsewhere;
   });
 
   const createMutation = useMutation({
@@ -214,13 +264,82 @@ export const Vehicles: React.FC = () => {
     },
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (rows: ReturnType<typeof parseVehicleCsv>) => {
+      const created: Vehicle[] = [];
+      for (const row of rows) created.push(await apiClient.createVehicle(row as any));
+      return created;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      setShowAddModal(false);
+      toast({ variant: 'success', title: `${created.length} assets uploaded`, message: 'Fleet assets were registered from the CSV.' });
+    },
+    onError: (error: any) => toast({ variant: 'error', title: 'Asset CSV import failed', message: error.message }),
+  });
+
+  const downloadAssetTemplate = () => {
+    const url = URL.createObjectURL(new Blob([assetCsvTemplate], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'turnaround-asset-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importAssets = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      let csvText = await file.text();
+      const imageData = new Map<string, string>();
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file);
+        const csvEntry = Object.values(zip.files).find((entry) => !entry.dir && entry.name.toLowerCase().endsWith('.csv'));
+        if (!csvEntry) throw new Error('ZIP must contain one CSV file.');
+        csvText = await csvEntry.async('text');
+        await Promise.all(Object.values(zip.files).filter((entry) => !entry.dir && /\.(png|jpe?g|webp)$/i.test(entry.name)).map(async (entry) => {
+          const base64 = await entry.async('base64');
+          const extension = entry.name.split('.').pop()?.toLowerCase() || 'jpeg';
+          const mime = extension === 'jpg' ? 'jpeg' : extension;
+          imageData.set(entry.name.toLowerCase(), `data:image/${mime};base64,${base64}`);
+          imageData.set(entry.name.split('/').pop()?.toLowerCase() || entry.name.toLowerCase(), `data:image/${mime};base64,${base64}`);
+        }));
+      }
+      const rows = parseVehicleCsv(csvText).map((row) => ({
+        ...row,
+        image_url: row.image_filename ? imageData.get(row.image_filename.toLowerCase()) : undefined,
+      }));
+      if (!rows.length) throw new Error('No valid asset rows found.');
+      const missingImage = rows.find((row) => row.image_filename && !row.image_url);
+      if (missingImage) throw new Error(`Image ${missingImage.image_filename} for ${missingImage.registration_number} was not found in the ZIP.`);
+      const invalid = rows.find((row) => row.capacity <= 0 || row.hourly_operating_cost <= 0);
+      if (invalid) throw new Error(`${invalid.registration_number} must have a positive capacity and hourly operating cost.`);
+      const duplicate = rows.find((row, index) => rows.findIndex((item) => item.registration_number.toUpperCase() === row.registration_number.toUpperCase()) !== index);
+      if (duplicate) throw new Error(`Duplicate registration ${duplicate.registration_number} in CSV.`);
+      const existing = new Set((vehicles ?? []).map((vehicle) => vehicle.registration_number.toUpperCase()));
+      const alreadyRegistered = rows.find((row) => existing.has(row.registration_number.toUpperCase()));
+      if (alreadyRegistered) throw new Error(`${alreadyRegistered.registration_number} is already registered.`);
+      bulkImportMutation.mutate(rows);
+    } catch (error: any) {
+      toast({ variant: 'error', title: 'Asset CSV import failed', message: error.message });
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const {
-    register, handleSubmit, reset, setValue,
+    register, handleSubmit, reset, setValue, watch, control,
     formState: { errors, isSubmitting },
   } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: { status: 'idle', capacity: 28, hourly_operating_cost: 7500, driver_status: 'on_duty', maintenance_status: 'good' },
   });
+
+  const selectedAssetType = useWatch({ control, name: 'vehicle_type' });
+  const isPoweredAsset = ['truck', 'minitruck', 'tanker', 'tractor'].includes(selectedAssetType);
+  const isContainerAsset = selectedAssetType === 'container';
+  const hasDriverTab = isPoweredAsset;
 
   const handleOpenAdd = () => {
     setSubmitError(''); setActiveTab('specs');
@@ -235,6 +354,8 @@ export const Vehicles: React.FC = () => {
       driver_phone: '',
       driver_license: '',
       driver_status: 'on_duty',
+      driver_id: '',
+      co_driver_id: '',
       trailer_number: '',
       container_number: '',
       container_type: '',
@@ -245,6 +366,8 @@ export const Vehicles: React.FC = () => {
       next_inspection_date: '',
       odometer_km: undefined,
       fuel_level: undefined,
+      fuel_tank_capacity_liters: undefined,
+      fuel_consumption_liters_per_100km: undefined,
     });
     setImageDataUrl(undefined);
     setShowAddModal(true);
@@ -263,6 +386,8 @@ export const Vehicles: React.FC = () => {
       driver_phone:         v.driver_phone || '',
       driver_license:       v.driver_license || '',
       driver_status:        (v.driver_status as any) || 'on_duty',
+      driver_id:            v.driver_id || '',
+      co_driver_id:         v.co_driver_id || '',
       trailer_number:       v.trailer_number || '',
       container_number:     v.container_number || '',
       container_type:       v.container_type || '',
@@ -273,6 +398,8 @@ export const Vehicles: React.FC = () => {
       next_inspection_date: v.next_inspection_date || '',
       odometer_km:          v.odometer_km ?? undefined,
       fuel_level:           v.fuel_level ?? undefined,
+      fuel_tank_capacity_liters: v.fuel_tank_capacity_liters ?? undefined,
+      fuel_consumption_liters_per_100km: v.fuel_consumption_liters_per_100km ?? undefined,
     });
   };
 
@@ -315,6 +442,17 @@ export const Vehicles: React.FC = () => {
     }
 
     const payload = { ...data, image_url: imageDataUrl } as any;
+    if (selectedAssetType === 'container') {
+      payload.container_number = payload.registration_number;
+    }
+    if (!['truck', 'minitruck', 'tanker', 'tractor'].includes(selectedAssetType || '')) {
+      delete payload.driver_id;
+      delete payload.co_driver_id;
+      delete payload.driver_name;
+      delete payload.driver_phone;
+      delete payload.driver_license;
+      delete payload.driver_status;
+    }
     // status is already the correct backend enum value — no mapping needed
     // Strip undefined/null/empty-string/NaN fields so PATCH only sends changed values
     Object.keys(payload).forEach(k => {
@@ -349,13 +487,16 @@ export const Vehicles: React.FC = () => {
   // ── LOADING / ERROR ──
   if (isLoading) {
     return (
-      <div className="space-y-4 animate-pulse">
+      <div className="space-y-4">
+        <LoadingStatus messages={['Please wait while we load your fleet', 'Checking vehicle telemetry', 'Almost there', 'Preparing fleet overview']} centered />
+        <div className="space-y-4 animate-pulse">
         <div className="h-10 w-full bg-bg-surface-raised rounded-xl" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-bg-surface-raised rounded-xl" />)}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-64 bg-bg-surface-raised rounded-xl" />)}
+        </div>
         </div>
       </div>
     );
@@ -386,7 +527,7 @@ export const Vehicles: React.FC = () => {
   const sortedTypes = Object.entries(typeGroups).sort((a, b) => b[1] - a[1]);
 
   // Drivers on duty
-  const driversOnDuty = vehicles.filter(v => v.driver_name).length;
+  const driversOnDuty = vehicles.filter(v => isPoweredAssetType(v.vehicle_type) && v.driver_name).length;
 
   // Containers in system
   const containersTracked = vehicles.filter(v => v.container_number).length;
@@ -411,6 +552,18 @@ export const Vehicles: React.FC = () => {
   const inputCls = "w-full bg-bg-surface-raised border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none";
 
   return (
+    <>
+      <CarrierAssetsReference
+        vehicles={vehicles.map((vehicle) => isPoweredAssetType(vehicle.vehicle_type)
+          ? vehicle
+          : { ...vehicle, driver_name: 'Not applicable' })}
+        gpsData={gpsData}
+        canMutate={canMutate}
+        onAdd={handleOpenAdd}
+        onEdit={handleOpenEdit}
+        onDelete={handleDelete}
+      />
+      <div className="hidden">
     <div className="space-y-6">
 
       {/* ── HEADER ── */}
@@ -427,6 +580,9 @@ export const Vehicles: React.FC = () => {
             <button onClick={() => setViewMode('table')} title="Table" className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${viewMode === 'table' ? 'bg-[#ED642B] text-white' : 'text-text-tertiary hover:text-text-primary'}`}><TableIcon size={13} /></button>
           </div>
           {canMutate && (
+            <>
+            <Button variant="outline" size="small" icon={<Download size={13} />} onClick={downloadAssetTemplate}>CSV template</Button>
+            <Button variant="outline" size="small" icon={<Upload size={13} />} loading={bulkImportMutation.isPending} onClick={() => assetFileRef.current?.click()}>Import CSV / ZIP</Button>
             <Button
               variant="primary"
               size="small"
@@ -435,6 +591,8 @@ export const Vehicles: React.FC = () => {
             >
               Register Asset
             </Button>
+            <input ref={assetFileRef} type="file" accept=".csv,.zip,text/csv,application/zip" className="hidden" onChange={importAssets} />
+            </>
           )}
         </div>
       </div>
@@ -706,7 +864,7 @@ export const Vehicles: React.FC = () => {
                   </div>
 
                   {/* Driver Info */}
-                  {vh.driver_name ? (
+                  {isPoweredAssetType(vh.vehicle_type) && vh.driver_name ? (
                     <div className="flex items-center gap-2 p-2.5 rounded-xl bg-bg-surface-raised border border-border-default">
                       <div className="h-7 w-7 rounded-lg bg-[#250C77] text-white font-bold text-xs flex items-center justify-center shrink-0">
                         {vh.driver_name.charAt(0).toUpperCase()}
@@ -721,12 +879,12 @@ export const Vehicles: React.FC = () => {
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#250C77]/10 text-[#250C77] font-mono font-bold shrink-0">{vh.driver_license}</span>
                       )}
                     </div>
-                  ) : (
+                  ) : isPoweredAssetType(vh.vehicle_type) ? (
                     <div className="flex items-center gap-2 p-2.5 rounded-xl bg-bg-surface-raised border border-dashed border-border-default text-text-tertiary">
                       <User size={13} />
                       <span className="text-[11px]">No driver assigned</span>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Container / Cargo — with weight */}
                   {(vh.container_number || vh.cargo_type) && (
@@ -882,13 +1040,15 @@ export const Vehicles: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {vh.driver_name ? (
+                        {isPoweredAssetType(vh.vehicle_type) && vh.driver_name ? (
                           <div>
                             <p className="font-medium text-xs text-text-primary">{vh.driver_name}</p>
                             <p className="text-[10px] text-text-tertiary">{vh.driver_phone || '—'}</p>
                           </div>
-                        ) : (
+                        ) : isPoweredAssetType(vh.vehicle_type) ? (
                           <span className="text-text-tertiary text-[11px]">Unassigned</span>
+                        ) : (
+                          <span className="text-text-tertiary text-[11px]">Not applicable</span>
                         )}
                       </TableCell>
                       <TableCell className="font-mono">
@@ -964,6 +1124,9 @@ export const Vehicles: React.FC = () => {
         </div>
       )}
 
+      </div>
+      </div>
+
       {/* ── ADD / EDIT MODAL ── */}
       {(showAddModal || editingVehicle) && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4 overflow-y-auto">
@@ -978,9 +1141,15 @@ export const Vehicles: React.FC = () => {
                   Vehicle specs, driver assignment, container tracking, and telematics.
                 </p>
               </div>
-              <button onClick={() => { setShowAddModal(false); setEditingVehicle(null); }} className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised cursor-pointer transition-colors">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                {!editingVehicle && <>
+                  <Button variant="outline" size="small" icon={<Download size={12} />} onClick={downloadAssetTemplate}>CSV Template</Button>
+                  <Button variant="outline" size="small" icon={<Upload size={12} />} loading={bulkImportMutation.isPending} onClick={() => assetFileRef.current?.click()}>Import CSV / ZIP</Button>
+                </>}
+                <button onClick={() => { setShowAddModal(false); setEditingVehicle(null); }} className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-surface-raised cursor-pointer transition-colors" aria-label="Close asset registration">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {submitError && (
@@ -992,12 +1161,12 @@ export const Vehicles: React.FC = () => {
 
             {/* Tab Navigation */}
             <div className="flex gap-1 border-b border-border-default pb-px overflow-x-auto">
-              {[
-                { id: 'specs',      label: 'Vehicle Specs', icon: <Truck size={12} /> },
-                { id: 'driver',     label: 'Driver',        icon: <User size={12} /> },
-                { id: 'cargo',      label: 'Cargo & Container', icon: <Package size={12} /> },
-                { id: 'telematics', label: 'Telematics',    icon: <Navigation2 size={12} /> },
-              ].map(tab => (
+                {[
+                  { id: 'specs',      label: isContainerAsset ? 'Container Details' : 'Asset Specs', icon: isContainerAsset ? <Container size={12} /> : <Truck size={12} /> },
+                  ...(hasDriverTab ? [{ id: 'driver', label: 'Driver', icon: <User size={12} /> }] : []),
+                  { id: 'cargo',      label: isContainerAsset ? 'Cargo Details' : 'Cargo & Container', icon: <Package size={12} /> },
+                  { id: 'telematics', label: 'Telematics',    icon: <Navigation2 size={12} /> },
+                ].map(tab => (
                 <button
                   key={tab.id}
                   type="button"
@@ -1034,58 +1203,147 @@ export const Vehicles: React.FC = () => {
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Registration Plate *</label>
-                      <input {...register('registration_number')} placeholder="e.g. KDF 489X" className={`${inputCls} uppercase font-numeric font-bold`} />
+                      <label className="block text-xs font-medium text-text-secondary mb-1">{isContainerAsset ? 'Container Number *' : 'Registration Plate *'}</label>
+                      <input {...register('registration_number')} placeholder={isContainerAsset ? 'e.g. MSCU1234567' : 'e.g. KDF 489X'} className={`${inputCls} uppercase font-numeric font-bold`} />
                       {errors.registration_number && <p className="text-[11px] text-red-500 mt-1">{errors.registration_number.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Vehicle Classification *</label>
-                      <input {...register('vehicle_type')} placeholder="e.g. Semi-Trailer (28T)" className={inputCls} />
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Asset Category *</label>
+                      <Select
+                        value={selectedAssetType ?? ''}
+                        onValueChange={(value) => {
+                          setValue('vehicle_type', value, { shouldValidate: true });
+                          if (!['truck', 'minitruck', 'tanker', 'tractor'].includes(value)) {
+                            setValue('driver_id', '');
+                            setValue('co_driver_id', '');
+                            setValue('driver_name', '');
+                            setValue('driver_phone', '');
+                            setValue('driver_license', '');
+                          }
+                          setActiveTab('specs');
+                        }}
+                        options={[
+                          { value: '', label: 'Select asset type' },
+                          ...ASSET_TYPE_OPTIONS.map(option => ({ value: option.value, label: option.label })),
+                        ]}
+                        placeholder="Select asset type"
+                      />
                       {errors.vehicle_type && <p className="text-[11px] text-red-500 mt-1">{errors.vehicle_type.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Payload Capacity (Tonnes) *</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">{isContainerAsset ? 'Maximum Payload (Tonnes) *' : 'Payload Capacity (Tonnes) *'}</label>
                       <input type="number" step="0.1" {...register('capacity', { valueAsNumber: true })} className={inputCls} />
-                      {errors.capacity && <p className="text-[11px] text-red-500 mt-1">{errors.capacity.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Idle Rate (KES/hr) *</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">{isContainerAsset ? 'Handling Rate (KES/hr) *' : 'Idle Rate (KES/hr) *'}</label>
                       <input type="number" step="100" {...register('hourly_operating_cost', { valueAsNumber: true })} className={inputCls} />
                       {errors.hourly_operating_cost && <p className="text-[11px] text-red-500 mt-1">{errors.hourly_operating_cost.message}</p>}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Current Status *</label>
-                      <select {...register('status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="active">Active</option>
-                        <option value="in_transit">In Transit</option>
-                        <option value="idle">Stationary / Idle</option>
-                        <option value="delayed">Delayed</option>
-                        <option value="maintenance">Under Maintenance</option>
-                      </select>
+                      <Select
+                        value={watch('status') ?? 'idle'}
+                        onValueChange={(value) => setValue('status', value as VehicleFormValues['status'], { shouldValidate: true })}
+                        options={[
+                          { value: 'active', label: 'Active' },
+                          { value: 'in_transit', label: 'In Transit' },
+                          { value: 'idle', label: 'Stationary / Idle' },
+                          { value: 'delayed', label: 'Delayed' },
+                          { value: 'maintenance', label: 'Under Maintenance' },
+                        ]}
+                        placeholder="Select status"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Maintenance Status</label>
-                      <select {...register('maintenance_status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="good">Good</option>
-                        <option value="due_soon">Due Soon</option>
-                        <option value="in_service">In Service</option>
-                      </select>
+                      <Select
+                        value={watch('maintenance_status') ?? 'good'}
+                        onValueChange={(value) => setValue('maintenance_status', value as VehicleFormValues['maintenance_status'], { shouldValidate: true })}
+                        options={[
+                          { value: 'good', label: 'Good' },
+                          { value: 'due_soon', label: 'Due Soon' },
+                          { value: 'in_service', label: 'In Service' },
+                        ]}
+                        placeholder="Select maintenance status"
+                      />
                     </div>
-                    <div>
+                    {isPoweredAsset && <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Odometer (km)</label>
                       <input type="number" {...register('odometer_km', { valueAsNumber: true })} placeholder="e.g. 120000" className={inputCls} />
-                    </div>
+                    </div>}
+                    {isPoweredAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Fuel Level (%)</label>
+                      <input type="number" min="0" max="100" {...register('fuel_level', { valueAsNumber: true })} placeholder="e.g. 65" className={inputCls} />
+                    </div>}
+                    {isPoweredAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Tank Capacity (litres)</label>
+                      <input type="number" min="1" step="1" {...register('fuel_tank_capacity_liters', { valueAsNumber: true })} placeholder="e.g. 300" className={inputCls} />
+                    </div>}
+                    {isPoweredAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Consumption (L/100 km)</label>
+                      <input type="number" min="0.1" step="0.1" {...register('fuel_consumption_liters_per_100km', { valueAsNumber: true })} placeholder="e.g. 32" className={inputCls} />
+                    </div>}
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Next Inspection Date</label>
-                      <input type="date" {...register('next_inspection_date')} className={inputCls} />
+                      <DatePicker>
+                        <DatePickerTrigger asChild>
+                          <DatePickerButton
+                            variant="outline"
+                            className="w-full h-9 justify-start px-3"
+                          >
+                            {watch('next_inspection_date')
+                              ? watch('next_inspection_date')
+                              : 'Select inspection date'}
+                          </DatePickerButton>
+                        </DatePickerTrigger>
+                        <DatePickerContent align="left">
+                          <Calendar
+                            mode="single"
+                            selected={fromDateInputValue(watch('next_inspection_date'))}
+                            onSelect={(date) =>
+                              setValue('next_inspection_date', date ? toDateInputValue(date) : '', {
+                                shouldValidate: true,
+                              })
+                            }
+                            initialFocus
+                          />
+                        </DatePickerContent>
+                      </DatePicker>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* DRIVER TAB */}
-              {activeTab === 'driver' && (
+              {activeTab === 'driver' && hasDriverTab && (
                 <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Assigned Driver</label>
+                      <Select
+                        value={watch('driver_id') || 'unassigned'}
+                        onValueChange={(value) => {
+                          const person = fleetStaff.find((entry) => entry.id === value);
+                          setValue('driver_id', value === 'unassigned' ? '' : value);
+                          if (person) {
+                            setValue('driver_name', person.name);
+                            setValue('driver_phone', person.phone || '');
+                            setValue('driver_license', person.license_number || '');
+                          }
+                        }}
+                        options={[{ value: 'unassigned', label: 'No driver assigned' }, ...availableStaffFor('driver').map((entry) => ({ value: entry.id, label: entry.name }))]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Assigned Co-driver</label>
+                      <Select
+                        value={watch('co_driver_id') || 'unassigned'}
+                        onValueChange={(value) => setValue('co_driver_id', value === 'unassigned' ? '' : value)}
+                        options={[{ value: 'unassigned', label: 'No co-driver assigned' }, ...availableStaffFor('co_driver').map((entry) => ({ value: entry.id, label: entry.name }))]}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-text-tertiary">Manage the driver pool from Drivers & Staff. Assignment copies the roster contact details to the asset record for trip and gate-pass documents.</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Driver Full Name</label>
@@ -1101,11 +1359,16 @@ export const Vehicles: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Driver Status</label>
-                      <select {...register('driver_status')} className={`${inputCls} cursor-pointer`}>
-                        <option value="on_duty">On Duty</option>
-                        <option value="driving">Driving</option>
-                        <option value="resting">Resting</option>
-                      </select>
+                      <Select
+                        value={watch('driver_status') ?? 'on_duty'}
+                        onValueChange={(value) => setValue('driver_status', value as VehicleFormValues['driver_status'], { shouldValidate: true })}
+                        options={[
+                          { value: 'on_duty', label: 'On Duty' },
+                          { value: 'driving', label: 'Driving' },
+                          { value: 'resting', label: 'Resting' },
+                        ]}
+                        placeholder="Select driver status"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1115,23 +1378,28 @@ export const Vehicles: React.FC = () => {
               {activeTab === 'cargo' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1">Container Number</label>
+                    {!isContainerAsset && <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Loaded Container Number</label>
                       <input {...register('container_number')} placeholder="e.g. MSCU1234567" className={`${inputCls} font-mono uppercase`} />
-                    </div>
+                    </div>}
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Container Type</label>
-                      <select {...register('container_type')} className={`${inputCls} cursor-pointer`}>
-                        <option value="">— Select type —</option>
-                        <option value="20ft Dry">20ft Dry</option>
-                        <option value="40ft Dry">40ft Dry</option>
-                        <option value="40ft HC">40ft High Cube</option>
-                        <option value="20ft Reefer">20ft Reefer</option>
-                        <option value="40ft Reefer">40ft Reefer</option>
-                        <option value="Open Top">Open Top</option>
-                        <option value="Flat Rack">Flat Rack</option>
-                        <option value="Tank Container">Tank Container</option>
-                      </select>
+                      <Select
+                        value={watch('container_type') ?? ''}
+                        onValueChange={(value) => setValue('container_type', value || undefined, { shouldValidate: true })}
+                        options={[
+                          { value: '', label: '— Select type —' },
+                          { value: '20ft Dry', label: '20ft Dry' },
+                          { value: '40ft Dry', label: '40ft Dry' },
+                          { value: '40ft HC', label: '40ft High Cube' },
+                          { value: '20ft Reefer', label: '20ft Reefer' },
+                          { value: '40ft Reefer', label: '40ft Reefer' },
+                          { value: 'Open Top', label: 'Open Top' },
+                          { value: 'Flat Rack', label: 'Flat Rack' },
+                          { value: 'Tank Container', label: 'Tank Container' },
+                        ]}
+                        placeholder="Select container type"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Trailer / Chassis Number</label>
@@ -1151,10 +1419,15 @@ export const Vehicles: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Tracker Model / Provider</label>
-                      <select {...register('telematics_provider')} className={`${inputCls} cursor-pointer`}>
-                        <option value="">— Select tracker —</option>
-                        {TRACKER_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                      </select>
+                      <Select
+                        value={watch('telematics_provider') ?? ''}
+                        onValueChange={(value) => setValue('telematics_provider', value || undefined, { shouldValidate: true })}
+                        options={[
+                          { value: '', label: '— Select tracker —' },
+                          ...TRACKER_MODELS.map(m => ({ value: m.id, label: m.name })),
+                        ]}
+                        placeholder="Select tracker"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Device IMEI / Serial</label>
@@ -1180,15 +1453,18 @@ export const Vehicles: React.FC = () => {
                   variant="primary"
                   size="small"
                   type="submit"
-                  loading={isSubmitting}
+                  loading={isSubmitting || createMutation.isPending || updateMutation.isPending}
+                  disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}
                 >
-                  {editingVehicle ? 'Update Asset' : 'Register Asset'}
+                  {editingVehicle
+                    ? updateMutation.isPending ? 'Updating Asset...' : 'Update Asset'
+                    : createMutation.isPending ? 'Registering Asset...' : 'Register Asset'}
                 </Button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

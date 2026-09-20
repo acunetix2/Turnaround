@@ -8,17 +8,76 @@ from app.db.session import get_db
 from app.db.models.trip import Trip, TripStatus
 from app.db.models.vehicle import Vehicle
 from app.db.models.location import Location
+from app.db.models.container import Container
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.user import UserRole
 from app.deps import get_current_company
 from app.schemas.trip import TripCreate, TripUpdate, TripResponse, TripCheckpoint
 from app.schemas.common import PaginatedResponse
 from app.auth.rbac import require_role
+from app.services import notifications as notif_svc
 import uuid
 
 router = APIRouter(prefix="/trips", tags=["Trips"])
 
 WRITE_ROLES = require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER, UserRole.DISPATCHER)
+
+ACTIVE_ASSIGNMENT_STATUSES = (TripStatus.PLANNED, TripStatus.IN_PROGRESS, TripStatus.IN_TRANSIT, TripStatus.DELAYED)
+
+
+async def _ensure_vehicle_available(
+    db: AsyncSession,
+    company_id: str,
+    vehicle_id: str,
+    departure,
+    arrival,
+    exclude_trip_id: Optional[str] = None,
+) -> None:
+    if not departure or not arrival or arrival <= departure:
+        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_TIME_WINDOW", "message": "Planned arrival must be after planned departure."}})
+
+    query = (
+        select(Trip)
+        .join(Vehicle, Trip.vehicle_id == Vehicle.id)
+        .where(
+            Vehicle.company_id == company_id,
+            Trip.vehicle_id == vehicle_id,
+            Trip.status.in_(ACTIVE_ASSIGNMENT_STATUSES),
+            Trip.planned_departure < arrival,
+            Trip.planned_arrival > departure,
+        )
+    )
+    if exclude_trip_id:
+        query = query.where(Trip.id != exclude_trip_id)
+    conflict = (await db.execute(query)).scalar_one_or_none()
+    if conflict:
+        raise HTTPException(status_code=409, detail={"error": {"code": "RESOURCE_UNAVAILABLE", "message": "Vehicle is already assigned to an overlapping active trip."}})
+
+
+async def _ensure_container_available(
+    db: AsyncSession,
+    company_id: str,
+    container_id: str,
+    departure,
+    arrival,
+    exclude_trip_id: Optional[str] = None,
+) -> None:
+    container = (await db.execute(select(Container).where(Container.id == container_id, Container.company_id == company_id))).scalar_one_or_none()
+    if not container:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Container not found"}})
+    if container.status != 'available':
+        raise HTTPException(status_code=409, detail={"error": {"code": "CONTAINER_UNAVAILABLE", "message": "Container is not available for assignment"}})
+    query = select(Trip).join(Vehicle, Trip.vehicle_id == Vehicle.id).where(
+        Vehicle.company_id == company_id,
+        Trip.container_id == container_id,
+        Trip.status.in_(ACTIVE_ASSIGNMENT_STATUSES),
+        Trip.planned_departure < arrival,
+        Trip.planned_arrival > departure,
+    )
+    if exclude_trip_id:
+        query = query.where(Trip.id != exclude_trip_id)
+    if (await db.execute(query)).scalar_one_or_none():
+        raise HTTPException(status_code=409, detail={"error": {"code": "CONTAINER_UNAVAILABLE", "message": "Container is already assigned to an overlapping active trip"}})
 
 
 # ── Checkpoint builder ────────────────────────────────────────────────────────
@@ -121,6 +180,8 @@ def _trip_query(company_id: str):
         .join(Vehicle, Trip.vehicle_id == Vehicle.id)
         .where(Vehicle.company_id == company_id)
         .options(
+            selectinload(Trip.vehicle),
+            selectinload(Trip.container),
             selectinload(Trip.origin),
             selectinload(Trip.destination),
             selectinload(Trip.dwell_events).selectinload(DwellEvent.location),
@@ -188,6 +249,13 @@ async def create_trip(
     if not v_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
 
+    await _ensure_vehicle_available(
+        db, company_id, payload.vehicle_id, payload.planned_departure, payload.planned_arrival
+    )
+    await _ensure_container_available(
+        db, company_id, payload.container_id, payload.planned_departure, payload.planned_arrival
+    )
+
     trip = Trip(id=str(uuid.uuid4()), **payload.model_dump())
     db.add(trip)
     await db.commit()
@@ -195,6 +263,13 @@ async def create_trip(
     # Re-fetch with full eager loads so checkpoints can be built
     result = await db.execute(_trip_query(company_id).where(Trip.id == trip.id))
     trip = result.scalar_one()
+    await notif_svc.trip_created(
+        db, company_id=company_id, trip_id=trip.id,
+        vehicle_reg=trip.vehicle.registration_number,
+        origin=trip.origin.name if trip.origin else "origin",
+        dest=trip.destination.name if trip.destination else "destination",
+    )
+    await db.commit()
     return _attach_checkpoints(trip)
 
 
@@ -211,7 +286,20 @@ async def update_trip(
     if not trip:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Trip not found"}})
 
+    previous_status = trip.status
     update_data = payload.model_dump(exclude_unset=True)
+    candidate_vehicle_id = update_data.get("vehicle_id", trip.vehicle_id)
+    candidate_departure = update_data.get("planned_departure", trip.planned_departure)
+    candidate_arrival = update_data.get("planned_arrival", trip.planned_arrival)
+    if {"vehicle_id", "planned_departure", "planned_arrival"} & update_data.keys():
+        await _ensure_vehicle_available(
+            db, company_id, candidate_vehicle_id, candidate_departure, candidate_arrival, exclude_trip_id=trip.id
+        )
+    candidate_container_id = update_data.get("container_id", trip.container_id)
+    if candidate_container_id and ({"container_id", "planned_departure", "planned_arrival"} & update_data.keys()):
+        await _ensure_container_available(
+            db, company_id, candidate_container_id, candidate_departure, candidate_arrival, exclude_trip_id=trip.id
+        )
     for key, value in update_data.items():
         setattr(trip, key, value)
 
@@ -220,6 +308,13 @@ async def update_trip(
     # Re-fetch to get fresh eager-loaded relations
     result = await db.execute(_trip_query(company_id).where(Trip.id == trip_id))
     trip = result.scalar_one()
+    if "status" in update_data and trip.status != previous_status:
+        await notif_svc.trip_status_changed(
+            db, company_id=company_id, trip_id=trip.id,
+            vehicle_reg=trip.vehicle.registration_number,
+            new_status=trip.status.value if hasattr(trip.status, "value") else str(trip.status),
+        )
+        await db.commit()
     return _attach_checkpoints(trip)
 
 

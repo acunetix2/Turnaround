@@ -84,7 +84,7 @@ def render_gate_pass_pdf(gp) -> bytes:
         f"PASS:{gp.pass_number}|VEH:{gp.vehicle_reg}"
         f"|TERM:{gp.terminal_name}|UNTIL:{gp.time_window_end.isoformat() if gp.time_window_end else ''}"
         f"|STATUS:{status_label}"
-        f"|VERIFY:https://turnaround.africa/verify/{gp.pass_number}"
+        f"|VERIFY:https://turnaround.com/verify/{gp.pass_number}"
     )
     qr_b64 = _qr_png_base64(qr_data)
     qr_img  = f'<img src="data:image/png;base64,{qr_b64}" width="96" height="96"/>' if qr_b64 else ""
@@ -208,7 +208,7 @@ def render_gate_pass_pdf(gp) -> bytes:
 </div>
 
 <div class="footer">
-  <p>Present with valid ID · turnaround.africa</p>
+  <p>Present with valid ID · turnaround.com</p>
   <span>#{gp.pass_number}</span>
 </div>
 </body></html>"""
@@ -366,11 +366,11 @@ def render_demurrage_notice_pdf(claim) -> bytes:
   (by {due_date}). Failure to settle within the stipulated period may result in formal arbitration
   proceedings under the East African Community Customs Management Act.<br/><br/>
   <em>Verified by satellite GPS timestamps and entrance/exit geofence polygon telemetry
-  recorded on Turnaround (turnaround.africa). All timestamps are UTC.</em>
+  recorded on Turnaround (turnaround.com). All timestamps are UTC.</em>
 </p>
 
 <div class="footer">
-  <span>Turnaround Africa · turnaround.africa · Automated Fleet Intelligence</span>
+  <span>Turnaround · turnaround.com · Automated Fleet Intelligence</span>
   <span>{claim.claim_number}</span>
 </div>
 </body></html>"""

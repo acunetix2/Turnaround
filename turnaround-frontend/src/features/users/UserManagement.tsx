@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, Search, Plus, Shield, Truck, Eye, Edit2, Trash2,
-  CheckCircle2, Ban, RefreshCw, ChevronDown, X, UserCheck,
-  Mail, Phone, Calendar,
+  Ban, RefreshCw, ChevronDown, X, UserCheck,
+  Mail, Phone, Calendar, MoreVertical, Filter, UserRoundPlus,
+  Download, Upload,
 } from 'lucide-react';
 import { apiClient } from '../../lib/api/client';
 import { useAuth } from '../../auth/AuthProvider';
@@ -11,16 +12,23 @@ import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import { formatDateTime } from '../../lib/format';
 import type { User } from '../../lib/api/types';
+import { MetricCard, MetricCardHeader, MetricCardLabel, MetricCardContent, MetricCardValue, MetricCardDifferential, MetricCardSparkline } from '../../components/ui/MetricCard';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../components/ui/Select';
+import { parseTeamMembersCsv } from './teamMembersCsv';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+const teamCsvTemplate = `name,email,role,phone,status
+Jane Doe,jane@company.com,admin,+254700000001,active
+Alex Maina,alex@company.com,fleet_manager,+254700000002,inactive`;
+
+// ── helpers 
 
 const ROLE_CFG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  admin:         { label: 'Admin',         color: 'bg-[#250C77]/15 text-[#250C77] border-[#250C77]/30',      icon: <Shield size={10} /> },
-  fleet_manager: { label: 'Fleet Manager', color: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',   icon: <Truck size={10} /> },
-  dispatcher:    { label: 'Dispatcher',    color: 'bg-[#ED642B]/15 text-[#ED642B] border-[#ED642B]/30',      icon: <RefreshCw size={10} /> },
-  driver:        { label: 'Driver',        color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', icon: <Truck size={10} /> },
-  viewer:        { label: 'Viewer',        color: 'bg-gray-500/15 text-gray-500 border-gray-500/30',          icon: <Eye size={10} /> },
-  analyst:       { label: 'Analyst',       color: 'bg-purple-500/15 text-purple-500 border-purple-500/30',   icon: <Shield size={10} /> },
+  admin:                  { label: 'Admin',                 color: 'bg-[#250C77]/15 text-[#250C77] border-[#250C77]/30',       icon: <Shield size={10} /> },
+  fleet_manager:          { label: 'Fleet Manager',         color: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',    icon: <Truck size={10} /> },
+  dispatcher:             { label: 'Dispatcher',            color: 'bg-[#ED642B]/15 text-[#ED642B] border-[#ED642B]/30',       icon: <RefreshCw size={10} /> },
+  driver:                 { label: 'Driver',                color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', icon: <Truck size={10} /> },
+  viewer:                 { label: 'Viewer',                color: 'bg-gray-500/15 text-gray-500 border-gray-500/30',           icon: <Eye size={10} /> },
+  analyst:                { label: 'Analyst',               color: 'bg-purple-500/15 text-purple-500 border-purple-500/30',    icon: <Shield size={10} /> },
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; dot: string }> = {
@@ -50,7 +58,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── User Form Modal ───────────────────────────────────────────────────────────
+// ── User Form Modal 
 
 interface UserFormProps {
   user?: User;
@@ -73,7 +81,7 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-bg-surface border border-border-default rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-bg-surface border border-border-default rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="p-5 border-b border-border-default flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -81,18 +89,18 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
               <Users size={15} className="text-[#ED642B]" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-text-primary">{isEdit ? 'Edit User' : 'Add New User'}</h3>
-              <p className="text-[11px] text-text-tertiary">{isEdit ? `Editing ${user.name}` : 'Create a company team member'}</p>
+              <h3 className="text-base font-bold text-text-primary">{isEdit ? 'Edit Executive' : 'Add Executive'}</h3>
+              <p className="text-[11px] text-text-tertiary">{isEdit ? `Update ${user.name}'s role and access` : 'Invite a new member to your company workspace'}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg text-text-tertiary hover:text-text-primary cursor-pointer"><X size={15} /></button>
         </div>
 
         {/* Form */}
-        <div className="p-5 space-y-4 text-xs">
+        <div className="p-6 space-y-5 text-xs">
           {!isEdit && (
             <div>
-              <label className="block font-semibold text-text-primary mb-1.5">Email Address *</label>
+              <label className="block font-semibold text-text-primary mb-1.5">Email Address <span className="text-[#ED642B]">*</span></label>
               <div className="relative">
                 <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
                 <input
@@ -100,57 +108,40 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
                   value={form.email}
                   onChange={e => set('email', e.target.value)}
                   placeholder="user@company.com"
-                  className="w-full bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 py-2 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
+                  className="w-full h-10 bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block font-semibold text-text-primary mb-1.5">Full Name *</label>
+            <label className="block font-semibold text-text-primary mb-1.5">Full Name <span className="text-[#ED642B]">*</span></label>
             <input
               type="text"
               value={form.name}
               onChange={e => set('name', e.target.value)}
               placeholder="e.g. John Mwangi"
-              className="w-full bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
+              className="w-full h-10 bg-bg-surface-raised border border-border-default rounded-lg px-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-text-primary mb-1.5">Role *</label>
-              <div className="relative">
-                <select
-                  value={form.role}
-                  onChange={e => set('role', e.target.value)}
-                  className="w-full appearance-none bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none pr-8"
-                >
-                  {ALL_ROLES.map(r => (
-                    <option key={r} value={r}>{ROLE_CFG[r]?.label ?? r}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
-              </div>
+              <label className="block font-semibold text-text-primary mb-1.5">Role <span className="text-[#ED642B]">*</span></label>
+              <Select value={form.role} onValueChange={value => set('role', value)} className="w-full">
+                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{ALL_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_CFG[r]?.label ?? r}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
 
-            {isEdit && (
-              <div>
-                <label className="block font-semibold text-text-primary mb-1.5">Status</label>
-                <div className="relative">
-                  <select
-                    value={form.status}
-                    onChange={e => set('status', e.target.value)}
-                    className="w-full appearance-none bg-bg-surface-raised border border-border-default rounded-lg px-3 py-2 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none pr-8"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                  <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
-                </div>
-              </div>
-            )}
+            <div>
+              <label className="block font-semibold text-text-primary mb-1.5">Status</label>
+              <Select value={form.status} onValueChange={value => set('status', value)} className="w-full" disabled={!isEdit}>
+                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Invited</SelectItem><SelectItem value="suspended">Suspended</SelectItem></SelectContent>
+              </Select>
+              {!isEdit && <p className="mt-1.5 text-[10px] text-text-tertiary">New members start with an invitation pending.</p>}
+            </div>
           </div>
 
           <div>
@@ -162,25 +153,30 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
                 value={form.phone}
                 onChange={e => set('phone', e.target.value)}
                 placeholder="+254 7XX XXX XXX"
-                className="w-full bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 py-2 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
+                className="w-full h-10 bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border-default">
+          {!isEdit && <div className="rounded-lg border border-[#ED642B]/20 bg-[#ED642B]/5 px-3 py-2.5 text-[11px] text-text-secondary"><span className="font-semibold text-text-primary">Invitation ready.</span> The member will receive access instructions at their email address.</div>}
+
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border-default">
             <Button variant="ghost" size="small" onClick={onClose}>Cancel</Button>
             <Button
               variant="primary"
               size="small"
               loading={isSaving}
               icon={isEdit ? <Edit2 size={12} /> : <Plus size={12} />}
-              onClick={() => onSave({
-                ...(isEdit ? {} : { email: form.email }),
-                name: form.name,
-                role: form.role,
-                phone: form.phone || undefined,
-                ...(isEdit ? { status: form.status } : {}),
-              })}
+              onClick={() => {
+                if (!isEdit && (!form.email.trim() || !form.name.trim())) return;
+                onSave({
+                  ...(isEdit ? {} : { email: form.email.trim() }),
+                  name: form.name.trim(),
+                  role: form.role,
+                  phone: form.phone.trim() || undefined,
+                  ...(isEdit ? { status: form.status } : {}),
+                });
+              }}
             >
               {isEdit ? 'Save Changes' : 'Add User'}
             </Button>
@@ -191,7 +187,7 @@ const UserFormModal: React.FC<UserFormProps> = ({ user, onClose, onSave, isSavin
   );
 };
 
-// ── Confirm Dialog ────────────────────────────────────────────────────────────
+// ── Confirm Dialog 
 
 interface ConfirmProps {
   title: string;
@@ -215,19 +211,21 @@ const ConfirmDialog: React.FC<ConfirmProps> = ({ title, message, confirmLabel = 
   </div>
 );
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Main Component 
 
 export const UserManagement: React.FC = () => {
   const qc = useQueryClient();
   const { role: myRole } = useAuth();
   const { toast } = useToast();
   const isAdmin = myRole === 'admin';
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState<'create' | User | null>(null);
   const [confirm, setConfirm] = useState<{ action: string; user: User } | null>(null);
+  const [openActions, setOpenActions] = useState<string | null>(null);
 
   // ── queries ──
   const { data, isLoading } = useQuery({
@@ -276,11 +274,60 @@ export const UserManagement: React.FC = () => {
     onError: (e: any) => toast({ variant: 'error', title: 'Failed', message: e?.message }),
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (rows: Array<{ name: string; email?: string; role: string; phone?: string; status: 'active' | 'inactive' }>) => {
+      const created: User[] = [];
+      for (const row of rows) {
+        const payload = {
+          email: row.email || `${row.name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '')}@company.local`,
+          name: row.name,
+          role: row.role,
+          phone: row.phone || undefined,
+          status: row.status,
+        };
+        created.push(await apiClient.createUser(payload));
+      }
+      return created;
+    },
+    onSuccess: (created) => {
+      invalidate();
+      toast({ variant: 'success', title: `${created.length} executives uploaded`, message: 'Company executives were registered from the CSV.' });
+    },
+    onError: (e: any) => toast({ variant: 'error', title: 'CSV import failed', message: e?.message }),
+  });
+
+  const handleDownloadTemplate = () => {
+    const blob = new Blob([teamCsvTemplate], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'turnaround-team-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const rows = parseTeamMembersCsv(await file.text());
+      if (!rows.length) {
+        toast({ variant: 'error', title: 'No valid rows found', message: 'Check the CSV headers and values, then try again.' });
+        event.target.value = '';
+        return;
+      }
+      bulkImportMutation.mutate(rows);
+    } catch (error: any) {
+      toast({ variant: 'error', title: 'CSV import failed', message: error.message || 'The file could not be read.' });
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   // ── stats ──
   const totalUsers = users.length;
   const activeCount = users.filter(u => u.status === 'active').length;
-  const suspendedCount = users.filter(u => u.status === 'suspended').length;
-  const adminCount = users.filter(u => u.role === 'admin').length;
 
   // ── confirm handler ──
   const runConfirm = () => {
@@ -291,83 +338,77 @@ export const UserManagement: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-5 max-w-7xl">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-[#250C77] flex items-center justify-center shadow-md">
-            <Users size={18} className="text-[#ED642B]" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-text-primary tracking-tight">Team & User Management</h1>
-            <p className="text-xs text-text-secondary mt-0.5">Manage company staff, roles, and account access</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Company Executives</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage company executives, leadership access, and permissions</p>
         </div>
-        {isAdmin && (
-          <Button variant="primary" size="small" icon={<Plus size={13} />} onClick={() => setShowForm('create')}>
-            Add User
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="small" icon={<Download size={13} />} onClick={handleDownloadTemplate}>CSV template</Button>
+          <Button variant="outline" size="small" icon={<Upload size={13} />} loading={bulkImportMutation.isPending} onClick={() => fileInputRef.current?.click()}>Upload CSV</Button>
+          <Button variant="outline" size="small" icon={<Filter size={13} />}>Filters</Button>
+          {isAdmin && <Button variant="primary" size="small" icon={<Plus size={13} />} onClick={() => setShowForm('create')}>Add Executive</Button>}
+        </div>
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Users',  value: totalUsers,     color: 'text-text-primary' },
-          { label: 'Active',       value: activeCount,    color: 'text-emerald-500' },
-          { label: 'Suspended',    value: suspendedCount, color: 'text-red-500' },
-          { label: 'Admins',       value: adminCount,     color: 'text-[#250C77]' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-xl border border-border-default bg-bg-surface px-4 py-3">
-            <p className="text-[10px] uppercase tracking-widest font-semibold text-text-tertiary mb-1">{label}</p>
-            <p className={`text-2xl font-black font-numeric ${color}`}>{value}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<Users size={13} className="text-[#250C77]" />}>Total Members</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>{totalUsers}</MetricCardValue><MetricCardDifferential variant="positive">+8% from last month</MetricCardDifferential></MetricCardContent><MetricCardSparkline data={[{ value: 19 }, { value: 21 }, { value: 22 }, { value: totalUsers }]} color="#250C77" /></MetricCard>
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<UserCheck size={13} className="text-[#ED642B]" />}>Active Members</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>{activeCount}</MetricCardValue><MetricCardDifferential variant="positive">{totalUsers ? `${((activeCount / totalUsers) * 100).toFixed(1)}% of total` : '0% of total'}</MetricCardDifferential></MetricCardContent><MetricCardSparkline data={[{ value: 16 }, { value: 18 }, { value: 19 }, { value: activeCount }]} color="#ED642B" /></MetricCard>
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<Shield size={13} className="text-[#250C77]" />}>Roles</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>{ALL_ROLES.length}</MetricCardValue><MetricCardDifferential variant="neutral">System roles</MetricCardDifferential></MetricCardContent><MetricCardSparkline data={[{ value: 6 }, { value: 6 }, { value: 6 }]} color="#8B5CF6" /></MetricCard>
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<UserRoundPlus size={13} className="text-[#ED642B]" />}>New This Month</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>{users.filter(user => new Date(user.created_at).getMonth() === new Date().getMonth()).length}</MetricCardValue><MetricCardDifferential variant="positive">+50% from last month</MetricCardDifferential></MetricCardContent><MetricCardSparkline data={[{ value: 1 }, { value: 2 }, { value: 2 }, { value: 3 }]} color="#ED642B" /></MetricCard>
+        <MetricCard><MetricCardHeader><MetricCardLabel icon={<Mail size={13} className="text-[#250C77]" />}>Invited</MetricCardLabel></MetricCardHeader><MetricCardContent><MetricCardValue>{users.filter(user => user.status === 'inactive').length}</MetricCardValue><MetricCardDifferential variant="neutral">Pending invitation</MetricCardDifferential></MetricCardContent><MetricCardSparkline data={[{ value: 1 }, { value: 1 }, { value: 1 }]} color="#8B5CF6" /></MetricCard>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-default">
-        <div className="relative w-full sm:w-72">
+      <div className="flex flex-col lg:flex-row items-center gap-3">
+        <div className="relative w-full lg:flex-1">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, email, phone..."
-            className="w-full bg-bg-surface-raised border border-border-default rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
+            placeholder="Search members by name, email or role..."
+            className="w-full h-9 bg-bg-surface border border-border-default rounded-lg pl-8 pr-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-[#ED642B] focus:outline-none"
           />
         </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-          <span className="text-[10px] text-text-tertiary font-semibold shrink-0">Role:</span>
-          {(['all', ...ALL_ROLES]).map(r => (
-            <button
-              key={r}
-              onClick={() => setRoleFilter(r)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition-colors cursor-pointer ${
-                roleFilter === r ? 'bg-[#250C77] text-white' : 'bg-bg-surface-raised text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {r === 'all' ? 'All' : ROLE_CFG[r]?.label ?? r}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-          <span className="text-[10px] text-text-tertiary font-semibold shrink-0">Status:</span>
-          {(['all', 'active', 'inactive', 'suspended']).map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition-colors cursor-pointer capitalize ${
-                statusFilter === s ? 'bg-[#250C77] text-white' : 'bg-bg-surface-raised text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {s === 'all' ? 'All' : s}
-            </button>
-          ))}
-        </div>
+        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="w-full lg:w-44 h-9 bg-bg-surface border border-border-default rounded-lg px-3 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none">
+          <option value="all">All Roles</option>{ALL_ROLES.map(role => <option key={role} value={role}>{ROLE_CFG[role].label}</option>)}
+        </select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full lg:w-44 h-9 bg-bg-surface border border-border-default rounded-lg px-3 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none">
+          <option value="all">All Statuses</option><option value="active">Active</option><option value="inactive">Invited</option><option value="suspended">Suspended</option>
+        </select>
+        <select className="w-full lg:w-44 h-9 bg-bg-surface border border-border-default rounded-lg px-3 text-xs text-text-primary focus:border-[#ED642B] focus:outline-none" defaultValue="recent"><option value="recent">Recently Added</option><option value="name">Name</option></select>
       </div>
+
+      {!isLoading && users.length > 0 && <div className="rounded-xl border border-border-default bg-bg-surface overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[880px] text-left">
+            <thead className="bg-bg-surface-raised/70 border-b border-border-default">
+              <tr>{['Member', 'Role', 'Status', 'Contact', 'Joined', 'Actions'].map((heading, index) => <th key={heading} className={`px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-text-secondary ${index === 5 ? 'text-right' : ''}`}>{heading}</th>)}</tr>
+            </thead>
+            <tbody>
+              {users.map((user) => {
+                const initials = user.name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
+                return <tr key={user.id} className="border-b border-border-default last:border-0 hover:bg-bg-surface-raised/40 transition-colors">
+                  <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="h-9 w-9 rounded-full bg-[#5B2BD8] text-white flex items-center justify-center text-xs font-bold shrink-0">{initials}</div><div className="min-w-0"><p className="text-xs font-bold text-text-primary truncate">{user.name}</p><p className="text-[10px] text-text-tertiary truncate">{user.email}</p></div></div></td>
+                  <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
+                  <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
+                  <td className="px-4 py-3 text-[11px] text-text-secondary"><div className="flex items-center gap-1.5"><Phone size={11} />{user.phone || '—'}</div><div className="flex items-center gap-1.5 mt-1 text-[10px] text-text-tertiary"><Mail size={11} />{user.email}</div></td>
+                  <td className="px-4 py-3 text-[11px] text-text-secondary"><div className="flex items-center gap-1.5"><Calendar size={11} />{formatDateTime(user.created_at)}</div><div className="text-[10px] text-text-tertiary mt-1">{user.status === 'inactive' ? 'Pending invitation' : 'Member'}</div></td>
+                  <td className="relative px-4 py-3"><div className="flex items-center justify-end gap-1">
+                    {isAdmin && <div className="relative"><button title="User actions" aria-label={`Actions for ${user.name}`} onClick={() => setOpenActions(openActions === user.id ? null : user.id)} className="cursor-pointer rounded-lg p-1.5 text-text-tertiary hover:bg-bg-surface-raised hover:text-text-primary"><MoreVertical size={15} /></button>{openActions === user.id && <div className="absolute right-0 top-9 z-20 min-w-36 overflow-hidden rounded-lg border border-border-default bg-bg-surface p-1 shadow-xl"><button type="button" onClick={() => { setOpenActions(null); setShowForm(user); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary hover:bg-bg-surface-raised hover:text-text-primary"><Edit2 size={12} /> Edit member</button><button type="button" onClick={() => { setOpenActions(null); setConfirm({ action: user.status === 'suspended' ? 'activate' : 'suspend', user }); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary hover:bg-bg-surface-raised hover:text-[#ED642B]">{user.status === 'suspended' ? <UserCheck size={12} /> : <Ban size={12} />}{user.status === 'suspended' ? 'Activate member' : 'Suspend member'}</button><button type="button" onClick={() => { setOpenActions(null); setConfirm({ action: 'delete', user }); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary hover:bg-red-500/10 hover:text-red-500"><Trash2 size={12} /> Delete member</button></div>}</div>}
+                  </div></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between border-t border-border-default px-4 py-3 text-[11px] text-text-tertiary"><span>Showing 1 to {Math.min(users.length, 10)} of {totalUsers} members</span><div className="flex items-center gap-1"><button className="p-2 rounded-lg bg-bg-surface-raised text-text-tertiary cursor-pointer"><ChevronDown size={13} className="rotate-90" /></button><button className="h-7 w-7 rounded-lg bg-[#ED642B] text-white font-bold cursor-pointer">1</button><button className="h-7 w-7 rounded-lg bg-bg-surface-raised text-text-secondary cursor-pointer">2</button><button className="h-7 w-7 rounded-lg bg-bg-surface-raised text-text-secondary cursor-pointer">3</button><button className="p-2 rounded-lg bg-bg-surface-raised text-text-tertiary cursor-pointer"><ChevronDown size={13} className="-rotate-90" /></button></div><span className="hidden sm:block px-3 py-1.5 rounded-lg border border-border-default">10 per page <ChevronDown size={12} className="inline ml-2" /></span></div>
+      </div>}
 
       {/* User grid */}
       {isLoading ? (
@@ -390,7 +431,7 @@ export const UserManagement: React.FC = () => {
         <div className="rounded-xl border border-border-default bg-bg-surface p-12 text-center">
           <Users size={28} className="mx-auto mb-3 opacity-20 text-[#250C77]" />
           <p className="text-sm font-semibold text-text-secondary">No users found</p>
-          <p className="text-xs text-text-tertiary mt-1">Adjust filters or add a new team member.</p>
+          <p className="text-xs text-text-tertiary mt-1">Adjust filters or add a company executive.</p>
           {isAdmin && (
             <Button variant="outline" size="small" className="mt-4" icon={<Plus size={12} />} onClick={() => setShowForm('create')}>
               Add First User
@@ -398,7 +439,7 @@ export const UserManagement: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {users.map((user) => (
             <div
               key={user.id}
@@ -477,7 +518,7 @@ export const UserManagement: React.FC = () => {
       <div className="rounded-xl border border-border-default bg-bg-surface p-4">
         <p className="text-[10px] uppercase tracking-wider font-bold text-text-tertiary mb-3">Role Permissions</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {Object.entries(ROLE_CFG).map(([key, cfg]) => (
+          {Object.entries(ROLE_CFG).map(([key]) => (
             <div key={key} className="text-[10px] space-y-1">
               <RoleBadge role={key} />
               <p className="text-text-tertiary pl-0.5">

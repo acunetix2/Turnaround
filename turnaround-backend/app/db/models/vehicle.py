@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.db.models.dwell_event import DwellEvent
     from app.db.models.demurrage_claim import DemurrageClaim
     from app.db.models.gate_pass import GatePass
+    from app.db.models.fleet_staff import FleetStaff
 
 
 class VehicleStatus(str, enum.Enum):
@@ -51,10 +52,10 @@ class Vehicle(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
-    # ── Asset Image ─────────────────────────────────────────────────────────
+    # ── Asset Image 
     image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # ── Driver Assignment ────────────────────────────────────────────────────
+    # ── Driver Assignment 
     driver_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     driver_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     driver_license: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
@@ -63,19 +64,23 @@ class Vehicle(Base):
         SQLEnum(DriverStatus, values_callable=lambda obj: [e.value for e in obj], name="driverstatus"),
         nullable=True
     )
+    driver_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("fleet_staff.id", ondelete="SET NULL"), nullable=True, index=True)
+    co_driver_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("fleet_staff.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    # ── Container / Cargo ────────────────────────────────────────────────────
+    # ── Container / Cargo 
     trailer_number: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     container_number: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
     container_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     cargo_type: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
 
-    # ── Telematics / GPS ─────────────────────────────────────────────────────
+    # ── Telematics / GPS 
     telematics_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     tracker_imei: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
 
-    # ── Operational State ────────────────────────────────────────────────────
+    # ── Operational State 
     fuel_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # 0-100 %
+    fuel_tank_capacity_liters: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    fuel_consumption_liters_per_100km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odometer_km: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     maintenance_status: Mapped[Optional[MaintenanceStatus]] = mapped_column(
         SQLEnum(MaintenanceStatus, values_callable=lambda obj: [e.value for e in obj], name="maintenancestatus"),
@@ -84,10 +89,12 @@ class Vehicle(Base):
     )
     next_inspection_date: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
 
-    # ── Relationships ────────────────────────────────────────────────────────
+    # ── Relationships 
     company: Mapped["Company"] = relationship("Company", back_populates="vehicles")
     trips: Mapped[List["Trip"]] = relationship("Trip", back_populates="vehicle", cascade="all, delete-orphan")
     gps_events: Mapped[List["GPSEvent"]] = relationship("GPSEvent", back_populates="vehicle", cascade="all, delete-orphan")
     dwell_events: Mapped[List["DwellEvent"]] = relationship("DwellEvent", back_populates="vehicle", cascade="all, delete-orphan")
     demurrage_claims: Mapped[List["DemurrageClaim"]] = relationship("DemurrageClaim", back_populates="vehicle")
     gate_passes: Mapped[List["GatePass"]] = relationship("GatePass", back_populates="vehicle")
+    driver: Mapped[Optional["FleetStaff"]] = relationship("FleetStaff", foreign_keys=[driver_id], back_populates="assigned_vehicles")
+    co_driver: Mapped[Optional["FleetStaff"]] = relationship("FleetStaff", foreign_keys=[co_driver_id], back_populates="co_driven_vehicles")

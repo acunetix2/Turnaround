@@ -1,0 +1,11 @@
+registration_number,vehicle_type,capacity,hourly_operating_cost,status,driver_id,co_driver_id,trailer_number,container_number,container_type,cargo_type,telematics_provider,tracker_imei,fuel_level,fuel_tank_capacity_liters,fuel_consumption_liters_per_100km,odometer_km,maintenance_status,next_inspection_date
+KDA 482T,truck,28,7500,in_transit,,,TRL-KDA-001,MSCU7426158,40ft Dry,General Cargo,Teltonika,352093080000101,68,300,32,156230,good,2026-11-18
+KCB 731M,truck,30,7800,active,,,TRL-KCB-002,MSCU5192846,40ft High Cube,FMCG,Teltonika,352093080000102,74,320,34,98450,due_soon,2026-09-22
+KCP 908K,truck,26,6900,idle,,,TRL-KCP-003,MSCU6381942,40ft Dry,Automotive Parts,Concox,86753090000103,41,280,30,214670,due_soon,2026-09-14
+KDG 214D,truck,18,5200,active,,,TRL-KDG-004,,None,Building Materials,Cartrack,352093080000104,82,220,27,178300,good,2027-01-12
+KCE 567E,truck,12,4500,idle,,,TRL-KCE-005,,None,Food Products,Teltonika,352093080000105,59,180,24,305120,good,2027-02-26
+KCF 890F,truck,24,7200,maintenance,,,TRL-KCF-006,MSCU4827319,20ft Dry,Agri Supplies,Concox,86753090000106,28,260,31,189900,in_service,2026-09-10
+KCH 345G,tanker,35,9500,active,,,TRL-KCH-007,,None,Petroleum Products,Cartrack,352093080000107,63,420,38,267540,good,2026-12-05
+KCK 678H,truck,28,7600,delayed,,,TRL-KCK-008,MSCU8273641,40ft Reefer,Fresh Produce,Teltonika,352093080000108,19,300,36,142880,due_soon,2026-09-28
+KCL 901J,tractor,32,8200,in_transit,,,TRL-KCL-009,MSCU3917462,40ft High Cube,Export Cargo,Concox,86753090000109,56,350,35,221430,good,2027-03-08
+KCN 234L,minitruck,8,3600,active,,,TRL-KCN-010,,None,Regional Deliveries,Driver App,352093080000110,88,120,18,76420,good,2027-04-16

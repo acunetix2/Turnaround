@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Send, RefreshCw, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
-  Sparkles, ShieldCheck, Lightbulb, ExternalLink
+  Sparkles, ShieldCheck, Lightbulb, ExternalLink,
+  Package, Leaf, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
@@ -17,6 +18,7 @@ import { useTheme } from '../../lib/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/Alert';
 import { toast } from 'sonner';
+import { useAuth } from '../../auth/AuthProvider';
 
 /**
  * Rich Markdown parser and renderer tailored for Turnaround AI operations output.
@@ -202,6 +204,7 @@ const FormattedMarkdownMessage: React.FC<{ content: string; isUser: boolean }> =
 };
 
 export const AIAdvisor: React.FC = () => {
+  const { user } = useAuth();
   const { data: analysis, isLoading: loadingAnalysis, refetch } = useCorridorAnalysis();
   const { data: locationStats } = useQuery({
     queryKey: ['locationStats'],
@@ -210,6 +213,18 @@ export const AIAdvisor: React.FC = () => {
   const { data: dashboardStats } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: apiClient.getDashboardStats,
+  });
+  const { data: trendData = [] } = useQuery({
+    queryKey: ['analytics', 'trends', 30],
+    queryFn: () => apiClient.getTrendData(30),
+  });
+  const { data: insights = [] } = useQuery({
+    queryKey: ['insights'],
+    queryFn: apiClient.getInsights,
+  });
+  const { data: trips = [] } = useQuery({
+    queryKey: ['trips'],
+    queryFn: apiClient.getTrips,
   });
   const copilotMutation = useCopilotQuery();
   const navigate = useNavigate();
@@ -374,7 +389,11 @@ export const AIAdvisor: React.FC = () => {
   const delayedTrucks = dashboardStats?.trucks_delayed ?? 0;
   const totalCostToday = dashboardStats?.estimated_financial_impact ?? 0;
   const excessDwellToday = dashboardStats?.excess_dwell_today_minutes ?? 0;
-  const monthlySavings = analysis?.estimated_monthly_savings_kes || (totalCostToday > 0 ? totalCostToday * 24 : 185000);
+  const totalShipments = trips.length || locationStats?.reduce((sum, location) => sum + (location.total_visits || 0), 0) || 0;
+  const onTimeDelivery = trips.length > 0
+    ? Math.round((trips.filter((trip) => !['delayed', 'cancelled'].includes(trip.status)).length / trips.length) * 1000) / 10
+    : Math.max(0, 100 - delayedTrucks);
+  const recentInsights = insights.slice(0, 4);
 
   // Live prescriptive actions from AI analysis or real location stats
   const liveInterventions = analysis?.primary_bottlenecks && analysis.primary_bottlenecks.length > 0
@@ -393,98 +412,76 @@ export const AIAdvisor: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* ── ANALYST HEADER ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-[#250C77] text-white flex items-center justify-center font-bold text-sm shadow-md">
-              PA
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-text-primary tracking-tight">
-                Operations & Performance Analyst
-              </h1>
-              <p className="text-xs text-text-secondary">
-                Turnaround efficiency models, delay diagnostics, and financial bleed recovery
-              </p>
-            </div>
+      {/* ── ANALYST WELCOME ── */}
+      <section className="relative overflow-hidden rounded-xl border border-[#250C77]/40 bg-[#07092a] px-5 py-5 text-white shadow-sm sm:px-6">
+        <div className="relative z-10 max-w-md">
+          <p className="text-lg font-bold tracking-tight sm:text-xl">Hello, {user?.name?.split(' ')[0] || 'there'} <span aria-hidden="true">👋</span></p>
+          <p className="mt-2 text-xs leading-relaxed text-indigo-100/75">I've analyzed your logistics data and generated key insights to help you make smarter decisions.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              size="small"
+              icon={<Sparkles size={13} />}
+              loading={loadingAnalysis}
+              onClick={() => { refetch(); toast.success('Refreshing Analyst Intelligence Model'); }}
+            >
+              Generate New Analysis
+            </Button>
+            <button type="button" onClick={() => document.getElementById('analyst-assistant')?.scrollIntoView({ behavior: 'smooth' })} className="flex items-center gap-1.5 rounded-lg border border-indigo-300/30 px-3 py-2 text-[11px] font-semibold text-white transition-colors hover:bg-white/10">
+              <MessageCircle size={13} /> Ask a Question
+            </button>
           </div>
         </div>
+        <div className="pointer-events-none absolute -right-12 -top-20 h-64 w-64 rounded-full border border-violet-400/30 bg-violet-500/10 blur-[1px]" />
+        <div className="pointer-events-none absolute right-12 top-8 h-32 w-56 rotate-12 rounded-[50%] border border-violet-400/30 opacity-70" />
+        <div className="pointer-events-none absolute right-24 top-20 h-20 w-32 rounded-[50%] border border-violet-300/30 opacity-60" />
+        <Sparkles className="pointer-events-none absolute right-16 top-12 h-28 w-28 text-violet-300/60" strokeWidth={1} />
+      </section>
 
-        <div className="flex items-center gap-2.5">
-          <Link
-            to="/analytics"
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border-default bg-bg-surface hover:bg-bg-surface-raised text-xs font-semibold text-text-primary transition-colors cursor-pointer"
-          >
-            <BarChart3 size={13} className="text-[#ED642B]" />
-            <span>Full Analytics Hub</span>
-            <ArrowRight size={12} className="text-text-tertiary" />
-          </Link>
-
-          <Button
-            variant="primary"
-            size="small"
-            icon={<RefreshCw size={13} className={loadingAnalysis ? 'animate-spin' : ''} />}
-            loading={loadingAnalysis}
-            onClick={() => {
-              refetch();
-              toast.success('Refreshing Analyst Intelligence Model', {
-                description: 'Fetching real-time dwell logs and calculating cost recovery vectors.'
-              });
-            }}
-          >
-            Refresh Analysis
-          </Button>
-        </div>
-      </div>
-
-      {/* ── EXECUTIVE ANALYST KPI HUD (REAL DATA) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* ── EXECUTIVE KPI STRIP ── */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-[#ED642B]/30 bg-bg-surface p-4 shadow-sm">
           <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-            <span>Projected Monthly Recovery</span>
+            <span>Total Shipments</span>
+            <Package size={14} className="text-[#250C77]" />
+          </div>
+          <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
+            {totalShipments.toLocaleString()}
+          </p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">Across monitored operations</p>
+        </div>
+
+        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
+            <span>On-Time Delivery</span>
+            <Clock size={14} className="text-[#250C77]" />
+          </div>
+          <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
+            {onTimeDelivery}%
+          </p>
+          <p className="text-[11px] text-status-good mt-0.5">{delayedTrucks > 0 ? `${delayedTrucks} delayed now` : 'No active delays'}</p>
+        </div>
+
+        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
+            <span>Logistics Cost</span>
             <DollarSign size={14} className="text-[#ED642B]" />
           </div>
-          <p className="font-numeric text-2xl font-extrabold text-[#ED642B] mt-2">
-            +{formatCurrency(monthlySavings)}
-          </p>
-          <p className="text-[11px] text-text-tertiary mt-0.5">Through 20% dwell reduction</p>
-        </div>
-
-        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-            <span>Delayed Fleet Units</span>
-            <Clock size={14} className="text-status-danger" />
-          </div>
-          <p className={`font-numeric text-2xl font-extrabold mt-2 ${delayedTrucks > 0 ? 'text-status-danger' : 'text-text-primary'}`}>
-            {delayedTrucks}
-          </p>
-          <p className="text-[11px] text-text-tertiary mt-0.5">Units currently in excess dwell</p>
-        </div>
-
-        <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-            <span>Today's Idle Cost</span>
-            <TrendingUp size={14} className="text-money-accent" />
-          </div>
-          <p className="font-numeric text-2xl font-extrabold text-money-accent mt-2">
+          <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
             {formatCurrency(totalCostToday)}
           </p>
-          <p className="text-[11px] text-text-tertiary mt-0.5">
-            {excessDwellToday > 0 ? `${formatMinutes(excessDwellToday)} total excess delay` : 'No excess dwell today'}
-          </p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">Estimated idle cost today</p>
         </div>
 
         <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
           <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-            <span>Analyst Status</span>
-            <ShieldCheck size={14} className="text-status-good" />
+            <span>CO₂ Emissions Saved</span>
+            <Leaf size={14} className="text-status-good" />
           </div>
-          <p className="text-xs font-bold text-status-good mt-2 flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-status-good animate-pulse" />
-            Live Telemetry Engine Active
+          <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
+            —
           </p>
-          <p className="text-[11px] text-text-tertiary mt-1">Autonomous Corridor Monitoring</p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">Not tracked in current data</p>
         </div>
       </div>
 
@@ -507,6 +504,79 @@ export const AIAdvisor: React.FC = () => {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* ── INSIGHT SUMMARY / VOLUME / ROUTES ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <section className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm xl:col-span-4">
+          <div className="mb-3 flex items-start gap-2 border-b border-border-default pb-3">
+            <Sparkles size={16} className="mt-0.5 text-[#250C77]" />
+            <div>
+              <h2 className="text-xs font-bold text-text-primary">AI Insight Summary</h2>
+              <p className="text-[10px] text-text-secondary">Key findings from your logistics data</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {(recentInsights.length ? recentInsights : analysis?.primary_bottlenecks?.slice(0, 4) || []).map((item: any, index) => {
+              const severity = item.severity || (index === 0 ? 'high' : 'medium');
+              return (
+                <div key={item.id || item.location || index} className="flex gap-2.5">
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${severity === 'high' || severity === 'danger' ? 'bg-orange-500/15 text-orange-500' : severity === 'low' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-violet-500/15 text-violet-500'}`}>
+                    {severity === 'high' || severity === 'danger' ? <AlertTriangle size={13} /> : severity === 'low' ? <CheckCircle2 size={13} /> : <TrendingUp size={13} />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-text-primary">{item.title || `${item.location} bottleneck`}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-text-secondary">{item.description || item.issue || item.recommendation}</p>
+                  </div>
+                </div>
+              );
+            })}
+            {!recentInsights.length && !analysis?.primary_bottlenecks?.length && <p className="text-xs text-text-tertiary">No new insights have been generated yet.</p>}
+          </div>
+          <Link to="/insights" className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[#250C77] dark:text-[#ED642B]">View Full Analysis <ArrowRight size={12} /></Link>
+        </section>
+
+        <section className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm xl:col-span-5">
+          <div className="mb-3 flex items-start justify-between border-b border-border-default pb-3">
+            <div>
+              <h2 className="text-xs font-bold text-text-primary">Shipment Volume Trend</h2>
+              <p className="text-[10px] text-text-secondary">Daily activity from the last 30 days</p>
+            </div>
+            <span className="rounded-md border border-border-default px-2 py-1 text-[10px] text-text-secondary">30 Days</span>
+          </div>
+          {trendData.length ? (
+            <div className="flex h-48 items-end gap-1 border-b border-border-default px-1 pb-2">
+              {trendData.map((point, index) => {
+                const maxVisits = Math.max(...trendData.map((row) => row.visit_count || 0), 1);
+                const height = Math.max(4, ((point.visit_count || 0) / maxVisits) * 100);
+                return <div key={`${point.date}-${index}`} title={`${point.date}: ${point.visit_count} visits`} className="flex-1 rounded-t-sm bg-[#250C77] transition-all hover:bg-[#ED642B]" style={{ height: `${height}%` }} />;
+              })}
+            </div>
+          ) : <div className="flex h-48 items-center justify-center text-xs text-text-tertiary">No shipment trend data available.</div>}
+          <div className="mt-3 flex items-center gap-4 text-[10px] text-text-secondary"><span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#250C77]" /> Actual shipments</span><span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#ED642B]" /> AI monitored</span></div>
+        </section>
+
+        <section className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm xl:col-span-3">
+          <div className="mb-3 flex items-center justify-between border-b border-border-default pb-3">
+            <div><h2 className="text-xs font-bold text-text-primary">Top Routes Performance</h2><p className="text-[10px] text-text-secondary">By on-time delivery rate</p></div>
+            <RouteIcon size={15} className="text-[#250C77]" />
+          </div>
+          <div className="space-y-3">
+            {(locationStats || []).slice(0, 5).map((route, index) => {
+              const rate = Math.max(0, Math.min(100, 100 - ((route.avg_excess_delay_minutes || 0) / Math.max(route.expected_dwell_minutes || 1, 1) * 100)));
+              return <div key={route.location_id || index}><div className="mb-1 flex justify-between text-[10px]"><span className="truncate text-text-primary">{route.location_name}</span><span className="font-numeric text-text-secondary">{rate.toFixed(1)}%</span></div><div className="h-1.5 rounded-full bg-bg-surface-raised"><div className="h-full rounded-full bg-status-good" style={{ width: `${rate}%` }} /></div></div>;
+            })}
+            {!locationStats?.length && <p className="text-xs text-text-tertiary">No route performance data available.</p>}
+          </div>
+          <Link to="/analytics" className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[#250C77] dark:text-[#ED642B]">View all routes <ArrowRight size={12} /></Link>
+          <div className="mt-4 border-t border-border-default pt-3">
+            <div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold text-text-primary">Recent Analyses</h3><Link to="/insights" className="text-[10px] font-semibold text-[#250C77] dark:text-[#ED642B]">View all</Link></div>
+            <div className="space-y-2">
+              {recentInsights.slice(0, 3).map((insight) => <Link key={insight.id} to="/insights" className="flex items-start gap-2 rounded-md p-1.5 transition-colors hover:bg-bg-surface-raised"><BarChart3 size={12} className="mt-0.5 shrink-0 text-[#250C77]" /><span className="min-w-0"><span className="block truncate text-[10px] font-semibold text-text-primary">{insight.title}</span><span className="block text-[9px] text-text-tertiary">{new Date(insight.created_at).toLocaleDateString()}</span></span></Link>)}
+              {!recentInsights.length && <p className="text-[10px] text-text-tertiary">No previous analyses yet.</p>}
+            </div>
+          </div>
+        </section>
+      </div>
 
       {/* ── VISUAL ANALYTICS SECTION ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -602,7 +672,7 @@ export const AIAdvisor: React.FC = () => {
       </div>
 
       {/* ── LIVE INTERACTIVE ANALYST TERMINAL (WITH RICH MARKDOWN RENDERING) ── */}
-      <div className="rounded-2xl border border-border-strong bg-bg-surface shadow-xl flex flex-col h-[580px] overflow-hidden">
+      <div id="analyst-assistant" className="rounded-2xl border border-border-strong bg-bg-surface shadow-xl flex flex-col h-[580px] overflow-hidden">
         {/* Terminal Header */}
         <div className="px-4 py-3 border-b border-border-default bg-bg-surface-raised flex items-center justify-between">
           <div className="flex items-center gap-2">

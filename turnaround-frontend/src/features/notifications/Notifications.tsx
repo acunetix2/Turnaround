@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, AlertTriangle, CheckCircle2, Clock, Truck, MapPin,
+  Bell, AlertTriangle, CheckCircle2, Clock, Truck,
   DollarSign, FileCheck, Check, RefreshCw, Filter, ArrowRight,
   Trash2, Users, Settings2,
 } from 'lucide-react';
@@ -11,8 +11,13 @@ import { useToast } from '../../components/ui/Toast';
 import { formatDateTime } from '../../lib/format';
 import { formatCurrency } from '../../lib/format';
 import type { AppNotification } from '../../lib/api/types';
+import {
+  getExistingMessagingToken,
+  listenForForegroundMessages,
+  requestMessagingToken,
+  isMessagingConfigured,
+} from '../../lib/firebaseMessaging';
 
-// ── Config ─────────────────────────────────────────────────────────────────
 
 const SEV_CFG = {
   high:   { cls: 'bg-red-500/10 border-red-500/25',          icon: <AlertTriangle size={14} className="text-red-500" />,    dot: 'bg-red-500'     },
@@ -37,12 +42,12 @@ const CAT_LABEL: Record<string, string> = {
 
 type FilterVal = 'all' | 'unread' | 'high' | 'medium' | 'delay' | 'demurrage' | 'gate_pass' | 'trip' | 'user';
 
-// ── Component ───────────────────────────────────────────────────────────────
-
 export const Notifications: React.FC = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [filter, setFilter] = useState<FilterVal>('all');
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['notifications', filter],
@@ -66,6 +71,43 @@ export const Notifications: React.FC = () => {
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['notifications'] });
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    getExistingMessagingToken().then(async token => {
+      if (!token) return;
+      setPushEnabled(true);
+      await apiClient.registerMessagingToken(token);
+      unsubscribe = await listenForForegroundMessages(payload => {
+        invalidate();
+        toast({
+          variant: 'success',
+          title: payload.notification?.title || 'New notification',
+          message: payload.notification?.body || 'You have a new Turnaround alert.',
+        });
+      });
+    }).catch(() => {});
+    return () => unsubscribe();
+  }, []);
+
+  const enablePush = async () => {
+    setPushBusy(true);
+    try {
+      const token = await requestMessagingToken();
+      if (!token) throw new Error('Push permission was not granted or is unavailable.');
+      await apiClient.registerMessagingToken(token);
+      setPushEnabled(true);
+      toast({ variant: 'success', title: 'Push notifications enabled', message: 'You will receive Turnaround alerts on this device.' });
+    } catch (error) {
+      toast({
+        variant: 'error',
+        title: 'Push setup failed',
+        message: error instanceof Error ? error.message : 'Could not enable push notifications.',
+      });
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const readMutation = useMutation({
     mutationFn: (id: string) => apiClient.markNotificationRead(id),
@@ -104,6 +146,11 @@ export const Notifications: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isMessagingConfigured() && !pushEnabled && (
+            <Button onClick={enablePush} loading={pushBusy}>
+              <Bell size={12} className="mr-1" /> Enable push
+            </Button>
+          )}
           <Button onClick={() => readAllMutation.mutate()} loading={readAllMutation.isPending}>
             <Check size={12} className="mr-1" /> Mark all read
           </Button>
@@ -236,7 +283,6 @@ export const Notifications: React.FC = () => {
   );
 };
 
-// ── Simple button helper (no import needed) ────────────────────────────────
 const Button: React.FC<{ onClick: () => void; loading?: boolean; children: React.ReactNode }> = ({ onClick, loading, children }) => (
   <button onClick={onClick} disabled={loading}
     className="flex items-center px-3 py-1.5 rounded-lg border border-border-default text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50">

@@ -41,6 +41,7 @@ class TrendPoint(BaseModel):
     excess_dwell_minutes: float
     financial_impact_kes: float
     visit_count: int
+    delayed_visit_count: int = 0
 
 
 class TrendAnalytics(BaseModel):

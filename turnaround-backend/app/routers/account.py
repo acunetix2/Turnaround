@@ -110,32 +110,29 @@ async def update_profile(
 async def get_notification_preferences(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """
-    Get notification preferences for the current user.
-    For now, returns default values. In production, these would be stored in a user_preferences table.
-    """
     return NotificationPreferencesResponse(
-        email_notifications=True,
-        sms_notifications=False,
-        push_notifications=True,
-        notify_on_delay=True,
-        notify_on_arrival=True,
-        notify_on_gate_pass=True,
-        notify_on_demurrage=True,
+        email_notifications=current_user.email_notifications,
+        sms_notifications=current_user.sms_notifications,
+        push_notifications=current_user.push_notifications,
+        notify_on_delay=current_user.notify_on_delay,
+        notify_on_arrival=current_user.notify_on_arrival,
+        notify_on_gate_pass=current_user.notify_on_gate_pass,
+        notify_on_demurrage=current_user.notify_on_demurrage,
     )
 
 
 @router.patch("/notifications", response_model=NotificationPreferencesResponse, summary="Update notification preferences")
 async def update_notification_preferences(
     payload: NotificationPreferencesRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """
-    Update notification preferences for the current user.
-    For now, returns the payload. In production, these would be stored in a user_preferences table.
-    """
-    # TODO: Store preferences in database
-    return NotificationPreferencesResponse(**payload.model_dump())
+    for field, value in payload.model_dump().items():
+        setattr(current_user, field, value)
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
+    return await get_notification_preferences(current_user)
 
 
 class PasswordChangeRequest(BaseModel):

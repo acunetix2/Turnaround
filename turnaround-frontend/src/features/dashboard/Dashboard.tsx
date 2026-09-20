@@ -13,6 +13,7 @@ import {
   BarChart3, TrendingUp, User, Container, Layers
 } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
+import { LoadingStatus } from '../../components/common/Loader';
 import {
   Chart,
   ChartCard,
@@ -67,34 +68,39 @@ export const Dashboard: React.FC = () => {
   const { data: stats, isLoading, isError, refetch } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: apiClient.getDashboardStats,
-    refetchInterval: 20000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   const { data: dwellEvents } = useQuery({
     queryKey: ['dwellEvents', 'dashboard'],
     queryFn: () => apiClient.getDwellEvents(),
-    refetchInterval: 20000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   const { data: vehiclesData } = useQuery({
     queryKey: ['vehicles'],
     queryFn: apiClient.getVehicles,
-    staleTime: 30000,
+    staleTime: 60_000,
   });
 
   const { data: locationStats } = useQuery({
     queryKey: ['locationStats'],
     queryFn: apiClient.getLocationStats,
+    staleTime: 60_000,
   });
 
   const { data: trips } = useQuery({
     queryKey: ['trips'],
     queryFn: apiClient.getTrips,
+    staleTime: 60_000,
   });
 
   const { data: trendData } = useQuery({
     queryKey: ['trendData'],
     queryFn: () => apiClient.getTrendData(),
+    staleTime: 60_000,
   });
 
   const analysisMutation = useMutation({
@@ -324,13 +330,16 @@ export const Dashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-5 animate-pulse">
+      <div className="space-y-5">
+        <LoadingStatus messages={['Connecting to fleet data', 'Loading live telemetry', 'Almost there', 'Finalizing your dashboard']} centered />
+        <div className="space-y-5 animate-pulse">
         <div className="h-10 w-64 bg-bg-surface-raised rounded-xl" />
         <div className="h-32 bg-bg-surface-raised rounded-2xl" />
         <div className="h-72 bg-bg-surface-raised rounded-2xl" />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           <div className="h-96 bg-bg-surface-raised rounded-2xl lg:col-span-8" />
           <div className="h-96 bg-bg-surface-raised rounded-2xl lg:col-span-4" />
+        </div>
         </div>
       </div>
     );

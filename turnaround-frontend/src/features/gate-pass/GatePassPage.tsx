@@ -3,13 +3,13 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
-import { ArrowLeft, Image, Share2, ShieldCheck, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Share2, ShieldCheck, Download, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { apiClient } from '../../lib/api/client';
 import type { GatePassData } from '../../lib/api/types';
+import { LoadingStatus } from '../../components/common/Loader';
 
-/* ── Field cell — module-level to avoid "component created during render" ── */
 const F = ({
   label,
   value,
@@ -28,8 +28,6 @@ const F = ({
     </p>
   </div>
 );
-
-/* ─────────────────────────────────────────────────────────────── */
 
 type PassStatus = 'pre_approved' | 'approved' | 'cleared' | 'inspected' | 'used' | 'expired' | 'revoked';
 
@@ -56,7 +54,6 @@ function fmtShort(d: string) {
   });
 }
 
-/* ─────────────────────────────────────────────────────────────── */
 
 export const GatePassPage: React.FC = () => {
   const navigate     = useNavigate();
@@ -80,8 +77,9 @@ export const GatePassPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] gap-2 text-text-secondary text-sm">
-        <Loader2 size={16} className="animate-spin" /> Loading gate pass…
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2 size={20} className="animate-spin text-[#ED642B]" />
+        <LoadingStatus messages={['Please wait while we retrieve the gate pass', 'Checking pass status', 'Almost there']} centered />
       </div>
     );
   }
@@ -119,7 +117,7 @@ export const GatePassPage: React.FC = () => {
     setCapturing(true);
     try {
       const canvas = await html2canvas(card, {
-        scale: 3,           // 3× for crisp high-res output
+        scale: 3,           
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -148,7 +146,6 @@ export const GatePassPage: React.FC = () => {
 
   /** Share or copy the image */
   const handleShare = async () => {
-    // Try image share first (mobile)
     if (navigator.share && navigator.canShare) {
       const canvas = await captureImage();
       if (canvas) {
@@ -161,7 +158,6 @@ export const GatePassPage: React.FC = () => {
               return;
             } catch { /* fall through */ }
           }
-          // Fallback: share text
           shareText();
         }, 'image/png');
         return;
@@ -211,7 +207,6 @@ export const GatePassPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ══════════════ GATE PASS CARD ══════════════ */}
       <div
         ref={cardRef}
         className="gp-card bg-white rounded-2xl shadow-lg overflow-hidden"
@@ -322,7 +317,7 @@ export const GatePassPage: React.FC = () => {
           className="px-7 py-3 flex items-center justify-between"
           style={{ background: 'linear-gradient(90deg,#0B0524 0%,#250C77 100%)' }}
         >
-          <p className="text-[9px] text-purple-300">Present with valid ID · turnaround.africa</p>
+          <p className="text-[9px] text-purple-300">Present with valid ID · turnaround.com</p>
           <p className="font-mono text-[9px] text-orange-400 font-bold">#{pass.pass_number}</p>
         </div>
       </div>

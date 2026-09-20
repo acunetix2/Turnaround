@@ -20,6 +20,8 @@ class VehicleBase(BaseModel):
     driver_license: Optional[str] = Field(None, description="Driver license number")
     driver_avatar: Optional[str] = Field(None, description="Driver avatar image URL")
     driver_status: Optional[DriverStatus] = Field(None, description="Driver duty state")
+    driver_id: Optional[str] = None
+    co_driver_id: Optional[str] = None
 
     # Container / Cargo
     trailer_number: Optional[str] = Field(None, description="Trailer or chassis number")
@@ -33,6 +35,8 @@ class VehicleBase(BaseModel):
 
     # Operational
     fuel_level: Optional[int] = Field(None, ge=0, le=100, description="Fuel level percentage 0-100")
+    fuel_tank_capacity_liters: Optional[float] = Field(None, gt=0)
+    fuel_consumption_liters_per_100km: Optional[float] = Field(None, gt=0)
     odometer_km: Optional[int] = Field(None, description="Current odometer reading in km")
     maintenance_status: Optional[MaintenanceStatus] = Field(
         MaintenanceStatus.GOOD, description="Maintenance state of vehicle"
@@ -59,6 +63,8 @@ class VehicleUpdate(BaseModel):
     driver_license: Optional[str] = None
     driver_avatar: Optional[str] = None
     driver_status: Optional[DriverStatus] = None
+    driver_id: Optional[str] = None
+    co_driver_id: Optional[str] = None
 
     trailer_number: Optional[str] = None
     container_number: Optional[str] = None
@@ -69,6 +75,8 @@ class VehicleUpdate(BaseModel):
     tracker_imei: Optional[str] = None
 
     fuel_level: Optional[int] = None
+    fuel_tank_capacity_liters: Optional[float] = None
+    fuel_consumption_liters_per_100km: Optional[float] = None
     odometer_km: Optional[int] = None
     maintenance_status: Optional[MaintenanceStatus] = None
     next_inspection_date: Optional[str] = None

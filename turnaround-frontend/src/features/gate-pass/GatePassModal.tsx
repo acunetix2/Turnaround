@@ -6,8 +6,6 @@ import { useToast } from '../../components/ui/Toast';
 import type { GatePassData } from '../../lib/api/types';
 export type { GatePassData };
 
-/* ── Declared outside the component so React never treats it as a
-      "component created during render"                             ── */
 const PassField = ({
   label,
   value,
@@ -35,7 +33,6 @@ const PassField = ({
   </div>
 );
 
-/* ─────────────────────────────────────────────────────────────────── */
 
 interface GatePassModalProps {
   pass: GatePassData;
@@ -58,7 +55,6 @@ export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) =
       hour: '2-digit', minute: '2-digit', hour12: false,
     });
 
-  /* QR value – everything a gatehouse officer needs to verify */
   const qrValue = [
     `PASS:${pass.pass_number}`,
     `VEH:${pass.vehicle_reg}`,
@@ -145,7 +141,6 @@ export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) =
           </button>
         </div>
 
-        {/* ═══════════════ DIGITAL GATE PASS CARD ═══════════════ */}
         <div
           id="gp-card"
           className="bg-white w-full max-w-[400px] rounded-2xl shadow-2xl overflow-hidden select-text"
@@ -248,7 +243,6 @@ export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) =
               </div>
             </div>
 
-            {/* Signature boxes — mirrors the physical Yusen-style layout */}
             <div className="grid grid-cols-2 gap-3">
               <div className="border border-gray-200 rounded-xl p-3 min-h-[64px] flex flex-col justify-between">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 leading-tight">
@@ -286,7 +280,7 @@ export const GatePassModal: React.FC<GatePassModalProps> = ({ pass, onClose }) =
             style={{ background: 'linear-gradient(90deg,#0B0524 0%,#250C77 100%)' }}
           >
             <p className="text-[9px] text-purple-300">
-              Present with valid ID · turnaround.africa
+              Present with valid ID · Turnaround Africa · Nairobi, Kenya
             </p>
             <p className="font-mono text-[9px] text-orange-400 font-bold">
               #{pass.pass_number}

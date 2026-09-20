@@ -23,6 +23,7 @@ from app.engines.geofencing import find_matching_geofences, evaluate_debounce_de
 from app.engines.dwell import resolve_expected_dwell_minutes, calculate_dwell_duration_minutes
 from app.engines.financial import calculate_delay_cost, calculate_excess_minutes
 from app.config import settings
+from app.services import notifications as notif_svc
 
 router = APIRouter(prefix="/gps", tags=["GPS Ingestion"])
 logger = logging.getLogger("turnaround.gps")
@@ -118,6 +119,12 @@ async def _auto_create_demurrage_claim(
         updated_at=now,
     )
     db.add(claim)
+    await db.flush()
+    await notif_svc.demurrage_flagged(
+        db, company_id=vehicle.company_id, claim_id=claim.id,
+        vehicle_reg=claim.vehicle_reg, location=claim.location_name,
+        amount_kes=float(claim.claimed_amount_kes or 0),
+    )
     logger.info(
         f"Demurrage FLAGGED: claim={claim_number} vehicle={vehicle.registration_number} "
         f"location={location.name} excess={excess_minutes:.1f}m cost=KES{cost:.2f}"

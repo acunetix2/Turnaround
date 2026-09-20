@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Truck } from 'lucide-react';
 
 export interface SpinnerProps {
@@ -44,6 +44,45 @@ export const RouteProgressBar: React.FC<RouteProgressBarProps> = ({ isLoading = 
   return (
     <div className="fixed top-0 left-0 right-0 h-[2.5px] z-50 overflow-hidden bg-bg-surface-raised">
       <div className="h-full bg-gradient-to-r from-brand-600 via-brand-400 to-brand-cyan animate-route-progress w-full" />
+    </div>
+  );
+};
+
+export interface LoadingStatusProps {
+  messages?: string[];
+  className?: string;
+  centered?: boolean;
+  fullscreen?: boolean;
+}
+
+export const LoadingStatus: React.FC<LoadingStatusProps> = ({
+  messages = ['Please wait while we connect your workspace', 'Loading the latest operations', 'Almost there', 'Finalizing your view'],
+  className = '',
+  centered = false,
+  fullscreen = false,
+}) => {
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  const emoji = ['🚚', '📡', '⏳', '✅'][messageIndex % 4];
+  const layout = fullscreen
+    ? 'fixed inset-0 z-[110] flex items-center justify-center bg-bg-canvas/95 backdrop-blur-sm'
+    : centered
+      ? 'w-full justify-center text-center'
+      : '';
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setMessageIndex(index => (index + 1) % messages.length);
+    }, 1800);
+    return () => window.clearInterval(timer);
+  }, [messages.length]);
+
+  return (
+    <div className={`flex items-center gap-2 text-[11px] text-text-secondary ${layout} ${className}`} role="status" aria-live="polite">
+      <span aria-hidden="true" className="text-sm">{emoji}</span>
+      <span className="h-1.5 w-1.5 rounded-full bg-[#ED642B] animate-pulse" />
+      <span>{messages[messageIndex]}</span>
+      <span className="text-text-tertiary">...</span>
     </div>
   );
 };

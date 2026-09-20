@@ -31,7 +31,25 @@ import type {
 
 // Read configuration from environment
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const configuredApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const localApiUrl = 'http://localhost:8000/api/v1';
+const productionApiUrl = 'https://turnaround-99kc.onrender.com/api/v1';
+const API_BASE_URL = configuredApiUrl || (
+  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? localApiUrl
+    : productionApiUrl
+);
+
+async function fetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const request = () => globalThis.fetch(input, { ...init, credentials: 'include' });
+  const response = await request();
+  if (response.status !== 401 || String(input).includes('/auth/')) return response;
+
+  const refresh = await globalThis.fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST', credentials: 'include',
+  });
+  return refresh.ok ? request() : response;
+}
 
 // Local state for mock data persistence during session
 let memoryVehicles = [...mockVehicles];
@@ -39,6 +57,35 @@ let memoryLocations = [...mockLocations];
 let memoryDwellEvents = [...mockDwellEvents];
 let memoryInsights = [...mockInsights];
 let memoryTrips = [...mockTrips];
+let memoryUsers: import('./types').User[] = [
+  {
+    id: 'user_demo_admin',
+    company_id: 'seed-company-siginon-001',
+    name: 'Demo Administrator',
+    email: 'admin@siginon.com',
+    role: 'admin',
+    phone: '+254 700 000 001',
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+];
+let memoryCompanyConfig: import('./types').CompanyConfig = {
+  id: 'seed-company-siginon-001',
+  name: 'Siginon Global Logistics',
+  created_at: new Date().toISOString(),
+  country: 'Kenya',
+  currency: 'KES',
+  timezone: 'Africa/Nairobi',
+  sla_warning_threshold_minutes: 30,
+  sla_breach_threshold_minutes: 60,
+  hourly_operating_rate: 7500,
+  demurrage_rate_multiplier: 1.5,
+  gps_polling_interval_seconds: 30,
+  geofence_buffer_meters: 100,
+  auto_revoke_expired_passes: true,
+  notify_on_delay: true,
+  notify_on_gate_pass: true,
+};
 let memoryDemurrageClaims = [...mockDemurrageClaims];
 let memoryDashboardStats = { ...mockDashboardStats };
 let memoryGatePasses: import('./types').GatePassData[] = [];
@@ -48,11 +95,23 @@ const sleep = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Helper for fetch headers
 function getHeaders(): HeadersInit {
-  const token = localStorage.getItem('supabase_session_jwt') || 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager';
+  const token = USE_MOCKS
+    ? localStorage.getItem('supabase_session_jwt') || 'demo-token:seed-user-admin-001:seed-company-siginon-001:fleet_manager'
+    : localStorage.getItem('supabase_session_jwt');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 15_000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export function extractErrorMessage(error: unknown): string {
@@ -69,12 +128,84 @@ function _normalizeTrip(raw: any): import('./types').Trip {
     ...raw,
     origin_name:      raw.origin_name      ?? raw.origin?.name      ?? '',
     destination_name: raw.destination_name ?? raw.destination?.name ?? '',
+    vehicle_reg:      raw.vehicle_reg      ?? raw.vehicle?.registration_number ?? '',
+    vehicle_type:     raw.vehicle_type     ?? raw.vehicle?.vehicle_type ?? '',
+    driver_name:      raw.driver_name      ?? raw.vehicle?.driver_name ?? '',
+    driver_phone:     raw.driver_phone     ?? raw.vehicle?.driver_phone ?? '',
     // checkpoints come directly from backend now
     checkpoints: raw.checkpoints ?? [],
   };
 }
 
 export const apiClient = {
+  // --- Backend-owned authentication ---
+  async login(email: string, password: string): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Invalid email or password');
+    return (await res.json()).user;
+  },
+
+  async signup(data: { email: string; password: string; name: string; company: string }): Promise<{ user: import('./types').User; requires_email_confirmation?: boolean }> {
+    const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Unable to create account');
+    return res.json();
+  },
+
+  async confirmEmail(tokenHash: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/auth/confirm-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token_hash: tokenHash }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'This confirmation link is invalid or has expired.');
+    }
+  },
+
+  async getAuthUser(): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/auth/me`, { headers: { 'Content-Type': 'application/json' } });
+    if (!res.ok) throw new Error('Not authenticated');
+    return res.json();
+  },
+
+  async refreshAuth(): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, { method: 'POST' });
+    if (!res.ok) throw new Error('Session expired');
+  },
+
+  async logout(): Promise<void> {
+    await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST' });
+  },
+
+  async getSessions(): Promise<Array<{ id: string; created_at: string; last_used_at: string; expires_at: string; current: boolean }>> {
+    if (USE_MOCKS) {
+      const now = new Date().toISOString();
+      return [{ id: 'mock-current-session', created_at: now, last_used_at: now, expires_at: new Date(Date.now() + 3600000).toISOString(), current: true }];
+    }
+    const res = await fetch(`${API_BASE_URL}/auth/sessions`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch active sessions');
+    return res.json();
+  },
+
+  async revokeSession(id: string): Promise<void> {
+    if (USE_MOCKS) return;
+    const res = await fetch(`${API_BASE_URL}/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Failed to revoke session');
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error('Unable to send reset instructions');
+  },
+
   // --- Dashboard ---
   async getDashboardStats(): Promise<DashboardStats> {
     if (USE_MOCKS) {
@@ -86,7 +217,7 @@ export const apiClient = {
       memoryDashboardStats.trucks_delayed = delayedCount;
       return memoryDashboardStats;
     }
-    const res = await fetch(`${API_BASE_URL}/analytics/dashboard`, { headers: getHeaders() });
+    const res = await fetchWithTimeout(`${API_BASE_URL}/analytics/dashboard`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch dashboard stats');
     return res.json();
   },
@@ -97,10 +228,33 @@ export const apiClient = {
       await sleep(200);
       return memoryVehicles;
     }
-    const res = await fetch(`${API_BASE_URL}/vehicles`, { headers: getHeaders() });
+    const res = await fetchWithTimeout(`${API_BASE_URL}/vehicles`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch vehicles');
     const data = await res.json();
     return Array.isArray(data) ? data : (data.items || []);
+  },
+
+  async getFleetStaff(): Promise<import('./types').FleetStaff[]> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch fleet staff');
+    return res.json();
+  },
+
+  async createFleetStaff(data: Omit<import('./types').FleetStaff, 'id' | 'company_id' | 'created_at' | 'assigned_vehicle_count'>): Promise<import('./types').FleetStaff> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Failed to add fleet staff');
+    return res.json();
+  },
+
+  async updateFleetStaff(id: string, data: Partial<import('./types').FleetStaff>): Promise<import('./types').FleetStaff> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff/${id}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || 'Failed to update fleet staff');
+    return res.json();
+  },
+
+  async deleteFleetStaff(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/fleet-staff/${id}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to remove fleet staff');
   },
 
   async getVehicleById(id: string): Promise<Vehicle> {
@@ -132,6 +286,12 @@ export const apiClient = {
         capacity: Number(data.capacity),
         hourly_operating_cost: Number(data.hourly_operating_cost),
         status: normalizedStatus,
+        fuel_level: data.fuel_level,
+        fuel_tank_capacity_liters: data.fuel_tank_capacity_liters,
+        fuel_consumption_liters_per_100km: data.fuel_consumption_liters_per_100km,
+        odometer_km: data.odometer_km,
+        maintenance_status: data.maintenance_status,
+        next_inspection_date: data.next_inspection_date,
         created_at: new Date().toISOString(),
         current_location_name: 'Unassigned Loading Bay',
         today_excess_dwell_minutes: 0
@@ -145,7 +305,26 @@ export const apiClient = {
       vehicle_type: data.vehicle_type,
       capacity: Number(data.capacity),
       hourly_operating_cost: Number(data.hourly_operating_cost),
-      status: normalizedStatus
+      status: normalizedStatus,
+      image_url: data.image_url,
+      driver_name: data.driver_name,
+      driver_phone: data.driver_phone,
+      driver_license: data.driver_license,
+      driver_status: data.driver_status,
+      driver_id: data.driver_id,
+      co_driver_id: data.co_driver_id,
+      trailer_number: data.trailer_number,
+      container_number: data.container_number,
+      container_type: data.container_type,
+      cargo_type: data.cargo_type,
+      telematics_provider: data.telematics_provider,
+      tracker_imei: data.tracker_imei,
+      fuel_level: data.fuel_level,
+      fuel_tank_capacity_liters: data.fuel_tank_capacity_liters,
+      fuel_consumption_liters_per_100km: data.fuel_consumption_liters_per_100km,
+      odometer_km: data.odometer_km,
+      maintenance_status: data.maintenance_status,
+      next_inspection_date: data.next_inspection_date,
     };
 
     const res = await fetch(`${API_BASE_URL}/vehicles`, {
@@ -225,7 +404,15 @@ export const apiClient = {
     const res = await fetch(`${API_BASE_URL}/locations`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch locations');
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.items || []);
+    const rows = Array.isArray(data) ? data : (data.items || []);
+    return rows.map((row: any) => ({
+      ...row,
+      vehicle_id: row.vehicle_id ?? row.id,
+      total_dwell_events: row.total_dwell_events ?? row.total_trips ?? 0,
+      total_excess_dwell_minutes: row.total_excess_dwell_minutes ?? row.excess_dwell_minutes ?? 0,
+      total_financial_loss: row.total_financial_loss ?? row.total_excess_cost ?? 0,
+      avg_dwell_minutes: row.avg_dwell_minutes ?? 0,
+    }));
   },
 
   async getLocationById(id: string): Promise<Location> {
@@ -327,6 +514,202 @@ export const apiClient = {
     return true;
   },
 
+  // --- Company configuration ---
+  async getCompanyConfig(): Promise<import('./types').CompanyConfig> {
+    if (USE_MOCKS) {
+      await sleep(150);
+      return memoryCompanyConfig;
+    }
+    const res = await fetchWithTimeout(`${API_BASE_URL}/company`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch company configuration');
+    return res.json();
+  },
+
+  async updateCompanyConfig(data: Partial<import('./types').CompanyConfig>): Promise<import('./types').CompanyConfig> {
+    if (USE_MOCKS) {
+      await sleep(200);
+      memoryCompanyConfig = { ...memoryCompanyConfig, ...data };
+      return memoryCompanyConfig;
+    }
+    const res = await fetch(`${API_BASE_URL}/company`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update company configuration');
+    return res.json();
+  },
+
+  // --- Account profile ---
+  async getProfile(): Promise<import('./types').User> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      return memoryUsers[0];
+    }
+    const res = await fetch(`${API_BASE_URL}/account/profile`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch account profile');
+    return res.json();
+  },
+
+  async updateProfile(data: { name?: string; phone?: string }): Promise<import('./types').User> {
+    if (USE_MOCKS) {
+      await sleep(150);
+      memoryUsers[0] = { ...memoryUsers[0], ...data };
+      return memoryUsers[0];
+    }
+    const res = await fetch(`${API_BASE_URL}/account/profile`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update account profile');
+    return res.json();
+  },
+
+  async changePassword(current_password: string, new_password: string): Promise<{ message: string; status: string }> {
+    const res = await fetch(`${API_BASE_URL}/account/change-password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ current_password, new_password }),
+    });
+    if (!res.ok) throw new Error('Failed to change password');
+    return res.json();
+  },
+
+  async getNotificationPreferences(): Promise<Record<string, boolean>> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      return {
+        email_notifications: true, sms_notifications: false, push_notifications: true,
+        notify_on_delay: true, notify_on_arrival: true, notify_on_gate_pass: true,
+        notify_on_demurrage: true,
+      };
+    }
+    const res = await fetch(`${API_BASE_URL}/account/notifications`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch notification preferences');
+    return res.json();
+  },
+
+  async updateNotificationPreferences(data: Record<string, boolean>): Promise<Record<string, boolean>> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      return data;
+    }
+    const res = await fetch(`${API_BASE_URL}/account/notifications`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update notification preferences');
+    return res.json();
+  },
+
+  // --- Users / Team ---
+  async getUsers(params: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+    role?: string;
+    status?: string;
+  } = {}): Promise<{ items: import('./types').User[]; total: number; page: number; page_size: number }> {
+    const query = new URLSearchParams();
+    if (params.page !== undefined) query.set('page', String(params.page));
+    if (params.page_size !== undefined) query.set('page_size', String(params.page_size));
+    if (params.search) query.set('search', params.search);
+    if (params.role) query.set('role', params.role);
+    if (params.status) query.set('status', params.status);
+
+    if (USE_MOCKS) {
+      await sleep(150);
+      const filtered = memoryUsers.filter((user) => {
+        const matchesSearch = !params.search || `${user.name} ${user.email} ${user.phone ?? ''}`
+          .toLowerCase().includes(params.search.toLowerCase());
+        return matchesSearch && (!params.role || user.role === params.role) && (!params.status || user.status === params.status);
+      });
+      return { items: filtered, total: filtered.length, page: params.page ?? 1, page_size: params.page_size ?? 50 };
+    }
+
+    const res = await fetch(`${API_BASE_URL}/users?${query.toString()}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch team users');
+    return res.json();
+  },
+
+  async createUser(data: { email: string; name: string; role: string; phone?: string; status?: string }): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const detail = body?.detail;
+      const message = typeof detail === 'string'
+        ? detail
+        : detail?.message || detail?.[0]?.msg || 'Failed to create user';
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async updateUser(id: string, data: { name?: string; role?: string; phone?: string; status?: string }): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update user');
+    return res.json();
+  },
+
+  async suspendUser(id: string): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/suspend`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to suspend user');
+    return res.json();
+  },
+
+  async activateUser(id: string): Promise<import('./types').User> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/activate`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to activate user');
+    return res.json();
+  },
+
+  async deleteUser(id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to delete user');
+    return true;
+  },
+
+  // --- Notifications ---
+  async getNotifications(params: { unread_only?: boolean; limit?: number; offset?: number } = {}): Promise<{ items: any[]; total: number; unread: number }> {
+    if (USE_MOCKS) return { items: [], total: 0, unread: 0 };
+    const query = new URLSearchParams();
+    if (params.unread_only !== undefined) query.set('unread_only', String(params.unread_only));
+    if (params.limit !== undefined) query.set('limit', String(params.limit));
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    const res = await fetch(`${API_BASE_URL}/notifications?${query.toString()}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch notifications');
+    return res.json();
+  },
+
+  async markNotificationRead(id: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to mark notification as read');
+    return res.json();
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/notifications/read-all`, { method: 'POST', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to mark notifications as read');
+  },
+
+  async deleteNotification(id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE_URL}/notifications/${id}`, { method: 'DELETE', headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to delete notification');
+    return true;
+  },
+
+  async registerMessagingToken(token: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/notifications/devices`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail?.error?.message || body?.detail || 'Failed to register notification device');
+    }
+  },
+
   // --- GPS Events / Live positions ---
   async getLiveGPSEvents(): Promise<Record<string, GPSEvent>> {
     if (USE_MOCKS) {
@@ -334,26 +717,9 @@ export const apiClient = {
       // Return mapping of vehicle_id -> latest gps event
       return mockLiveGpsEvents;
     }
-    // Fetch individual vehicles telemetry from backend
-    const vehicles = await this.getVehicles();
-    const events: Record<string, GPSEvent> = {};
-    await Promise.all(
-      vehicles.map(async (v) => {
-        try {
-          const vRes = await fetch(`${API_BASE_URL}/gps/events/${v.id}`, { headers: getHeaders() });
-          if (vRes.ok) {
-            const data = await vRes.json();
-            const items = Array.isArray(data) ? data : (data.items || []);
-            if (items.length > 0) {
-              events[v.id] = items[0];
-            }
-          }
-        } catch {
-          // silent fail for single vehicle
-        }
-      })
-    );
-    return events;
+    const res = await fetch(`${API_BASE_URL}/vehicles/live`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch live vehicle positions');
+    return res.json();
   },
 
   // --- Dwell Events ---
@@ -427,7 +793,15 @@ export const apiClient = {
     const res = await fetch(`${API_BASE_URL}/analytics/locations`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch location stats');
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.items || []);
+    const rows = Array.isArray(data) ? data : (data.items || []);
+    return rows.map((row: any) => ({
+      ...row,
+      location_id: row.location_id ?? row.id,
+      location_name: row.location_name ?? row.name ?? 'Unknown stop',
+      financial_impact: row.financial_impact ?? row.total_excess_cost ?? row.financial_impact_kes ?? 0,
+      avg_excess_delay_minutes: row.avg_excess_delay_minutes ?? row.average_excess_minutes ?? 0,
+      total_visits: row.total_visits ?? row.visit_count ?? 0,
+    }));
   },
 
   async getVehicleStats(): Promise<VehicleStats[]> {
@@ -441,20 +815,26 @@ export const apiClient = {
     return Array.isArray(data) ? data : (data.items || []);
   },
 
-  async getTrendData(_days?: number): Promise<TrendDataPoint[]> {
+  async getTrendData(days = 30): Promise<TrendDataPoint[]> {
     if (USE_MOCKS) {
       await sleep(250);
       return mockTrendData;
     }
-    const res = await fetch(`${API_BASE_URL}/analytics/trends`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE_URL}/analytics/trends?days=${days}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch trend data');
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.points || []);
+    const rows = Array.isArray(data) ? data : (data.points || []);
+    return rows.map((row: any) => ({
+      ...row,
+      average_dwell_minutes: row.average_dwell_minutes ?? (row.visit_count ? row.total_dwell_minutes / row.visit_count : 0),
+      estimated_cost: row.estimated_cost ?? row.financial_impact_kes ?? 0,
+      delayed_visit_count: row.delayed_visit_count ?? 0,
+    }));
   },
 
-  async getFleetProductivity(_days?: number): Promise<unknown> {
+  async getFleetProductivity(days = 30): Promise<unknown> {
     if (USE_MOCKS) return { score: 0, visits: [], total_financial_waste: 0 };
-    const res = await fetch(`${API_BASE_URL}/analytics/fleet-productivity`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE_URL}/analytics/fleet-productivity?days=${days}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch fleet productivity');
     return res.json();
   },
@@ -568,17 +948,38 @@ export const apiClient = {
   },
 
   // --- Trips / Dispatch ---
+  async getContainers(): Promise<import('./types').Container[]> {
+    const res = await fetch(`${API_BASE_URL}/containers`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch containers');
+    return res.json();
+  },
+
   async getTrips(): Promise<Trip[]> {
     if (USE_MOCKS) {
       await sleep(200);
       return memoryTrips;
     }
-    const res = await fetch(`${API_BASE_URL}/trips`, { headers: getHeaders() });
+    const res = await fetchWithTimeout(`${API_BASE_URL}/trips`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch trips');
     const data = await res.json();
     const items: any[] = Array.isArray(data) ? data : (data.items || []);
     // Map backend joined origin/destination objects → flat display fields
     return items.map(_normalizeTrip);
+  },
+
+  async getTripById(id: string): Promise<Trip> {
+    if (USE_MOCKS) {
+      await sleep(100);
+      const trip = memoryTrips.find((item) => item.id === id);
+      if (!trip) throw new Error('Trip not found');
+      return trip;
+    }
+    const res = await fetch(`${API_BASE_URL}/trips/${id}`, { headers: getHeaders() });
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('Trip not found');
+      throw new Error('Failed to fetch trip');
+    }
+    return _normalizeTrip(await res.json());
   },
 
   async createTrip(data: Omit<Trip, 'id'>): Promise<Trip> {
@@ -616,6 +1017,26 @@ export const apiClient = {
     });
     if (!res.ok) throw new Error('Failed to update trip');
     return _normalizeTrip(await res.json());
+  },
+
+  async startTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'in_transit' });
+  },
+
+  async completeTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'completed' });
+  },
+
+  async cancelTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'cancelled' });
+  },
+
+  async reassignTrip(id: string, data: { vehicle_id: string }): Promise<Trip> {
+    return this.updateTrip(id, data);
+  },
+
+  async archiveTrip(id: string): Promise<Trip> {
+    return this.updateTrip(id, { status: 'cancelled' });
   },
 
   async deleteTrip(id: string): Promise<boolean> {
@@ -708,6 +1129,33 @@ export const apiClient = {
     if (!res.ok) throw new Error('Failed to fetch gate passes');
     const data = await res.json();
     return Array.isArray(data) ? data : (data.items || []);
+  },
+
+  async getGatePassById(id: string): Promise<import('./types').GatePassData> {
+    if (USE_MOCKS) {
+      const pass = memoryGatePasses.find((item) => item.id === id);
+      if (!pass) throw new Error('Gate pass not found');
+      return pass;
+    }
+    const res = await fetch(`${API_BASE_URL}/gate-passes/${id}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch gate pass');
+    return res.json();
+  },
+
+  async approveGatePass(id: string): Promise<import('./types').GatePassData> {
+    return this.updateGatePass(id, { status: 'approved' });
+  },
+
+  async markGatePassUsed(id: string): Promise<import('./types').GatePassData> {
+    return this.updateGatePass(id, { status: 'used' });
+  },
+
+  async reissueGatePass(id: string): Promise<import('./types').GatePassData> {
+    return this.updateGatePass(id, { status: 'pre_approved' });
+  },
+
+  async deleteGatePass(id: string): Promise<boolean> {
+    return this.updateGatePass(id, { status: 'cancelled' }).then(() => true);
   },
 
   /** Returns the first active (non-expired, non-cancelled) gate pass for a trip, or null. */

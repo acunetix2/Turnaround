@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
@@ -5,7 +6,10 @@ from pydantic import Field
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Resolve the backend env file from this module, not the shell's cwd.
+        # This keeps `python turnaround-backend/run.py` and IDE launches
+        # from silently falling back to the placeholder production defaults.
+        env_file=Path(__file__).resolve().parent.parent / ".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
@@ -13,7 +17,7 @@ class Settings(BaseSettings):
     # App
     PROJECT_NAME: str = "Turnaround API"
     VERSION: str = "1.0.0"
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = "production"  # "development" | "staging" | "production"
     PORT: int = 8000
     HOST: str = "0.0.0.0"
     LOG_LEVEL: str = "INFO"
@@ -34,8 +38,8 @@ class Settings(BaseSettings):
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
-        "*"
     ]
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # Database — Supabase PostgreSQL (asyncpg)
     # Format: postgresql+asyncpg://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
@@ -48,8 +52,14 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
     # anon key (safe for frontend, used by supabase-js)
     SUPABASE_ANON_KEY: Optional[str] = None
+    AUTH_COOKIE_NAME: str = "turnaround_session"
+    AUTH_SESSION_DAYS: int = 30
+    AUTH_COOKIE_SECURE: bool = True
     # JWT secret — used only as dev fallback when SUPABASE_URL is not set
     SUPABASE_JWT_SECRET: Optional[str] = "dev-secret-key-for-local-testing-turnaround"
+
+    # Firebase Admin — server-side push delivery. Store the service account JSON as an env value.
+    FIREBASE_SERVICE_ACCOUNT_JSON: Optional[str] = None
 
     # AI / LLM Engine (Groq)
     GROQ_API_KEY: Optional[str] = None

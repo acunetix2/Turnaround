@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Location } from '../../lib/api/types';
 import { useToast } from '../../components/ui/Toast';
+import { LoadingStatus } from '../../components/common/Loader';
 
 const updateLocSchema = zod.object({
   name: zod.string().min(2),
@@ -116,7 +117,9 @@ export const LocationDetail: React.FC = () => {
 
   if (loadingLoc) {
     return (
-      <div className="space-y-5 animate-pulse">
+      <div className="space-y-5">
+        <LoadingStatus messages={['Please wait while we load this facility', 'Reading geofence activity', 'Almost there', 'Preparing location details']} centered />
+        <div className="space-y-5 animate-pulse">
         <div className="h-6 w-32 bg-bg-surface-raised rounded" />
         <div className="h-32 rounded-xl bg-bg-surface border border-border-default" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -125,6 +128,7 @@ export const LocationDetail: React.FC = () => {
           ))}
         </div>
         <div className="h-80 rounded-xl bg-bg-surface border border-border-default" />
+        </div>
       </div>
     );
   }

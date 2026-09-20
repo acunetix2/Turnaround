@@ -3,13 +3,16 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight, TrendingDown, Zap, MapPin, Shield,
   Clock, DollarSign, ChevronRight, ChevronDown, CheckCircle2,
-  Radio, Cpu, Layers, Server
+  Radio, Cpu, Layers, Server, Moon, Sun
 } from 'lucide-react';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { OperationalFlashcards } from '../components/landing/OperationalFlashcards';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { useTheme } from '../lib/ThemeContext';
 
 
+
+const DEMO_VIDEO_URL = 'https://www.youtube.com/embed/e0bipF5qQls?si=1s0K-jJ284Rgg-pU';
 
 const FEATURES = [
   {
@@ -61,6 +64,7 @@ const FEATURES = [
 export const Landing: React.FC = () => {
   const heroRef = useRef<HTMLDivElement>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const { theme, toggleTheme } = useTheme();
   const menuTimeoutRef = useRef<number | null>(null);
 
   const handleMouseEnter = (menuKey: string) => {
@@ -85,14 +89,14 @@ export const Landing: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-[#0A051B] text-[#F4F5F7] overflow-x-hidden selection:bg-[#ED642B]/30">
+    <div className={`relative min-h-screen overflow-x-hidden selection:bg-[#ED642B]/30 ${theme === 'dark' ? 'bg-[#0A051B] text-[#F4F5F7]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
 
       {/* ── FLEXPORT-STYLE SYSTEM MEGA-NAVBAR ── */}
       <header
-        className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-[#0A051B]/95 backdrop-blur-2xl transition-all"
+        className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.08] bg-[#07051A]/80 backdrop-blur-2xl transition-all"
         onMouseLeave={handleMouseLeave}
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
           
           {/* Clean Solid Vector Brand Logo */}
           <Link to="/" className="group shrink-0">
@@ -154,10 +158,15 @@ export const Landing: React.FC = () => {
               </button>
             </div>
 
+            <Link to="/about" className="px-3.5 py-2 text-xs font-semibold tracking-wide text-[#D1D5DB] transition-colors hover:text-white">
+              About
+            </Link>
+
           </nav>
 
           {/* Action CTAs */}
           <div className="flex items-center gap-3">
+            <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
             <Link to="/login" className="text-xs font-semibold text-[#9CA3AF] hover:text-white transition-colors px-3 py-2">
               Sign in
             </Link>
@@ -440,7 +449,7 @@ export const Landing: React.FC = () => {
       </header>
 
       {/* ── HERO SECTION ── */}
-      <section className="relative min-h-[95vh] flex items-center overflow-hidden pt-24 z-10">
+      <section className="relative min-h-[92vh] flex items-center overflow-hidden pt-24 z-10">
         
         {/* Crisp, clear background photo with subtle parallax */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -452,7 +461,7 @@ export const Landing: React.FC = () => {
             />
           </div>
           {/* Directional gradient and cinematic vignette */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#07080A]/95 via-[#07080A]/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#07051A]/95 via-[#07051A]/68 to-[#07051A]/10" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#07080A] via-transparent to-[#07080A]/30" />
           <div className="absolute inset-0 cinematic-vignette opacity-70" />
           {/* Subtle Anamorphic Optical Flare Sweep */}
@@ -464,14 +473,14 @@ export const Landing: React.FC = () => {
         {/* ── MOVING TRUCKS ON ASPHALT ROADS ANIMATION LAYER ── */}
         <AnimatedFleetBackground />
 
-        <div className="relative z-10 mx-auto max-w-7xl px-6 py-20 lg:py-28">
+        <div className="relative z-10 mx-auto max-w-7xl px-6 py-20 lg:px-10 lg:py-28">
           <div className="grid lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Copy Column */}
-            <div className="lg:col-span-7 space-y-6">
+            <div className="lg:col-span-7 space-y-6 lg:pr-8">
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1]">
-                Stop losing money at loading docks and border crossings.
+              <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-white leading-[1.04] sm:text-5xl lg:text-[4.35rem]">
+                Stop losing money at <span className="text-[#ED642B]">loading docks</span> and border crossings.
               </h1>
 
               <p className="text-base sm:text-lg text-white/80 max-w-xl leading-relaxed">
@@ -493,7 +502,7 @@ export const Landing: React.FC = () => {
                 </Link>
               </div>
 
-              <div className="pt-4 flex items-center gap-6 text-xs text-white/60">
+              <div className="pt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/65">
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={13} className="text-emerald-400" /> Plug-and-play GPS feeds</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={13} className="text-emerald-400" /> Automated geofence entry/exit</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={13} className="text-emerald-400" /> Real-time cost readouts</span>
@@ -523,6 +532,30 @@ export const Landing: React.FC = () => {
             </div>
 
           </div>
+        </div>
+      </section>
+
+      {/* ── LIVE OPERATIONS METRICS RAIL ── */}
+      <section className="relative z-20 -mt-10 px-6 lg:px-10">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 divide-x divide-white/[0.08] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0E0A2C]/85 shadow-2xl shadow-black/30 backdrop-blur-xl md:grid-cols-5">
+          {[
+            { value: '28+', label: 'Freight stations', detail: 'Across East Africa', color: '#9C6ADE' },
+            { value: '2,450+', label: 'Shipments delivered', detail: 'This month', color: '#ED642B' },
+            { value: '98.2%', label: 'On-time delivery', detail: 'Performance', color: '#6E92FF' },
+            { value: 'KES 12.4M+', label: 'Revenue processed', detail: 'This month', color: '#22C55E' },
+            { value: '200+', label: 'Active partners', detail: 'On the platform', color: '#4F7CFF' },
+          ].map((metric) => (
+            <div key={metric.label} className="flex items-center gap-3 px-4 py-4 sm:px-5 sm:py-5">
+              <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border sm:flex" style={{ color: metric.color, borderColor: `${metric.color}45`, backgroundColor: `${metric.color}18` }}>
+                <Radio size={16} />
+              </span>
+              <div className="min-w-0">
+                <strong className="block truncate text-lg font-bold text-white sm:text-xl">{metric.value}</strong>
+                <span className="block truncate text-[10px] font-semibold text-white/75 sm:text-xs">{metric.label}</span>
+                <span className="block truncate text-[10px] text-white/45">{metric.detail}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -699,6 +732,39 @@ export const Landing: React.FC = () => {
 
 
 
+      {/* ── DEMO VIDEO SECTION ── */}
+      <section id="demo" className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(237,100,43,0.18),_transparent_45%),linear-gradient(180deg,rgba(7,8,10,0.94),rgba(7,8,10,0.88))]" />
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-7xl px-6">
+          <div className="mx-auto max-w-3xl text-center mb-12 space-y-4">
+            <span className="text-xs font-mono font-bold text-[#ED642B] tracking-wider uppercase">See Turnaround in action</span>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+              A quick walkthrough of the Turnaround demo experience.
+            </h2>
+            <p className="text-sm sm:text-base text-white/75 leading-relaxed">
+              Watch how dispatchers and fleet teams use live dwell visibility, geofencing alerts, and financial impact summaries to stay ahead of terminal delays.
+            </p>
+          </div>
+
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[28px] border border-white/10 bg-black/60 p-3 shadow-2xl shadow-black/20">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+              <iframe
+                src={DEMO_VIDEO_URL}
+                title="Turnaround product demo"
+                className="aspect-video w-full"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── FINAL CTA: Clear Dusk Fleet Backdrop ── */}
       <section className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
         {/* Clear, sharp background photo */}
@@ -783,7 +849,7 @@ export const Landing: React.FC = () => {
                 <li><Link to="/signup" className="hover:text-white transition-colors">Register fleet</Link></li>
                 <li><Link to="/login" className="hover:text-white transition-colors">Dispatcher console</Link></li>
                 <li><Link to="/forgot-password" className="hover:text-white transition-colors">Password recovery</Link></li>
-                <li><a href="mailto:support@turnaround.io" className="hover:text-white transition-colors">Technical support</a></li>
+                <li><a href="mailto:support@turnaround.com" className="hover:text-white transition-colors">Technical support</a></li>
                 <li><Link to="/login" className="hover:text-white transition-colors">Operator dashboard</Link></li>
               </ul>
             </div>
@@ -792,11 +858,11 @@ export const Landing: React.FC = () => {
 
           {/* Bottom copyright & legal */}
           <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B7280]">
-            <p>© 2026 Turnaround Logistics Systems. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Turnaround Logistics Systems. All rights reserved.</p>
             <div className="flex items-center gap-6">
-              <a href="#" className="hover:text-[#9CA3AF] transition-colors">Privacy policy</a>
-              <a href="#" className="hover:text-[#9CA3AF] transition-colors">Terms of service</a>
-              <a href="#" className="hover:text-[#9CA3AF] transition-colors">Security & SLA</a>
+              <Link to="/privacy" className="hover:text-[#9CA3AF] transition-colors">Privacy policy</Link>
+              <Link to="/terms" className="hover:text-[#9CA3AF] transition-colors">Terms of service</Link>
+              <Link to="/terms#security" className="hover:text-[#9CA3AF] transition-colors">Security & SLA</Link>
             </div>
           </div>
 

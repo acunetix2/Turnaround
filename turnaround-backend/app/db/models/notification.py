@@ -2,7 +2,7 @@ import uuid
 import enum
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLEnum, Boolean, Text, JSON
+from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLEnum, Boolean, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, utc_now
 
@@ -57,3 +57,13 @@ class Notification(Base):
     # Relationships
     company: Mapped["Company"] = relationship("Company")
     user: Mapped[Optional["User"]] = relationship("User")
+
+
+class NotificationDevice(Base):
+    __tablename__ = "notification_devices"
+    __table_args__ = (UniqueConstraint("user_id", "token", name="uq_notification_device_user_token"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

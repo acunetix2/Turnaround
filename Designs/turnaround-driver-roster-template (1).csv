@@ -1,0 +1,3 @@
+name,phone,license_number,license_expiry_date,staff_type,status,availability_status,notes
+John Maina,+254700000001,DL-00123456,2026-12-20,driver,active,available,Primary route
+Alex Maina,+254700000003,,,maintenance_technician,active,available,Workshop technician

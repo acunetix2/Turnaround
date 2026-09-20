@@ -1,0 +1,3 @@
+name,phone,license_number,staff_type,status,notes
+John Doe,+254700000001,DL-001,driver,active,Primary route
+Jane Smith,+254700000002,DL-002,co_driver,inactive,Relief co-driver

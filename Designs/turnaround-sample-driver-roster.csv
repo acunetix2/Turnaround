@@ -1,0 +1,11 @@
+name,phone,license_number,license_expiry_date,staff_type,status,availability_status,notes
+James Mwangi,+254712345678,DL-KE-00124567,2027-03-18,driver,active,available,Nairobi-Mombasa primary route
+Faith Wanjiku,+254723456789,DL-KE-00124568,2026-11-04,driver,active,driving,Long-haul driver
+Peter Otieno,+254734567890,DL-KE-00124569,2027-08-22,driver,active,available,Northern Corridor driver
+Mary Achieng,+254745678901,DL-KE-00124570,2026-12-15,driver,active,assigned,Container haulage driver
+David Kiptoo,+254756789012,DL-KE-00124571,2028-01-30,driver,active,available,Regional distribution driver
+Lucy Njeri,+254767890123,DL-KE-00124572,2027-06-09,driver,active,on_leave,Relief driver
+Samuel Kamau,+254778901234,DL-KE-00124573,2027-09-27,co_driver,active,available,Relief co-driver
+Esther Chebet,+254789012345,DL-KE-00124574,2026-10-12,co_driver,active,assigned,Vehicle support co-driver
+Brian Omondi,+254701234567,DL-KE-00124575,2028-02-14,co_driver,active,available,Night shift co-driver
+Grace Naliaka,+254711234567,DL-KE-00124576,2027-05-25,co_driver,inactive,unavailable,Induction pending

@@ -1,11 +1,3 @@
-/**
- * GatePassCreateModal
- * ───────────────────
- * Shown when a dispatcher clicks "Gate Pass" on a trip.
- * Displays pre-filled values derived from the trip and lets the user edit
- * terminal_name, terminal_gate, time windows, carrier, and cargo weight
- * before the pass is created.
- */
 import React, { useState } from 'react';
 import { X, FileCheck, Truck, User, Container, Building2, Clock } from 'lucide-react';
 import { Button } from '../../components/ui/Button';

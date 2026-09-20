@@ -1,14 +1,15 @@
 from typing import Annotated, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, func, or_
 
 from app.db.session import get_db
 from app.db.models.vehicle import Vehicle
 from app.db.models.gps_event import GPSEvent
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.user import UserRole, User
+from app.db.models.fleet_staff import FleetStaff
 from app.deps import get_current_user, get_current_company
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleResponse
 from app.schemas.gps_event import GPSEventResponse
@@ -19,6 +20,49 @@ import uuid
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
 WRITE_ROLES = require_role(UserRole.ADMIN, UserRole.FLEET_MANAGER)
+
+
+async def _validate_vehicle_assignments(
+    db: AsyncSession,
+    company_id: str,
+    driver_id: Optional[str],
+    co_driver_id: Optional[str],
+    exclude_vehicle_id: Optional[str] = None,
+) -> None:
+    assignment_ids = [value for value in (driver_id, co_driver_id) if value]
+    if not assignment_ids:
+        return
+
+    if driver_id and co_driver_id and driver_id == co_driver_id:
+        raise HTTPException(status_code=409, detail="A person cannot be assigned as both driver and co-driver on the same vehicle")
+
+    assigned_staff = (await db.execute(
+        select(FleetStaff).where(
+            FleetStaff.id.in_(assignment_ids),
+            FleetStaff.company_id == company_id,
+            FleetStaff.status == 'active',
+        )
+    )).scalars().all()
+    staff_by_id = {staff.id: staff for staff in assigned_staff}
+    if len(staff_by_id) != len(set(assignment_ids)):
+        raise HTTPException(status_code=400, detail="Assigned driver or co-driver is not an active member of this company")
+
+    if driver_id and staff_by_id[driver_id].staff_type != 'driver':
+        raise HTTPException(status_code=400, detail="The selected primary assignee must be a driver")
+    if co_driver_id and staff_by_id[co_driver_id].staff_type != 'co_driver':
+        raise HTTPException(status_code=400, detail="The selected co-driver must be a co-driver")
+
+    occupied_query = select(Vehicle).where(
+        Vehicle.company_id == company_id,
+        or_(Vehicle.driver_id.in_(assignment_ids), Vehicle.co_driver_id.in_(assignment_ids)),
+    )
+    if exclude_vehicle_id:
+        occupied_query = occupied_query.where(Vehicle.id != exclude_vehicle_id)
+    occupied = (await db.execute(occupied_query)).scalars().first()
+    if occupied:
+        occupied_id = occupied.driver_id if occupied.driver_id in assignment_ids else occupied.co_driver_id
+        occupied_role = 'driver' if occupied.driver_id == occupied_id else 'co-driver'
+        raise HTTPException(status_code=409, detail=f"This {occupied_role} is already assigned to vehicle {occupied.registration_number}")
 
 
 # ── Live GPS Aggregate — must be declared BEFORE /{vehicle_id} ───────────────
@@ -145,11 +189,6 @@ async def list_vehicles(
 ):
     base_q = (
         select(Vehicle)
-        .options(
-            selectinload(Vehicle.company),
-            selectinload(Vehicle.trips),
-            selectinload(Vehicle.gate_passes)
-        )
         .where(Vehicle.company_id == company_id)
     )
     if status_filter:
@@ -173,11 +212,6 @@ async def get_vehicle(
 ):
     result = await db.execute(
         select(Vehicle)
-        .options(
-            selectinload(Vehicle.company),
-            selectinload(Vehicle.trips),
-            selectinload(Vehicle.gate_passes)
-        )
         .where(Vehicle.id == vehicle_id, Vehicle.company_id == company_id)
     )
     vehicle = result.scalar_one_or_none()
@@ -194,9 +228,16 @@ async def create_vehicle(
     company_id: Annotated[str, Depends(get_current_company)],
     _rbac: bool = Depends(WRITE_ROLES),
 ):
+    await _validate_vehicle_assignments(db, company_id, payload.driver_id, payload.co_driver_id)
     vehicle = Vehicle(id=str(uuid.uuid4()), company_id=company_id, **payload.model_dump())
     db.add(vehicle)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if 'uq_vehicle_company_driver' in str(exc) or 'uq_vehicle_company_codriver' in str(exc):
+            raise HTTPException(status_code=409, detail="Driver or co-driver is already assigned to another vehicle") from exc
+        raise
     await db.refresh(vehicle)
     return vehicle
 
@@ -211,21 +252,32 @@ async def update_vehicle(
 ):
     result = await db.execute(
         select(Vehicle)
-        .options(
-            selectinload(Vehicle.company),
-            selectinload(Vehicle.trips),
-            selectinload(Vehicle.gate_passes)
-        )
         .where(Vehicle.id == vehicle_id, Vehicle.company_id == company_id)
     )
     vehicle = result.scalar_one_or_none()
     if not vehicle:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
 
+    candidate_driver_id = payload.driver_id if 'driver_id' in payload.model_fields_set else vehicle.driver_id
+    candidate_co_driver_id = payload.co_driver_id if 'co_driver_id' in payload.model_fields_set else vehicle.co_driver_id
+    await _validate_vehicle_assignments(
+        db,
+        company_id,
+        candidate_driver_id,
+        candidate_co_driver_id,
+        exclude_vehicle_id=vehicle.id,
+    )
+
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(vehicle, field, value)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if 'uq_vehicle_company_driver' in str(exc) or 'uq_vehicle_company_codriver' in str(exc):
+            raise HTTPException(status_code=409, detail="Driver or co-driver is already assigned to another vehicle") from exc
+        raise
     await db.refresh(vehicle)
     return vehicle
 
