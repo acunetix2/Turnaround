@@ -599,7 +599,9 @@ export const VehicleDetail: React.FC = () => {
                 <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Current Facility</span>
                 <span className="text-xs font-bold text-text-primary flex items-center gap-1 mt-1">
                   <MapPin size={12} className="text-[#ED642B]" />
-                  {vehicle.current_location_name || 'En Route (Northern Corridor)'}
+                  {gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)
+                    ? (vehicle.current_location_name?.trim() || 'Location not reported')
+                    : 'Location not reported'}
                 </span>
               </div>
             </div>

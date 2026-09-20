@@ -23,9 +23,10 @@ const category = (vehicle: Vehicle) => /ship|vessel/.test(assetType(vehicle)) ? 
 const status = (vehicle: Vehicle) => statusMeta[vehicle.status] || statusMeta.idle
 const utilization = (vehicle: Vehicle, gps?: GPS) => Math.min(100, Math.max(0, Math.round(gps?.speed ? gps.speed / 1.2 : isPowered(vehicle) ? vehicle.status === 'in_transit' ? 78 : 62 : 0)))
 const plateNumber = (vehicle: Vehicle) => isContainer(vehicle) ? vehicle.container_number?.trim() || vehicle.registration_number?.trim() || 'Container number not assigned' : vehicle.registration_number?.trim() || 'Asset ID not assigned'
-const locationLabel = (vehicle: Vehicle, gps?: GPS) => gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)
-  ? `${gps.latitude?.toFixed(2)}, ${gps.longitude?.toFixed(2)}`
-  : vehicle.current_location_name?.trim() || 'Location not reported'
+const hasLiveGps = (gps?: GPS) => !!gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)
+const locationLabel = (vehicle: Vehicle, gps?: GPS) => hasLiveGps(gps)
+  ? `${gps!.latitude!.toFixed(2)}, ${gps!.longitude!.toFixed(2)}`
+  : 'Location not reported'
 
 const Donut: React.FC<{ values: number[]; total: number }> = ({ values, total }) => {
   const sum = values.reduce((a, b) => a + b, 0) || 1
