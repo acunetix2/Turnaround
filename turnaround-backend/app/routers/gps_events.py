@@ -407,28 +407,25 @@ async def get_vehicle_gps_events(
     return PaginatedResponse(items=list(events), total=total, limit=limit, offset=offset)
 
 
-@router.post("/telemify/webhook", status_code=status.HTTP_202_ACCEPTED,
-             summary="Accept Telemetry payloads from Telemify devices")
-async def ingest_telemify_webhook(
+@router.post("/flespi/webhook", status_code=status.HTTP_202_ACCEPTED,
+             summary="Accept normalized GPS payloads from a Flespi gateway")
+async def ingest_flespi_webhook(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     company_id: Annotated[Optional[str], Query()] = None,
     secret: Annotated[Optional[str], Query()] = None,
 ):
-    """Accept a Telemify webhook payload, map it to a vehicle by IMEI/registration, and ingest GPS points.
+    """Accept a Flespi webhook payload, map it to a vehicle by IMEI/registration, and ingest GPS points.
 
-    Expected payloads are usually JSON objects or arrays containing at least one of:
-      - imei / device_imei / tracker_imei
-      - registration_number / vehicle_id
-      - latitude / longitude (or lat / lng / latit / lon)
-      - timestamp / recorded_at / time
+    This is the recommended architecture: Telemify or other trackers send raw device data to Flespi,
+    Flespi normalizes it, and Flespi streams the resulting JSON to this Render backend.
     """
     raw_payload = await request.json()
     payload_dict = raw_payload if isinstance(raw_payload, dict) else {'items': raw_payload}
 
     company_id_value = company_id or payload_dict.get('company_id') or payload_dict.get('tenant_id')
     if not company_id_value:
-        raise HTTPException(status_code=400, detail='company_id is required for Telemify webhook ingestion')
+        raise HTTPException(status_code=400, detail='company_id is required for Flespi webhook ingestion')
 
     company_res = await db.execute(select(Company).where(Company.id == company_id_value))
     company = company_res.scalar_one_or_none()
@@ -436,17 +433,20 @@ async def ingest_telemify_webhook(
         raise HTTPException(status_code=404, detail='Company not found')
 
     integrations = company.integrations or {}
-    telemify_conf = integrations.get('telemify', {}) if isinstance(integrations, dict) else {}
-    expected_secret = telemify_conf.get('webhook_secret') if isinstance(telemify_conf, dict) else None
-    provided_secret = secret or request.headers.get('x-telemify-secret') or payload_dict.get('secret')
+    flespi_conf = integrations.get('flespi', {}) if isinstance(integrations, dict) else {}
+    if not isinstance(flespi_conf, dict):
+        flespi_conf = {}
+
+    expected_secret = flespi_conf.get('webhook_secret')
+    provided_secret = secret or request.headers.get('x-flespi-secret') or payload_dict.get('secret')
     if expected_secret and provided_secret != expected_secret:
-        raise HTTPException(status_code=401, detail='Invalid Telemify webhook secret')
+        raise HTTPException(status_code=401, detail='Invalid Flespi webhook secret')
 
     items: List[dict] = []
     if isinstance(raw_payload, list):
         items = [item for item in raw_payload if isinstance(item, dict)]
     elif isinstance(raw_payload, dict):
-        for key in ('events', 'data', 'items', 'positions', 'devices', 'records'):
+        for key in ('events', 'data', 'items', 'positions', 'devices', 'records', 'messages'):
             value = raw_payload.get(key)
             if isinstance(value, list):
                 items = [item for item in value if isinstance(item, dict)]
@@ -466,14 +466,33 @@ async def ingest_telemify_webhook(
         if vehicle is None:
             continue
 
-        latitude = _coerce_float(_first_present(item.get('latitude'), item.get('lat'), item.get('gps_latitude'), item.get('latit'), item.get('y')))
-        longitude = _coerce_float(_first_present(item.get('longitude'), item.get('lng'), item.get('lon'), item.get('gps_longitude'), item.get('long'), item.get('x')))
+        latitude = _coerce_float(_first_present(
+            item.get('latitude'), item.get('lat'), item.get('gps_latitude'), item.get('latit'), item.get('y'),
+            item.get('position', {}).get('lat') if isinstance(item.get('position'), dict) else None,
+            item.get('location', {}).get('lat') if isinstance(item.get('location'), dict) else None,
+        ))
+        longitude = _coerce_float(_first_present(
+            item.get('longitude'), item.get('lng'), item.get('lon'), item.get('gps_longitude'), item.get('long'), item.get('x'),
+            item.get('position', {}).get('lng') if isinstance(item.get('position'), dict) else None,
+            item.get('position', {}).get('lon') if isinstance(item.get('position'), dict) else None,
+            item.get('location', {}).get('lng') if isinstance(item.get('location'), dict) else None,
+            item.get('location', {}).get('lon') if isinstance(item.get('location'), dict) else None,
+        ))
         if latitude is None or longitude is None:
             continue
 
-        speed = _coerce_float(_first_present(item.get('speed'), item.get('speed_kmh'), item.get('velocity'), item.get('speed_km_h'))) or 0.0
-        heading = _coerce_float(_first_present(item.get('heading'), item.get('bearing'), item.get('course'))) or 0.0
-        timestamp = _coerce_datetime(_first_present(item.get('recorded_at'), item.get('timestamp'), item.get('time'), item.get('created_at')))
+        speed = _coerce_float(_first_present(
+            item.get('speed'), item.get('speed_kmh'), item.get('velocity'), item.get('speed_km_h'),
+            item.get('position', {}).get('speed') if isinstance(item.get('position'), dict) else None,
+        )) or 0.0
+        heading = _coerce_float(_first_present(
+            item.get('heading'), item.get('bearing'), item.get('course'),
+            item.get('position', {}).get('heading') if isinstance(item.get('position'), dict) else None,
+        )) or 0.0
+        timestamp = _coerce_datetime(_first_present(
+            item.get('recorded_at'), item.get('timestamp'), item.get('time'), item.get('created_at'),
+            item.get('position', {}).get('timestamp') if isinstance(item.get('position'), dict) else None,
+        ))
 
         event = GPSEventCreate(
             vehicle_id=vehicle.id,
@@ -492,3 +511,14 @@ async def ingest_telemify_webhook(
 
     await db.commit()
     return IngestionResult(processed=processed, duplicates_ignored=duplicates, dwell_events_updated=dwell_updates)
+
+
+@router.post("/telemify/webhook", status_code=status.HTTP_202_ACCEPTED,
+             summary="Backward-compatible alias for Telemify payloads")
+async def ingest_telemify_webhook_alias(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[Optional[str], Query()] = None,
+    secret: Annotated[Optional[str], Query()] = None,
+):
+    return await ingest_flespi_webhook(request, db, company_id, secret)

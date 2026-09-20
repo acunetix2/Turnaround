@@ -78,18 +78,18 @@ const PROVIDERS = [
     ],
   },
   {
-    id: 'telemify' as const,
-    name: 'Telemify',
-    desc: 'Direct GPS device tracking and webhook ingest — connect via API key and webhook secret',
+    id: 'flespi' as const,
+    name: 'Flespi Gateway',
+    desc: 'Free telematics gateway that normalizes raw tracker streams and forwards them to Turnaround via webhook',
     badge: 'Webhook + API',
     color: 'text-orange-500 bg-orange-500/10 border-orange-500/20',
     icon: '📡',
     authType: 'apikey' as const,
-    docsUrl: 'https://www.telemify.com/',
+    docsUrl: 'https://flespi.com/',
     fields: [
-      { key: 'telemify_base_url', label: 'Base API URL', placeholder: 'https://api.telemify.com', type: 'url' },
-      { key: 'telemify_api_key', label: 'API Key', placeholder: 'Your Telemify API key', type: 'password' },
-      { key: 'telemify_webhook_secret', label: 'Webhook Secret', placeholder: 'Optional secret for inbound webhook verification', type: 'password' },
+      { key: 'flespi_base_url', label: 'Gateway URL', placeholder: 'https://flespi.com', type: 'url' },
+      { key: 'flespi_api_key', label: 'API Key', placeholder: 'Your Flespi API key', type: 'password' },
+      { key: 'flespi_webhook_secret', label: 'Webhook Secret', placeholder: 'Optional secret for inbound webhook verification', type: 'password' },
     ],
   },
 ];
@@ -319,12 +319,12 @@ export const Settings: React.FC = () => {
     setSaving(true);
     try {
       const integrations = (companyConfig?.integrations ?? {}) as Record<string, any>;
-      const telemifyConfig = {
-        ...(integrations.telemify ?? {}),
+      const flespiConfig = {
+        ...(integrations.flespi ?? {}),
         webhook_url: settings.webhookUrl,
         polling_interval_seconds: Number(settings.gpsPollingInterval) || 8,
       };
-      await updateCompanyConfig({ integrations: { ...integrations, telemify: telemifyConfig } });
+      await updateCompanyConfig({ integrations: { ...integrations, flespi: flespiConfig } });
       toast({
         variant: 'success',
         title: 'Settings Saved',
