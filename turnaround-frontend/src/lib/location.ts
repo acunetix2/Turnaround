@@ -13,6 +13,28 @@ export const hasValidGps = (gps?: CoordinatesLike | null): gps is Required<Coord
   return !!gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude);
 };
 
+export const getLiveVehicles = <T extends { id: string; status?: string | null; registration_number?: string; current_location_name?: string | null; vehicle_type?: string }>(
+  vehicles: T[] | null | undefined,
+  gpsMap?: Record<string, CoordinatesLike | null | undefined> | null,
+  searchQuery = '',
+  statusFilter: string = 'all',
+): T[] => {
+  const normalizedQuery = searchQuery.toLowerCase().trim();
+
+  return (vehicles || []).filter((vehicle) => {
+    const gps = gpsMap?.[vehicle.id];
+    if (!hasValidGps(gps)) return false;
+
+    const matchesSearch = !normalizedQuery ||
+      (vehicle.registration_number || '').toLowerCase().includes(normalizedQuery) ||
+      (vehicle.current_location_name || '').toLowerCase().includes(normalizedQuery) ||
+      (vehicle.vehicle_type || '').toLowerCase().includes(normalizedQuery);
+
+    const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+};
+
 export const formatGpsCoordinates = (gps?: CoordinatesLike | null): string | null => {
   if (!hasValidGps(gps)) return null;
   return `${gps.latitude.toFixed(4)}, ${gps.longitude.toFixed(4)}`;

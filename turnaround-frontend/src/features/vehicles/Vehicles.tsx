@@ -96,13 +96,19 @@ type VehicleFormValues = zod.infer<typeof vehicleSchema>;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const statusLabel = (s: string) =>
-  s === 'moving' || s === 'in_transit' || s === 'active' ? 'In Transit' : s === 'delayed' ? 'Delayed' : 'Stationary';
+const statusLabel = (s: string, speed?: number | null) => {
+  if (s === 'in_transit' || (typeof speed === 'number' && Number.isFinite(speed) && speed > 5)) return 'In Transit';
+  if (s === 'delayed') return 'Delayed';
+  if (s === 'maintenance') return 'Maintenance';
+  return 'Stationary';
+};
 
-const statusColor = (s: string) =>
-  s === 'moving' || s === 'in_transit' || s === 'active' ? 'bg-status-good/15 text-status-good' :
-  s === 'delayed' ? 'bg-red-500/15 text-red-500' :
-                    'bg-bg-surface-raised text-text-tertiary';
+const statusColor = (s: string, speed?: number | null) => {
+  if (s === 'in_transit' || (typeof speed === 'number' && Number.isFinite(speed) && speed > 5)) return 'bg-status-good/15 text-status-good';
+  if (s === 'delayed') return 'bg-red-500/15 text-red-500';
+  if (s === 'maintenance') return 'bg-yellow-500/15 text-yellow-500';
+  return 'bg-bg-surface-raised text-text-tertiary';
+};
 
 const maintenanceBadge = (m?: string) => {
   if (m === 'in_service')  return { label: 'In Service', cls: 'bg-yellow-500/15 text-yellow-500' };
@@ -516,7 +522,7 @@ export const Vehicles: React.FC = () => {
 
   // ── DERIVED COUNTS ──
   const totalFleet      = vehicles.length;
-  const activeCount     = vehicles.filter(v => v.status === 'in_transit' || v.status === 'active').length;
+  const activeCount     = vehicles.filter(v => v.status === 'in_transit').length;
   const delayedCount    = vehicles.filter(v => v.status === 'delayed').length;
 
   // Vehicle type breakdown
@@ -830,9 +836,9 @@ export const Vehicles: React.FC = () => {
                   )}
                   {/* Status badge overlay */}
                   <div className="absolute top-2 right-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shadow ${statusColor(vh.status)}`}>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shadow ${statusColor(vh.status, gps?.speed)}`}>
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {statusLabel(vh.status)}
+                      {statusLabel(vh.status, gps?.speed)}
                     </span>
                   </div>
                   {/* Maintenance badge */}
@@ -910,7 +916,7 @@ export const Vehicles: React.FC = () => {
                     <Radio size={12} className={gps ? 'text-status-good' : 'text-text-tertiary'} />
                     {gps ? (
                       <span className="text-text-secondary font-semibold">
-                        {gps.speed?.toFixed(0)} km/h · {gps.latitude?.toFixed(4)}, {gps.longitude?.toFixed(4)}
+                        {gps.speed && gps.speed > 5 ? 'Vehicle on route' : 'Current location'}
                       </span>
                     ) : (
                       <span className="text-text-tertiary">No live signal — assign tracker</span>
@@ -1435,8 +1441,9 @@ export const Vehicles: React.FC = () => {
                       <input {...register('tracker_imei')} placeholder="e.g. 868204041234567" className={`${inputCls} font-mono`} />
                     </div>
                   </div>
-                  <div className="p-3 rounded-xl bg-bg-surface-raised/60 border border-border-default text-[11px] text-text-tertiary">
-                    Telemetry webhook: <code className="text-[#ED642B] font-mono">POST /api/v1/gps/events</code> — configure in your tracker's server URL.
+                  <div className="p-3 rounded-xl bg-bg-surface-raised/60 border border-border-default text-[11px] text-text-tertiary leading-relaxed">
+                    Telematics webhook: <code className="text-[#ED642B] font-mono">POST /api/v1/gps/flespi/webhook?company_id=&lt;company-id&gt;</code>
+                    <span className="block mt-1">For Telemify-compatible payloads, use <code className="text-[#ED642B] font-mono">/api/v1/gps/telemify/webhook?company_id=&lt;company-id&gt;</code> instead.</span>
                   </div>
                 </div>
               )}

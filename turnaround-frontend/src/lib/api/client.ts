@@ -206,6 +206,18 @@ export const apiClient = {
     if (!res.ok) throw new Error('Unable to send reset instructions');
   },
 
+  async resetPassword(tokenHash: string, password: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token_hash: tokenHash, password }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'This reset link is invalid or has expired.');
+    }
+  },
+
   // --- Dashboard ---
   async getDashboardStats(): Promise<DashboardStats> {
     if (USE_MOCKS) {

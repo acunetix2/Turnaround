@@ -76,6 +76,10 @@ class Vehicle(Base):
     # ── Telematics / GPS 
     telematics_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     tracker_imei: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    battery_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-100 %
+    battery_voltage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    ignition_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    mileage_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # ── Operational State 
     fuel_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # 0-100 %

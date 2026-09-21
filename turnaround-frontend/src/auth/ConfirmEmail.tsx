@@ -12,6 +12,7 @@ export const ConfirmEmail: React.FC = () => {
   const [state, setState] = useState<'ready' | 'confirming' | 'confirmed' | 'error'>('ready');
   const [message, setMessage] = useState('Click below to confirm your email address and activate your account.');
   const [tokenHash, setTokenHash] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
     const tokenHash = searchParams.get('token_hash');
@@ -26,19 +27,39 @@ export const ConfirmEmail: React.FC = () => {
     setTokenHash(tokenHash);
   }, [searchParams]);
 
+  useEffect(() => {
+    if (state !== 'confirmed') return;
+
+    const timer = window.setInterval(() => {
+      setCountdown((previous) => {
+        if (previous <= 1) {
+          window.clearInterval(timer);
+          navigate('/login');
+          return 0;
+        }
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [state, navigate]);
+
   const handleConfirm = async () => {
     setState('confirming');
     setMessage('Confirming your email address...');
     try {
-      // When Supabase has already verified its hosted link, no token remains
-      // in the redirect URL. A token_hash is handled through our backend.
       if (tokenHash) await apiClient.confirmEmail(tokenHash);
       setState('confirmed');
       setMessage('Your email address has been confirmed.');
+      setCountdown(5);
     } catch (error: unknown) {
       setState('error');
       setMessage(error instanceof Error ? error.message : 'This confirmation link is invalid or has expired.');
     }
+  };
+
+  const handleSkipToLogin = () => {
+    navigate('/login');
   };
 
   return (
@@ -59,14 +80,25 @@ export const ConfirmEmail: React.FC = () => {
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-text-secondary">{message}</p>
 
+        {state === 'confirmed' && (
+          <div className="mt-5 space-y-3">
+            <p className="text-xs text-text-secondary">
+              Redirecting to login in {countdown} second{countdown === 1 ? '' : 's'}.
+            </p>
+            <div className="flex gap-3">
+              <button type="button" onClick={handleSkipToLogin} className="flex-1 rounded-xl bg-[#ED642B] py-3 text-sm font-bold text-white transition-colors hover:bg-[#D4521D]">
+                Skip timer
+              </button>
+              <button type="button" onClick={handleSkipToLogin} className="flex-1 rounded-xl border border-border-default py-3 text-sm font-bold text-text-primary transition-colors hover:bg-bg-surface-raised">
+                Continue now
+              </button>
+            </div>
+          </div>
+        )}
+
         {state === 'ready' && (
           <button type="button" onClick={handleConfirm} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] py-3 text-sm font-bold text-white transition-colors hover:bg-[#D4521D]">
             Confirm email <ArrowRight size={15} />
-          </button>
-        )}
-        {state === 'confirmed' && (
-          <button type="button" onClick={() => navigate('/login')} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] py-3 text-sm font-bold text-white transition-colors hover:bg-[#D4521D]">
-            Continue to login <ArrowRight size={15} />
           </button>
         )}
         {state === 'error' && (

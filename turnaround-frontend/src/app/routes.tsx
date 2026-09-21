@@ -7,6 +7,7 @@ import { Login } from '../auth/Login';
 import { Signup } from '../auth/Signup';
 import { ConfirmEmail } from '../auth/ConfirmEmail';
 import { ForgotPassword } from '../auth/ForgotPassword';
+import { ResetPassword } from '../auth/ResetPassword';
 import { DashboardReference as Dashboard } from '../features/dashboard/DashboardReference';
 import { LiveMap } from '../features/live-map/LiveMap';
 import { Vehicles } from '../features/vehicles/Vehicles';
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
   { path: '/signup',          element: <Signup />,         errorElement: <RouteErrorBoundary /> },
   { path: '/confirm-email',  element: <ConfirmEmail />,   errorElement: <RouteErrorBoundary /> },
   { path: '/forgot-password', element: <ForgotPassword />, errorElement: <RouteErrorBoundary /> },
+  { path: '/reset-password', element: <ResetPassword />, errorElement: <RouteErrorBoundary /> },
   { path: '/privacy',         element: <PrivacyPolicyPage />, errorElement: <RouteErrorBoundary /> },
   { path: '/terms',           element: <TermsOfServicePage />, errorElement: <RouteErrorBoundary /> },
   { path: '/about',           element: <AboutPage />,           errorElement: <RouteErrorBoundary /> },

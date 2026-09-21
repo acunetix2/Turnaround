@@ -1,4 +1,4 @@
-from app.routers.gps_events import _collect_vehicle_match_candidates, _lookup_nested_value
+from app.routers.gps_events import _collect_vehicle_match_candidates, _lookup_nested_value, _extract_vehicle_telemetry
 
 
 def test_collect_vehicle_match_candidates_reads_nested_flespi_fields():
@@ -42,3 +42,21 @@ def test_lookup_nested_value_handles_dotted_flespi_keys():
     assert _lookup_nested_value(payload, 'latitude', 'lat', 'gps_latitude') == -4.05451
     assert _lookup_nested_value(payload, 'longitude', 'lng', 'gps_longitude') == 39.689702
     assert _lookup_nested_value(payload, 'speed', 'speed_kmh', 'velocity') == 63
+
+
+def test_extract_vehicle_telemetry_reads_nested_flespi_fields():
+    payload = {
+        'battery.level': 76,
+        'battery.voltage': 13.8,
+        'engine.ignition.status': 'on',
+        'vehicle.mileage': 18456,
+        'position.latitude': -1.286,
+        'position.longitude': 36.817,
+    }
+
+    telemetry = _extract_vehicle_telemetry(payload)
+
+    assert telemetry['battery_level'] == 76
+    assert telemetry['battery_voltage'] == 13.8
+    assert telemetry['ignition_status'] == 'on'
+    assert telemetry['mileage_km'] == 18456

@@ -68,6 +68,11 @@ class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 
+class ResetPasswordRequest(BaseModel):
+    token_hash: str = Field(min_length=1)
+    password: str = Field(min_length=8)
+
+
 class ConfirmEmailRequest(BaseModel):
     token_hash: str = Field(min_length=1)
 
@@ -215,9 +220,25 @@ async def confirm_email(payload: ConfirmEmailRequest):
 async def forgot_password(payload: PasswordResetRequest):
     # Always return the same status so email addresses cannot be enumerated.
     try:
-        get_supabase_client().auth.reset_password_for_email(str(payload.email))
+        get_supabase_client().auth.reset_password_for_email(
+            str(payload.email),
+            {"redirect_to": f"{settings.FRONTEND_URL.rstrip('/')}/reset-password"},
+        )
     except Exception:
         pass
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_password(payload: ResetPasswordRequest):
+    try:
+        get_supabase_client().auth.verify_otp({
+            "token_hash": payload.token_hash,
+            "type": "recovery",
+            "password": payload.password,
+        })
+    except Exception as exc:
+        logger.info("Password reset failed: %s", exc)
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired.") from exc
 
 
 @router.get("/me")
