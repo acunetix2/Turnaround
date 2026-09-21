@@ -3,9 +3,9 @@
 # 🚛 Turnaround
 ### Operational Intelligence Platform for Commercial Fleet & Corridor Logistics
 
-<img src="Designs/turnaround-cyber-passport.svg" alt="Animated cyber logistics identity with green scan strips" width="900" />
+<img src="Designs/landing.png" alt="Fleet logistics landing page showing trucks, corridors, and live logistics intelligence" width="900" />
 
-<img src="https://readme-typing-svg.demolab.com?font=Space+Grotesk&weight=700&size=20&duration=3200&pause=900&color=ED642B&center=true&vCenter=true&width=720&lines=Make+every+delay+visible.;Make+every+minute+actionable.;Fleet+intelligence+for+East+African+corridors." alt="Animated Turnaround tagline" />
+<img src="https://readme-typing-svg.demolab.com?font=Space+Grotesk&weight=700&size=20&duration=3200&pause=900&color=ED642B&center=true&vCenter=true&width=720&lines=Vehicles+in+motion.;Trucks+that+stay+on+schedule.;Intelligence+for+every+corridor." alt="Animated fleet and truck intelligence tagline" />
 
 <br />
 
@@ -33,6 +33,43 @@
 **Turnaround** is a mission-critical fleet operational intelligence and dwell optimization platform engineered specifically for commercial haulage corridors across East Africa (e.g., Mombasa Port $\leftrightarrow$ Nairobi ICD $\leftrightarrow$ Malaba OSBP $\leftrightarrow$ Kampala / Kigali).
 
 In cross-border trucking, unexplained dwell times at weighbridges, container depots, customs yards, and customer facilities generate substantial unrecovered idle costs and severe SLA penalties. Turnaround solves this by transforming continuous GPS telemetry streams into real-time financial transparency, automated bottleneck classification, and predictive turnaround analytics.
+
+## 🔄 Recent Updates
+
+The current product release includes the following refinements:
+
+- AI advisor responses now explicitly distinguish the Turnaround platform from turnaround-time metrics, reducing operational ambiguity in executive and operational prompts.
+- Dashboard analytics now use real trend data for the on-time delivery chart instead of static fallback values.
+- Gate Pass summaries now include working "View all" actions that reset filters and jump to the list view.
+- Shared gate-pass status types were aligned with the real app states used throughout the workflow.
+
+## 🏃 Quick Start
+
+### 1) Backend
+
+```powershell
+cd turnaround-backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+uvicorn app.main:app --reload
+```
+
+### 2) Frontend
+
+```powershell
+cd turnaround-frontend
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
+
+### 3) Environment configuration
+
+- Copy the provided `.env.example` files in both services and fill in your Supabase, database, and Groq credentials.
+- The backend expects a PostgreSQL connection string and Supabase keys to enable auth, telemetry, and AI services.
+- The frontend uses `VITE_API_BASE_URL` and Supabase config for local development.
 
 ---
 
