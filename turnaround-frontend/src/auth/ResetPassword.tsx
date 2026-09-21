@@ -1,10 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
-import { apiClient } from '../lib/api/client';
 import { useTheme } from '../lib/ThemeContext';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL || '',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  },
+);
 
 export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -19,18 +31,31 @@ export const ResetPassword: React.FC = () => {
   const [success, setSuccess] = useState(false);
 
   const tokenHash = useMemo(() => searchParams.get('token_hash') || '', [searchParams]);
+  const accessToken = useMemo(() => searchParams.get('access_token') || new URLSearchParams(window.location.hash.replace(/^#/, '')).get('access_token') || '', [searchParams]);
+  const refreshToken = useMemo(() => searchParams.get('refresh_token') || new URLSearchParams(window.location.hash.replace(/^#/, '')).get('refresh_token') || '', [searchParams]);
 
   useEffect(() => {
-    if (!tokenHash) {
+    const hash = window.location.hash.replace(/^#/, '');
+    const params = new URLSearchParams(hash);
+    const type = params.get('type');
+
+    if (!tokenHash && (!accessToken || !refreshToken || type !== 'recovery')) {
       setError('This password reset link is missing a valid token. Please request a new one.');
     }
-  }, [tokenHash]);
+  }, [tokenHash, accessToken, refreshToken]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
 
-    if (!tokenHash) {
+    const hash = window.location.hash.replace(/^#/, '');
+    const params = new URLSearchParams(hash);
+    const accessTokenFromHash = searchParams.get('access_token') || params.get('access_token') || accessToken;
+    const refreshTokenFromHash = searchParams.get('refresh_token') || params.get('refresh_token') || refreshToken;
+
+    const currentTokenHash = tokenHash || '';
+
+    if (!currentTokenHash && (!accessTokenFromHash || !refreshTokenFromHash)) {
       setError('This password reset link is missing a valid token. Please request a new one.');
       return;
     }
@@ -48,7 +73,32 @@ export const ResetPassword: React.FC = () => {
     setSubmitting(true);
 
     try {
-      await apiClient.resetPassword(tokenHash, password);
+      if (accessTokenFromHash && refreshTokenFromHash) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessTokenFromHash,
+          refresh_token: refreshTokenFromHash,
+        });
+
+        if (sessionError) throw sessionError;
+
+        const { error: updateError } = await supabase.auth.updateUser({
+          password,
+        });
+
+        if (updateError) throw updateError;
+      } else {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'}/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token_hash: currentTokenHash, password }),
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.detail || 'This reset link is invalid or has expired.');
+        }
+      }
+
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to reset your password. Please try again.');
@@ -180,7 +230,7 @@ export const ResetPassword: React.FC = () => {
 
                 <button
                   type="submit"
-                  disabled={submitting || !tokenHash}
+                  disabled={submitting || (!tokenHash && !accessToken && !refreshToken)}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   {submitting ? 'Updating password…' : 'Update password'}
