@@ -31,18 +31,18 @@ export const ResetPassword: React.FC = () => {
   const [success, setSuccess] = useState(false);
 
   const tokenHash = useMemo(() => searchParams.get('token_hash') || '', [searchParams]);
+  const accessToken = useMemo(() => searchParams.get('access_token') || new URLSearchParams(window.location.hash.replace(/^#/, '')).get('access_token') || '', [searchParams]);
+  const refreshToken = useMemo(() => searchParams.get('refresh_token') || new URLSearchParams(window.location.hash.replace(/^#/, '')).get('refresh_token') || '', [searchParams]);
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, '');
     const params = new URLSearchParams(hash);
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
     const type = params.get('type');
 
     if (!tokenHash && (!accessToken || !refreshToken || type !== 'recovery')) {
       setError('This password reset link is missing a valid token. Please request a new one.');
     }
-  }, [tokenHash]);
+  }, [tokenHash, accessToken, refreshToken]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -50,12 +50,12 @@ export const ResetPassword: React.FC = () => {
 
     const hash = window.location.hash.replace(/^#/, '');
     const params = new URLSearchParams(hash);
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
+    const accessTokenFromHash = searchParams.get('access_token') || params.get('access_token') || accessToken;
+    const refreshTokenFromHash = searchParams.get('refresh_token') || params.get('refresh_token') || refreshToken;
 
     const currentTokenHash = tokenHash || '';
 
-    if (!currentTokenHash && (!accessToken || !refreshToken)) {
+    if (!currentTokenHash && (!accessTokenFromHash || !refreshTokenFromHash)) {
       setError('This password reset link is missing a valid token. Please request a new one.');
       return;
     }
@@ -73,10 +73,10 @@ export const ResetPassword: React.FC = () => {
     setSubmitting(true);
 
     try {
-      if (accessToken && refreshToken) {
+      if (accessTokenFromHash && refreshTokenFromHash) {
         const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
+          access_token: accessTokenFromHash,
+          refresh_token: refreshTokenFromHash,
         });
 
         if (sessionError) throw sessionError;
@@ -230,7 +230,7 @@ export const ResetPassword: React.FC = () => {
 
                 <button
                   type="submit"
-                  disabled={submitting || (!tokenHash && !window.location.hash.includes('access_token'))}
+                  disabled={submitting || (!tokenHash && !accessToken && !refreshToken)}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ED642B] hover:bg-[#D4521D] py-3 text-sm font-bold text-white shadow-lg shadow-[#ED642B]/25 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   {submitting ? 'Updating password…' : 'Update password'}
