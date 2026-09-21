@@ -16,7 +16,10 @@ class Settings(BaseSettings):
 
     # App
     PROJECT_NAME: str = "Turnaround API"
-    VERSION: str = "1.0.0"
+    APP_VERSION: str = "1.4.0"
+    VERSION: str = "1.4.0"  # backwards-compat alias for app version metadata
+    BUILD_SHA: str = "local"
+    BUILD_TIME: str = ""
     ENVIRONMENT: str = "production"  # "development" | "staging" | "production"
     PORT: int = 8000
     HOST: str = "0.0.0.0"

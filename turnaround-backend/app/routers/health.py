@@ -43,6 +43,9 @@ async def check_health(db: AsyncSession = Depends(get_db)):
         "supabase_auth": supabase_status,
         "service": "turnaround-backend",
         "version": settings.VERSION,
+        "build": settings.BUILD_SHA,
+        "environment": settings.ENVIRONMENT,
+        "built_at": settings.BUILD_TIME,
     }
 
 
