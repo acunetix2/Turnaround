@@ -133,11 +133,18 @@ export const DashboardReference: React.FC = () => {
   const inTransit = tripList.filter((trip) => ['in_transit', 'in_progress'].includes(trip.status || '')).length
   const pending = Math.max(0, tripList.length - delivered - inTransit)
   const delayed = stats?.trucks_delayed ?? tripList.filter((trip) => trip.status === 'delayed').length
-  const onTime = tripList.length ? ((tripList.filter((trip) => !['delayed', 'cancelled'].includes(trip.status || '')).length / tripList.length) * 100) : 0
+  const onTimeFromTrips = tripList.length ? ((tripList.filter((trip) => !['delayed', 'cancelled'].includes(trip.status || '')).length / tripList.length) * 100) : 0
+  const trendOnTimeValues = (trends as TrendDataPoint[]).slice(-20).map((point) => {
+    const visits = Math.max(1, point.visit_count || 0)
+    const delayedVisits = Math.max(0, point.delayed_visit_count || 0)
+    return visits ? Math.max(0, 100 - ((delayedVisits / visits) * 100)) : 100
+  })
+  const onTime = (trendOnTimeValues.length ? trendOnTimeValues[trendOnTimeValues.length - 1] : onTimeFromTrips)
   const cost = stats?.estimated_financial_impact ?? 0
   const trendValues = (trends as TrendDataPoint[]).map((point) => point.visit_count || 0)
   const visibleTrendValues = trendValues.length ? trendValues : [2, 4, 3, 5]
   const maxTrend = Math.max(...visibleTrendValues, 1)
+  const onTimeChartValues = trendOnTimeValues.length ? trendOnTimeValues : Array.from({ length: 12 }, (_, index) => 78 + ((index % 5) * 3) - (index % 3))
   const topLocations = (locationStats as LocationStats[]).slice().sort((a, b) => (b.total_visits || 0) - (a.total_visits || 0)).slice(0, 5)
   const routeRate = (location: LocationStats) => Math.max(0, Math.min(100, 100 - ((location.avg_excess_delay_minutes || 0) / Math.max(location.expected_dwell_minutes || 1, 1) * 100)))
   const modeCounts = useMemo(() => {
@@ -175,7 +182,7 @@ export const DashboardReference: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Card><SectionTitle title="Shipments by Mode" action="30 Days" /><div className="flex items-center gap-3"><Donut values={modeCounts.map(([, value]) => value)} colors={['#8b5cf6', '#ED642B', '#0ea5e9', '#F59E0B']} total={String(tripList.length)} /><div className="space-y-1.5 text-[9px]">{modeCounts.map(([mode, value], index) => <p key={mode}><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: ['#8b5cf6', '#ED642B', '#0ea5e9', '#F59E0B'][index] }} />{mode} <strong className="text-text-primary">{value}</strong></p>)}</div></div></Card>
-        <Card><SectionTitle title="On-Time Delivery Performance" action="30 Days" /><p className="font-numeric text-2xl font-bold text-text-primary">{onTime.toFixed(1)}%</p><p className="text-[9px] text-status-good">{delayed ? `${delayed} delayed units` : 'No delayed units'} vs last 30 days</p><div className="mt-3 flex h-20 items-end gap-1 overflow-hidden">{(trends.length ? trends : Array.from({ length: 20 }, (_, index) => ({ visit_count: index + 1 } as TrendDataPoint))).slice(-20).map((point, index) => <div key={index} className="min-h-1 flex-1 rounded-t bg-emerald-500/80" style={{ height: `${Math.min(100, Math.max(8, ((point.visit_count || 0) / Math.max(...(trends.length ? trendValues : Array.from({ length: 20 }, (_, item) => item + 1)), 1)) * 100))}%` }} />)}</div></Card>
+        <Card><SectionTitle title="On-Time Delivery Performance" action="30 Days" /><p className="font-numeric text-2xl font-bold text-text-primary">{onTime.toFixed(1)}%</p><p className="text-[9px] text-status-good">{delayed ? `${delayed} delayed units` : 'No delayed units'} vs last 30 days</p><div className="mt-3 flex h-20 items-end gap-1 overflow-hidden">{onTimeChartValues.map((value, index) => <div key={`${value}-${index}`} className="min-h-1 flex-1 rounded-t bg-emerald-500/80" style={{ height: `${Math.min(100, Math.max(10, value))}%` }} title={`${value.toFixed(1)}%`} />)}</div></Card>
         <Card><SectionTitle title="Quick Actions" /><div className="grid grid-cols-2 gap-2">{[{ label: 'New Shipment', to: '/trips', icon: Plus }, { label: 'Track Shipment', to: '/map', icon: Map }, { label: 'Schedule Pickup', to: '/trips', icon: Truck }, { label: 'Create Report', to: '/analytics', icon: BarChart3 }].map((action) => <Link key={action.label} to={action.to} className="flex items-center gap-2 rounded-lg border border-border-default bg-bg-surface-raised p-2 text-[9px] font-semibold text-text-primary hover:border-[#8b5cf6]"><action.icon size={13} className="text-[#8b5cf6]" />{action.label}</Link>)}<Link to="/ai-advisor" className="col-span-2 flex items-center gap-2 rounded-lg bg-[#250C77] p-2 text-[10px] font-bold text-white"><Sparkles size={13} className="text-[#ED642B]" />AI Analyst <ArrowRight size={12} className="ml-auto" /></Link></div></Card>
       </div>
     </div>
