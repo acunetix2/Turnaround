@@ -213,7 +213,7 @@ export const GatePassList: React.FC = () => {
       const ids = passes
         .filter((p: GatePassData) => ARCHIVED.includes(resolvePassStatus(p)))
         .map((p: GatePassData) => p.id)
-        .filter(Boolean) as string[]
+        .filter((id): id is string => Boolean(id))
 
       if (!ids.length) return 0
       await Promise.all(ids.map((id) => apiClient.deleteGatePass(id)))
@@ -232,6 +232,7 @@ export const GatePassList: React.FC = () => {
 
   const runConfirm = () => {
     if (!confirm) return;
+    if (!confirm.pass.id) return;
     if (confirm.action === 'revoke') revokeMutation.mutate(confirm.pass.id);
     if (confirm.action === 'delete') deleteMutation.mutate(confirm.pass.id);
   };

@@ -215,9 +215,12 @@ class AIAdvisorEngine:
         company_name = fleet_context.get("company_name", "Siginon Global Logistics")
         system_prompt = (
             f"You are the Turnaround Fleet Intelligence & Operations Analyst for {company_name}.\n"
-            "You are an expert in commercial trucking logistics, turnaround time optimization, telematics, "
-            "and supply chain cost recovery along East African transit corridors (Mombasa Port, Nairobi ICD, "
-            "Athi River, Naivasha, Nakuru, Eldoret, Malaba OSBP, Busia, Namanga).\n\n"
+            "You are an expert in commercial trucking logistics, telematics, and supply chain cost recovery along East African transit corridors "
+            "(Mombasa Port, Nairobi ICD, Athi River, Naivasha, Nakuru, Eldoret, Malaba OSBP, Busia, Namanga).\n\n"
+            "CRITICAL TERMINOLOGY: 'Turnaround' refers to the Turnaround logistics operating platform and product used to monitor fleet operations. "
+            "'Turnaround time' is a separate operational KPI measuring dwell duration, gate delay, or processing time at stops, ports, depots, and borders. "
+            "Do not confuse the platform with the metric. If a user asks about the Turnaround platform, explain the product and its capabilities. "
+            "If they ask about turnaround time, discuss dwell, delay, SLA, and queue metrics.\n\n"
             "═══ LIVE FLEET OPERATIONAL TELEMETRY & CONTEXT ═══\n"
             f"{json.dumps(fleet_context, indent=2)}\n\n"
             "═══ INSTRUCTIONS & RESPONSE FORMATTING ═══\n"
@@ -272,7 +275,14 @@ class AIAdvisorEngine:
         delayed_count = fleet_context.get("trucks_delayed", 0)
         loss_today = fleet_context.get("financial_loss_today_kes", 0.0)
 
-        if "malaba" in q_lower or "border" in q_lower:
+        if "turnaround platform" in q_lower or "what is turnaround" in q_lower or "what is turn around" in q_lower or "turnaround product" in q_lower:
+            answer = (
+                "### 🧭 Turnaround Platform\n\n"
+                "• **Turnaround** is the logistics operating platform used to monitor fleet movement, dwell, dispatch coordination, and corridor performance.\n"
+                "• **Turnaround time** is a separate KPI that measures how long a truck, container, or vehicle is delayed at a stop, terminal, or border.\n"
+                "• In short: the platform is the system; turnaround time is the metric the system helps improve."
+            )
+        elif "malaba" in q_lower or "border" in q_lower:
             answer = (
                 "### 🚚 Malaba OSBP Border Crossing Advisory\n\n"
                 "• **Current Status:** Customs document queue processing is trending at **114 minutes** (Target SLA: 90 mins).\n"

@@ -108,6 +108,10 @@ export interface Vehicle {
   cargo_type?: string;
   telematics_provider?: string;
   tracker_imei?: string;
+  battery_level?: number;
+  battery_voltage?: number;
+  ignition_status?: 'on' | 'off';
+  mileage_km?: number;
   fuel_level?: number; // 0-100 percentage
   fuel_tank_capacity_liters?: number;
   fuel_consumption_liters_per_100km?: number;
@@ -269,7 +273,7 @@ export interface GatePassData {
   terminal_gate?: string;
   time_window_start: string;
   time_window_end: string;
-  status: 'pre_approved' | 'cleared' | 'inspected' | 'expired' | 'cancelled';
+  status: 'pre_approved' | 'approved' | 'cleared' | 'inspected' | 'used' | 'expired' | 'revoked' | 'cancelled';
   carrier_name?: string;
   digital_signature?: string;
 }
