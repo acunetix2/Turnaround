@@ -1,6 +1,7 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "installCommand": "cd turnaround-frontend && pnpm install --frozen-lockfile",
+  "buildCommand": "cd turnaround-frontend && pnpm run build",
+  "outputDirectory": "turnaround-frontend/dist",
   "rewrites": [
     {
       "source": "/(.*)",
