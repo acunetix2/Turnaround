@@ -32,6 +32,10 @@ class VehicleBase(BaseModel):
     # Telematics
     telematics_provider: Optional[str] = Field(None, description="GPS tracker model or provider ID")
     tracker_imei: Optional[str] = Field(None, description="Tracker IMEI or serial number")
+    battery_level: Optional[int] = Field(None, ge=0, le=100, description="Battery charge percentage 0-100")
+    battery_voltage: Optional[float] = Field(None, description="Battery voltage in V")
+    ignition_status: Optional[str] = Field(None, description="Ignition state, e.g. on/off")
+    mileage_km: Optional[float] = Field(None, description="Latest reported mileage in km")
 
     # Operational
     fuel_level: Optional[int] = Field(None, ge=0, le=100, description="Fuel level percentage 0-100")
@@ -73,6 +77,10 @@ class VehicleUpdate(BaseModel):
 
     telematics_provider: Optional[str] = None
     tracker_imei: Optional[str] = None
+    battery_level: Optional[int] = None
+    battery_voltage: Optional[float] = None
+    ignition_status: Optional[str] = None
+    mileage_km: Optional[float] = None
 
     fuel_level: Optional[int] = None
     fuel_tank_capacity_liters: Optional[float] = None

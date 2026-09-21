@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Vehicle } from '../../lib/api/types';
 import { ASSET_TYPE_OPTIONS } from '../../lib/api/types';
+import { getVehicleLocationLabel } from '../../lib/location';
 import { useToast } from '../../components/ui/Toast';
 import { Button } from '../../components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
@@ -599,9 +600,7 @@ export const VehicleDetail: React.FC = () => {
                 <span className="text-[10px] font-semibold uppercase text-text-tertiary block">Current Facility</span>
                 <span className="text-xs font-bold text-text-primary flex items-center gap-1 mt-1">
                   <MapPin size={12} className="text-[#ED642B]" />
-                  {gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)
-                    ? (vehicle.current_location_name?.trim() || 'Location not reported')
-                    : 'Location not reported'}
+                  {getVehicleLocationLabel(vehicle, gps)}
                 </span>
               </div>
             </div>
@@ -676,6 +675,15 @@ export const VehicleDetail: React.FC = () => {
                   value={gps ? `Live · ${gps.speed?.toFixed(0)} km/h` : 'No signal'}
                   accent={gps ? 'text-status-good' : undefined}
                 />
+                {vehicle.ignition_status && (
+                  <InfoRow label="Ignition" value={vehicle.ignition_status === 'on' ? 'On' : 'Off'} accent={vehicle.ignition_status === 'on' ? 'text-status-good' : 'text-text-tertiary'} />
+                )}
+                {vehicle.battery_level != null && (
+                  <InfoRow label="Battery" value={`${vehicle.battery_level}%`} mono accent={vehicle.battery_level < 20 ? 'text-red-500' : 'text-status-good'} />
+                )}
+                {vehicle.battery_voltage != null && (
+                  <InfoRow label="Battery Voltage" value={`${vehicle.battery_voltage.toFixed(1)} V`} mono />
+                )}
               </div>
             </div>
 
@@ -687,6 +695,9 @@ export const VehicleDetail: React.FC = () => {
                 <InfoRow label="Maintenance" value={mtx.label} accent={vehicle.maintenance_status === 'good' ? 'text-status-good' : vehicle.maintenance_status === 'in_service' ? 'text-yellow-500' : 'text-orange-400'} />
                 {vehicle.odometer_km != null && (
                   <InfoRow label="Odometer" value={`${vehicle.odometer_km.toLocaleString()} km`} mono />
+                )}
+                {vehicle.mileage_km != null && (
+                  <InfoRow label="Mileage" value={`${vehicle.mileage_km.toLocaleString()} km`} mono />
                 )}
                 {vehicle.fuel_level != null && (
                   <div className="flex items-center justify-between py-1.5 border-b border-border-default/40">

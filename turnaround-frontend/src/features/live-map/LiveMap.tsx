@@ -10,6 +10,7 @@ import { apiClient } from '../../lib/api/client';
 import { useCompany } from '../../lib/CompanyContext';
 import { getOperatingZone } from '../../lib/operatingZones';
 import { formatMinutes } from '../../lib/format';
+import { getLiveVehicles, getMotionStatus, resolveRouteContext } from '../../lib/location';
 import type { Vehicle, VehicleStatus } from '../../lib/api/types';
 import {
   Search, X,
@@ -162,24 +163,12 @@ export const LiveMap: React.FC = () => {
   // Read URL params — ?focus=vehicleId&origin_lat=...&dest_lat=... etc.
   const [searchParams] = useSearchParams();
   const focusVehicleId = searchParams.get('focus');
-  const originLat  = parseFloat(searchParams.get('origin_lat') || '');
-  const originLng  = parseFloat(searchParams.get('origin_lng') || '');
-  const destLat    = parseFloat(searchParams.get('dest_lat') || '');
-  const destLng    = parseFloat(searchParams.get('dest_lng') || '');
-  const originName = searchParams.get('origin_name') ? decodeURIComponent(searchParams.get('origin_name')!) : null;
-  const destName   = searchParams.get('dest_name')   ? decodeURIComponent(searchParams.get('dest_name')!)   : null;
-  const hasRoute   = !isNaN(originLat) && !isNaN(originLng) && !isNaN(destLat) && !isNaN(destLng);
-
-  // Build a Google Maps directions URL (opens in new tab as fallback or iframe src)
-  const googleMapsDirectionsUrl = hasRoute
-    ? `https://www.google.com/maps/dir/${originLat},${originLng}/${destLat},${destLng}`
-    : null;
-
-  const googleMapsEmbedUrl = hasRoute && import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-    ? `https://www.google.com/maps/embed/v1/directions?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&origin=${originLat},${originLng}&destination=${destLat},${destLng}&mode=driving`
-    : null;
-
-  const [showDirections, setShowDirections] = useState(hasRoute);
+  const originParamLat  = parseFloat(searchParams.get('origin_lat') || '');
+  const originParamLng  = parseFloat(searchParams.get('origin_lng') || '');
+  const destParamLat    = parseFloat(searchParams.get('dest_lat') || '');
+  const destParamLng    = parseFloat(searchParams.get('dest_lng') || '');
+  const originParamName = searchParams.get('origin_name') ? decodeURIComponent(searchParams.get('origin_name')!) : null;
+  const destParamName   = searchParams.get('dest_name')   ? decodeURIComponent(searchParams.get('dest_name')!)   : null;
 
   // State
   const [showRoutes] = useState<boolean>(true);
@@ -198,6 +187,39 @@ export const LiveMap: React.FC = () => {
   const { data: locations } = useLocations();
   const { data: gpsPositions } = useLiveGPSEvents(8000);
   const { data: trips = [] } = useQuery({ queryKey: ['trips', 'corridor-tracker'], queryFn: apiClient.getTrips, staleTime: 30_000 });
+  const selectedRouteTrip = useMemo(() => {
+    if (!selectedVehicleId) return null;
+    return trips.find((trip: any) => trip.vehicle_id === selectedVehicleId && ['in_transit', 'in_progress', 'delayed', 'planned'].includes(trip.status ?? 'planned'))
+      ?? trips.find((trip: any) => trip.vehicle_id === selectedVehicleId)
+      ?? null;
+  }, [selectedVehicleId, trips]);
+  const routeContext = resolveRouteContext(
+    {
+      originLat: originParamLat,
+      originLng: originParamLng,
+      destLat: destParamLat,
+      destLng: destParamLng,
+      originName: originParamName,
+      destName: destParamName,
+    },
+    selectedRouteTrip,
+  );
+  const { originLat, originLng, destLat, destLng, originName, destName, hasRoute } = routeContext;
+
+  // Build a Google Maps directions URL (opens in new tab as fallback or iframe src)
+  const googleMapsDirectionsUrl = hasRoute
+    ? `https://www.google.com/maps/dir/${originLat},${originLng}/${destLat},${destLng}`
+    : null;
+
+  const googleMapsEmbedUrl = hasRoute && import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+    ? `https://www.google.com/maps/embed/v1/directions?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&origin=${originLat},${originLng}&destination=${destLat},${destLng}&mode=driving`
+    : null;
+
+  const [showDirections, setShowDirections] = useState(hasRoute);
+  useEffect(() => {
+    setShowDirections(hasRoute);
+  }, [hasRoute]);
+
   const { data: dwells } = useQuery({
     queryKey: ['dwellEvents', 'map'],
     queryFn: () => apiClient.getDwellEvents(),
@@ -349,16 +371,8 @@ export const LiveMap: React.FC = () => {
 
   // Filtered vehicles
   const filteredVehicles = useMemo(() => {
-    return (vehicles || []).filter((v) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch = !q ||
-        v.registration_number.toLowerCase().includes(q) ||
-        (v.current_location_name && v.current_location_name.toLowerCase().includes(q)) ||
-        v.vehicle_type.toLowerCase().includes(q);
-      const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
-      return matchesStatus && matchesSearch;
-    });
-  }, [vehicles, statusFilter, searchQuery]);
+    return getLiveVehicles(vehicles, gpsPositions, searchQuery, statusFilter);
+  }, [vehicles, gpsPositions, statusFilter, searchQuery]);
 
   const topTenVehicles = useMemo(() => {
     const statusRank: Record<string, number> = { delayed: 4, in_transit: 3, active: 2, idle: 1, maintenance: 0 };
@@ -438,8 +452,9 @@ export const LiveMap: React.FC = () => {
       if (!gps || !Number.isFinite(gps.latitude) || !Number.isFinite(gps.longitude)) return;
 
       const isSelected = selectedVehicleId === vh.id;
-      const isDelayed = vh.status === 'delayed';
-      const isMoving = vh.status === 'in_transit' || (vh.status as string) === 'moving'; // 'moving' kept as legacy shim
+      const liveStatus = getMotionStatus(vh, gps);
+      const isDelayed = liveStatus === 'delayed';
+      const isMoving = liveStatus === 'in_transit';
 
       const bg = isDelayed ? '#EF4444' : isMoving ? '#10B981' : '#250C77';
       const ring = isSelected ? 'ring-4 ring-[#ED642B]' : '';
@@ -831,6 +846,12 @@ export const LiveMap: React.FC = () => {
                     <p className="text-[10px] text-text-tertiary">Heading</p>
                     <p className="font-numeric font-bold text-text-primary">{Math.round((activeVehicleGps as any).heading ?? 0)}°</p>
                   </div>
+                  {activeVehicle.battery_level != null && (
+                    <div>
+                      <p className="text-[10px] text-text-tertiary">Battery</p>
+                      <p className={`font-numeric font-bold ${activeVehicle.battery_level < 20 ? 'text-red-500' : 'text-text-primary'}`}>{activeVehicle.battery_level}%</p>
+                    </div>
+                  )}
                   {activeVehicle.fuel_level != null && (
                     <div>
                       <p className="text-[10px] text-text-tertiary">Fuel</p>
@@ -914,6 +935,7 @@ export const LiveMap: React.FC = () => {
                 const gps = gpsPositions ? gpsPositions[vh.id] : null;
                 const isSelected = selectedVehicleId === vh.id;
                 const isExpanded = expandedVehicleId === vh.id;
+                const liveStatus = getMotionStatus(vh, gps);
 
                 return (
                   <div
@@ -935,13 +957,13 @@ export const LiveMap: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1.5">
                       <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${
-                        vh.status === 'in_transit'
+                        liveStatus === 'in_transit'
                           ? 'bg-status-good/15 text-status-good'
-                          : vh.status === 'delayed'
+                          : liveStatus === 'delayed'
                           ? 'bg-status-danger-bg text-status-danger'
                           : 'bg-bg-surface-raised text-text-tertiary'
                       }`}>
-                        {vh.status === 'in_transit' ? 'In Transit' : vh.status === 'delayed' ? 'Delayed' : 'Stationary'}
+                        {liveStatus === 'in_transit' ? 'In Transit' : liveStatus === 'delayed' ? 'Delayed' : 'Stationary'}
                       </span>
                       <button
                         type="button"

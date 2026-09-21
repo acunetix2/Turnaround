@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getVehicleLocationLabel, getMotionStatus, hasValidGps, resolveRouteContext } from '../lib/location';
+import { getLiveVehicles, getVehicleLocationLabel, getMotionStatus, hasValidGps, resolveRouteContext } from '../lib/location';
 
 describe('location helpers', () => {
   it('prefers a named facility when present', () => {
@@ -49,5 +49,22 @@ describe('location helpers', () => {
   it('marks a vehicle as in transit when live GPS speed is above the threshold', () => {
     expect(getMotionStatus({ status: 'idle' }, { speed: 18 })).toBe('in_transit');
     expect(getMotionStatus({ status: 'in_transit' }, { speed: 0 })).toBe('idle');
+  });
+
+  it('shows only vehicles with live GPS locations in the corridor live list', () => {
+    const vehicles = [
+      { id: '1', status: 'active', registration_number: 'KCN 234L', current_location_name: 'Nairobi', vehicle_type: 'Land Vehicle' },
+      { id: '2', status: 'idle', registration_number: 'KCL 901J', current_location_name: 'Mombasa', vehicle_type: 'Land Vehicle' },
+      { id: '3', status: 'in_transit', registration_number: 'KCH 345G', current_location_name: 'Nakuru', vehicle_type: 'Land Vehicle' },
+    ];
+
+    const gpsMap = {
+      '1': { latitude: -1.287, longitude: 36.815 },
+      '2': null,
+      '3': { latitude: -0.31, longitude: 36.07 },
+    };
+
+    expect(getLiveVehicles(vehicles, gpsMap, '', 'all')).toHaveLength(2);
+    expect(getLiveVehicles(vehicles, gpsMap, '', 'all').map(vehicle => vehicle.id)).toEqual(['1', '3']);
   });
 });

@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.db.models.gps_event import GPSEvent
-from app.db.models.vehicle import Vehicle
+from app.db.models.vehicle import Vehicle, VehicleStatus
 from app.db.models.location import Location
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.trip import Trip, TripStatus
@@ -104,6 +104,54 @@ def _coerce_float(value: object) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _extract_vehicle_telemetry(item: dict) -> dict:
+    """Extract battery, ignition, and mileage values from nested Flespi payloads."""
+    telemetry: dict[str, object] = {}
+
+    battery_level = _coerce_float(_lookup_nested_value(
+        item,
+        'battery_level', 'battery.level', 'battery_percent', 'battery.percentage', 'battery.charge', 'charge_level',
+    ))
+    if battery_level is not None:
+        telemetry['battery_level'] = int(round(battery_level)) if 0 <= battery_level <= 100 else battery_level
+
+    battery_voltage = _coerce_float(_lookup_nested_value(
+        item,
+        'battery_voltage', 'battery.voltage', 'battery_voltage_v', 'external.powersource.voltage', 'power_voltage',
+    ))
+    if battery_voltage is not None:
+        telemetry['battery_voltage'] = round(battery_voltage, 2)
+
+    ignition_value = _lookup_nested_value(
+        item,
+        'ignition_status', 'ignition.status', 'engine.ignition.status', 'engine.ignition', 'ignition',
+    )
+    if ignition_value is not None:
+        if isinstance(ignition_value, str):
+            normalized = ignition_value.strip().lower()
+            telemetry['ignition_status'] = 'on' if normalized in {'on', 'true', '1', 'active', 'running'} else 'off'
+        elif isinstance(ignition_value, bool):
+            telemetry['ignition_status'] = 'on' if ignition_value else 'off'
+        elif isinstance(ignition_value, (int, float)):
+            telemetry['ignition_status'] = 'on' if int(ignition_value) > 0 else 'off'
+
+    mileage_km = _coerce_float(_lookup_nested_value(
+        item,
+        'mileage_km', 'mileage', 'vehicle.mileage', 'odometer', 'odometer_km', 'distance_km', 'total_distance',
+    ))
+    if mileage_km is not None:
+        telemetry['mileage_km'] = round(mileage_km, 2)
+
+    fuel_level = _coerce_float(_lookup_nested_value(
+        item,
+        'fuel_level', 'fuel.level', 'fuel_percent', 'fuel.percentage', 'fuel.remaining_percent',
+    ))
+    if fuel_level is not None and 0 <= fuel_level <= 100:
+        telemetry['fuel_level'] = int(round(fuel_level))
+
+    return telemetry
 
 
 def _coerce_datetime(value: object) -> datetime:
@@ -298,6 +346,11 @@ async def _process_single_event(db: AsyncSession, event: GPSEventCreate, company
         await db.rollback()
         logger.debug(f"Duplicate GPS event ignored: {event.vehicle_id} @ {event.recorded_at}")
         return {"status": "duplicate"}
+
+    if vehicle.status in (VehicleStatus.ACTIVE, VehicleStatus.IDLE, VehicleStatus.IN_TRANSIT, VehicleStatus.DELAYED):
+        next_status = VehicleStatus.IN_TRANSIT if event.speed > 5 else VehicleStatus.IDLE
+        if vehicle.status != next_status and vehicle.status != VehicleStatus.MAINTENANCE:
+            vehicle.status = next_status
 
     # Load all company locations for geofence evaluation
     loc_result = await db.execute(
@@ -564,6 +617,11 @@ async def ingest_flespi_webhook(
             vehicle.id,
             company_id_value,
         )
+
+        telemetry_updates = _extract_vehicle_telemetry(item)
+        for field_name, value in telemetry_updates.items():
+            if hasattr(vehicle, field_name):
+                setattr(vehicle, field_name, value)
 
         latitude = _coerce_float(_lookup_nested_value(item, 'latitude', 'lat', 'gps_latitude', 'gpsLatitude', 'latit', 'y'))
         longitude = _coerce_float(_lookup_nested_value(item, 'longitude', 'lng', 'lon', 'gps_longitude', 'gpsLongitude', 'long', 'x'))
