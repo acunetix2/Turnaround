@@ -220,6 +220,20 @@ async def root():
     return {
         "service": "Turnaround Operational Intelligence API",
         "version": settings.VERSION,
+        "build": settings.BUILD_SHA,
+        "environment": settings.ENVIRONMENT,
+        "built_at": settings.BUILD_TIME,
         "docs": "/docs",
         "health": "/health",
+    }
+
+
+@app.get("/api/v1/version", tags=["Version"], summary="Release metadata")
+async def app_version():
+    return {
+        "service": "turnaround-backend",
+        "version": settings.VERSION,
+        "build": settings.BUILD_SHA,
+        "environment": settings.ENVIRONMENT,
+        "built_at": settings.BUILD_TIME,
     }

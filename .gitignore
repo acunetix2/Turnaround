@@ -44,6 +44,8 @@ dist-ssr/
 *.local
 .npm
 .eslintcache
+!turnaround-frontend/src/lib/
+!turnaround-frontend/src/lib/**
 
 # IDE / System
 .vscode/
