@@ -3,7 +3,7 @@
 # 🚛 Turnaround
 ### Operational Intelligence Platform for Commercial Fleet & Corridor Logistics
 
-<img src="Designs/landing.png" alt="Fleet logistics landing page showing trucks, corridors, and live logistics intelligence" width="900" />
+<img src="Designs/account.png" alt="Turnaround carrier assets and fleet operations dashboard" width="900" />
 
 <img src="https://readme-typing-svg.demolab.com?font=Space+Grotesk&weight=700&size=20&duration=3200&pause=900&color=ED642B&center=true&vCenter=true&width=720&lines=Vehicles+in+motion.;Trucks+that+stay+on+schedule.;Intelligence+for+every+corridor." alt="Animated fleet and truck intelligence tagline" />
 
