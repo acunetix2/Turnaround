@@ -431,6 +431,96 @@ export const AIAdvisor: React.FC = () => {
   const gpsIsFresh = selectedGps?.recorded_at
     ? Date.now() - Date.parse(selectedGps.recorded_at) < 5 * 60_000
     : false;
+  const forecastChartOption = React.useMemo<EChartsOption>(() => {
+    const prediction = predictionQuery.data;
+    const history = prediction?.history ?? [];
+    const labels = history.map((point) => new Date(point.arrival_time).toLocaleString('en-KE', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+    }));
+    const plannedLabel = `Plan · ${new Date(predictionArrival).toLocaleString('en-KE', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+    })}`;
+    const categories = [...labels, plannedLabel];
+    const chartText = isDark ? '#9CA3AF' : '#6B7280';
+
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: isDark ? '#180B4A' : '#FFFFFF',
+        borderColor: '#ED642B',
+        textStyle: { color: isDark ? '#FFFFFF' : '#111827', fontSize: 11 },
+        formatter: (items: any) => {
+          const pointIndex = items[0]?.dataIndex ?? 0;
+          const actual = history[pointIndex];
+          const summary = actual
+            ? `Actual dwell: ${formatMinutes(actual.actual_dwell_minutes)}`
+            : `Forecast dwell: ${formatMinutes(prediction?.predicted_dwell_minutes ?? 0)}`;
+          return `${categories[pointIndex]}<br/>${summary}<br/>Expected: ${formatMinutes(prediction?.expected_dwell_minutes ?? 0)}`;
+        },
+      },
+      legend: {
+        top: 0,
+        textStyle: { color: chartText, fontSize: 10 },
+        itemWidth: 12,
+        itemHeight: 8,
+      },
+      grid: { top: 30, right: 12, bottom: 42, left: 48 },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: { color: chartText, fontSize: 9, rotate: 20 },
+        axisLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Minutes',
+        nameTextStyle: { color: chartText, fontSize: 9 },
+        axisLabel: { color: chartText, fontSize: 9 },
+        splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', type: 'dashed' } },
+      },
+      series: [
+        {
+          name: 'Actual GPS dwell',
+          type: 'line',
+          data: [...history.map((point) => point.actual_dwell_minutes), null],
+          connectNulls: false,
+          symbolSize: 6,
+          lineStyle: { color: '#250C77', width: 2 },
+          itemStyle: { color: '#250C77' },
+        },
+        {
+          name: 'Expected SLA',
+          type: 'line',
+          data: [...history.map((point) => point.expected_dwell_minutes), prediction?.expected_dwell_minutes ?? null],
+          symbol: 'none',
+          lineStyle: { color: '#10B981', width: 1.5, type: 'dashed' },
+        },
+        {
+          name: 'Model forecast',
+          type: 'line',
+          data: [...history.map(() => null), prediction?.predicted_dwell_minutes ?? null],
+          connectNulls: false,
+          symbol: 'diamond',
+          symbolSize: 11,
+          lineStyle: { color: '#ED642B', width: 2 },
+          itemStyle: { color: '#ED642B' },
+          markArea: prediction ? {
+            silent: true,
+            itemStyle: { color: 'rgba(237, 100, 43, 0.12)' },
+            data: [[
+              { xAxis: plannedLabel, yAxis: prediction.confidence_interval_low },
+              { xAxis: plannedLabel, yAxis: prediction.confidence_interval_high },
+            ]],
+          } : undefined,
+        },
+      ],
+    };
+  }, [predictionQuery.data, predictionArrival, isDark]);
 
   // Live prescriptive actions from AI analysis or real location stats
   const liveInterventions = analysis?.primary_bottlenecks && analysis.primary_bottlenecks.length > 0
@@ -618,11 +708,42 @@ export const AIAdvisor: React.FC = () => {
                 ? 'Could not load the latest vehicle GPS fix.'
                 : 'No GPS fix received for this vehicle yet.'}
             {predictionQuery.data && (
-              <> · {predictionQuery.data.sample_size
-                ? `${predictionQuery.data.sample_size} completed GPS-derived stops · ${predictionQuery.data.model_version}`
-                : `Using configured stop baseline · ${predictionQuery.data.model_version}`}</>
+              <> · {predictionQuery.data.sample_size} stop-history records · {predictionQuery.data.model_version}</>
             )}
           </p>
+          {predictionQuery.data && (
+            <div className="mt-4 border-t border-border-default pt-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-[11px] font-bold text-text-primary">Actuals vs prediction</h3>
+                  <p className="text-[10px] text-text-tertiary">
+                    {predictionQuery.data.model_type} · {predictionQuery.data.training_samples
+                      ? 'Completed GPS geofence dwell history'
+                      : 'Awaiting completed GPS dwell history'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px]">
+                  <span className="rounded bg-bg-surface px-2 py-1 text-text-secondary">
+                    {predictionQuery.data.training_samples} training visits
+                  </span>
+                  {predictionQuery.data.validation_mae_minutes != null && (
+                    <span className="rounded bg-bg-surface px-2 py-1 text-text-secondary">
+                      Holdout MAE {formatMinutes(predictionQuery.data.validation_mae_minutes)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <ReactECharts
+                option={forecastChartOption}
+                style={{ height: 220, width: '100%' }}
+                opts={{ renderer: 'svg' }}
+              />
+              <p className="mt-1 text-[10px] text-text-tertiary">
+                The holdout MAE measures error on the latest unseen visits; the shaded band shows the forecast residual range.
+                If training history is limited, the estimate falls back to the stop's historical average or configured baseline.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

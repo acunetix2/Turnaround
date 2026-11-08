@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -8,6 +8,13 @@ class DwellPredictionRequest(BaseModel):
     planned_arrival: datetime = Field(..., description="Estimated arrival time")
     vehicle_id: Optional[str] = Field(None, description="Optional vehicle UUID for vehicle-specific cost estimation")
     vehicle_type: Optional[str] = Field("Semi-Trailer Truck", description="Vehicle classification")
+
+
+class DwellHistoryPoint(BaseModel):
+    arrival_time: datetime
+    actual_dwell_minutes: float
+    expected_dwell_minutes: float
+    estimated_cost: float
 
 
 class DwellPredictionResponse(BaseModel):
@@ -23,6 +30,10 @@ class DwellPredictionResponse(BaseModel):
     cost_interval_low: float
     cost_interval_high: float
     data_source: str
+    model_type: str
+    training_samples: int
+    validation_mae_minutes: Optional[float] = None
+    history: List[DwellHistoryPoint] = Field(default_factory=list)
     model_version: str = "statistical-v1"
 
 
