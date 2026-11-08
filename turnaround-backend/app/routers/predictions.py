@@ -16,6 +16,7 @@ from app.schemas.predictions import (
 )
 from app.config import settings
 from app.engines.financial import calculate_delay_cost, calculate_excess_minutes
+from app.engines.dwell_prediction import DwellObservation, train_dwell_forecast
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
@@ -63,6 +64,15 @@ async def _get_location_dwell_stats(
         "p10": p10,
         "p90": p90,
         "sample_size": len(sample),
+        "history": [
+            {
+                "arrival_time": row.arrival_time,
+                "actual_dwell_minutes": round(float(row.dwell_minutes), 1),
+                "expected_dwell_minutes": round(float(row.expected_minutes), 1),
+                "estimated_cost": round(float(row.estimated_cost), 2),
+            }
+            for row in sorted(rows, key=lambda row: row.arrival_time)[-14:]
+        ],
     }
 
 
@@ -87,23 +97,58 @@ async def predict_dwell(
         if not vehicle:
             raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
 
+    training_result = await db.execute(
+        select(DwellEvent.arrival_time, DwellEvent.expected_minutes, DwellEvent.dwell_minutes)
+        .join(Vehicle, DwellEvent.vehicle_id == Vehicle.id)
+        .where(
+            Vehicle.company_id == company_id,
+            DwellEvent.departure_time.isnot(None),
+            DwellEvent.expected_minutes > 0,
+        )
+        .order_by(DwellEvent.arrival_time.desc())
+        .limit(5000)
+    )
+    training_rows = [
+        DwellObservation(
+            arrival_time=row.arrival_time,
+            expected_minutes=float(row.expected_minutes),
+            actual_minutes=float(row.dwell_minutes),
+        )
+        for row in training_result.all()
+    ]
+
     stats = await _get_location_dwell_stats(
         db, company_id, payload.location_id,
         payload.planned_arrival.hour,
         payload.planned_arrival.weekday(),
     )
 
-    if stats:
+    forecast = train_dwell_forecast(
+        training_rows,
+        payload.planned_arrival,
+        float(loc.expected_dwell_minutes),
+    )
+    if forecast:
+        predicted = forecast.predicted_minutes
+        low = forecast.confidence_interval_low
+        high = forecast.confidence_interval_high
+        model_type = "Multiple linear regression"
+        model_version = forecast.model_version
+        validation_mae = forecast.validation_mae_minutes
+    elif stats:
         predicted = stats["mean"]
         low = stats["p10"]
         high = stats["p90"]
-        n = stats["sample_size"]
+        model_type = "Historical average baseline"
+        model_version = "statistical-v1"
+        validation_mae = None
     else:
-        # No historical data — fall back to configured expected dwell
         predicted = loc.expected_dwell_minutes
         low = predicted * 0.7
         high = predicted * 1.5
-        n = 0
+        model_type = "Configured dwell baseline"
+        model_version = "baseline-v1"
+        validation_mae = None
 
     expected = float(loc.expected_dwell_minutes)
     if vehicle:
@@ -119,15 +164,23 @@ async def predict_dwell(
         predicted_dwell_minutes=round(predicted, 1),
         confidence_interval_low=round(low, 1),
         confidence_interval_high=round(high, 1),
-        sample_size=n,
+        sample_size=stats["sample_size"] if stats else 0,
         expected_dwell_minutes=round(expected, 1),
         predicted_excess_minutes=round(calculate_excess_minutes(predicted, expected), 1),
         hourly_operating_cost=round(hourly_cost, 2),
         estimated_cost=calculate_delay_cost(calculate_excess_minutes(predicted, expected), hourly_cost),
         cost_interval_low=calculate_delay_cost(calculate_excess_minutes(low, expected), hourly_cost),
         cost_interval_high=calculate_delay_cost(calculate_excess_minutes(high, expected), hourly_cost),
-        data_source="gps_dwell_history" if n else "location_baseline",
-        model_version="statistical-v1",
+        data_source=(
+            "gps_dwell_history" if forecast
+            else "historical_average" if stats
+            else "location_baseline"
+        ),
+        model_type=model_type,
+        training_samples=forecast.training_samples if forecast else len(training_rows),
+        validation_mae_minutes=round(validation_mae, 1) if validation_mae is not None else None,
+        history=stats["history"] if stats else [],
+        model_version=model_version,
     )
 
 

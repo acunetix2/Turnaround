@@ -226,8 +226,9 @@ $$\text{Financial Loss} = \max(0, \text{Actual Dwell} - \text{Expected Dwell}) \
 ---
 
 ### 5. Predictive Delay & Bottleneck Intelligence Engine
-- **Pre-Arrival Turnaround Estimation**: Predicts expected turnaround durations based on time of day, day of week, seasonal congestion, and recent queue lengths.
-- **Fleet AI Idle-Cost Forecast**: Uses completed GPS-geofence dwell history (or the configured location baseline when no history exists) to estimate predicted dwell, excess time, a confidence range, and vehicle-specific operating cost for a planned arrival. GPS telemetry is ingested through `/api/v1/gps/events` or the configured Flespi webhook.
+- **Pre-Arrival Turnaround Model**: Fits a company-scoped multiple linear regression to up to 5,000 completed GPS-geofence dwell visits. Features include the stop's expected dwell and cyclical arrival hour/day-of-week. The chronological holdout MAE and training sample count are returned with each forecast; the model activates after twelve completed visits.
+- **Fallback and Forecast Tracking**: With limited model history, the API falls back to the selected stop's historical dwell average, then to its configured expected dwell. Fleet AI plots recent actual visit dwell against the SLA and planned-arrival prediction, including the model's residual interval and holdout MAE.
+- **Fleet AI Idle-Cost Forecast**: Converts predicted excess dwell into a confidence-range and vehicle-specific operating cost estimate. GPS telemetry is ingested through `/api/v1/gps/events` or the configured Flespi webhook.
 - **Automated Root Cause Classification**: Identifies and tags chronic bottleneck patterns:
   - `EXCESSIVE_DWELL`: Prolonged loading/unloading exceeding contractual SLA.
   - `RECURRING_BOTTLENECK`: Systemic facility delays across multiple carrier fleets.

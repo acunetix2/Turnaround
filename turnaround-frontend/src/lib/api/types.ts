@@ -365,6 +365,13 @@ export interface TrendDataPoint {
   delayed_visit_count: number;
 }
 
+export interface PredictionHistoryPoint {
+  arrival_time: string;
+  actual_dwell_minutes: number;
+  expected_dwell_minutes: number;
+  estimated_cost: number;
+}
+
 export interface PredictionDwellResponse {
   location_id: string;
   predicted_dwell_minutes: number;
@@ -377,7 +384,11 @@ export interface PredictionDwellResponse {
   estimated_cost: number;
   cost_interval_low: number;
   cost_interval_high: number;
-  data_source: 'gps_dwell_history' | 'location_baseline';
+  data_source: 'gps_dwell_history' | 'historical_average' | 'location_baseline';
+  model_type: string;
+  training_samples: number;
+  validation_mae_minutes: number | null;
+  history: PredictionHistoryPoint[];
   model_version: string;
 }
 
