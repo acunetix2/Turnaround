@@ -82,7 +82,7 @@ const TopAppBar: React.FC = () => {
   const queryClient = useQueryClient()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationsRef = useRef<HTMLDivElement>(null)
-  const pageTitle = location.pathname === '/ai-advisor' ? 'AI Analyst' : 'Turnaround Operations'
+  const pageTitle = location.pathname === '/ai-advisor' ? 'Fleet Intelligence' : 'Turnaround Operations'
   const { data: notificationsData } = useQuery({
     queryKey: ['notifications', 'navbar'],
     queryFn: () => apiClient.getNotifications({ limit: 8 }),
@@ -295,7 +295,7 @@ function SidebarNavContent() {
     // ── Analytics (all staff) ────────────────────────────────────────────
     { name: 'Delay Alerts',     path: '/insights',      icon: AlertOctagon },
     { name: 'Analytics',        path: '/analytics',     icon: BarChart3 },
-    { name: 'Fleet AI',         path: '/ai-advisor',    icon: BotMessageSquare },
+    { name: 'Fleet Intelligence', path: '/ai-advisor',  icon: BotMessageSquare },
     { name: 'Notifications',    path: '/notifications', icon: Bell, badgeCount: unreadNotifCount > 0 ? unreadNotifCount : undefined, badgeDanger: unreadNotifCount > 0 },
     // ── Settings (fleet_manager+) ────────────────────────────────────────
     ...(['admin','fleet_manager'].includes(user?.role || '') ? [

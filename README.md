@@ -226,9 +226,9 @@ $$\text{Financial Loss} = \max(0, \text{Actual Dwell} - \text{Expected Dwell}) \
 ---
 
 ### 5. Predictive Delay & Bottleneck Intelligence Engine
-- **Pre-Arrival Turnaround Model**: Fits a company-scoped multiple linear regression to up to 5,000 completed GPS-geofence dwell visits. Features include the stop's expected dwell and cyclical arrival hour/day-of-week. The chronological holdout MAE and training sample count are returned with each forecast; the model activates after twelve completed visits.
+- **Pre-Arrival Turnaround Model**: Fits a location-specific multiple linear regression to up to 5,000 of that stop's completed GPS-geofence dwell visits. Features include the stop's expected dwell and cyclical arrival hour/day-of-week. The chronological holdout MAE and training sample count are returned with each forecast; the model activates after twelve completed visits.
 - **Fallback and Forecast Tracking**: With limited model history, the API falls back to the selected stop's historical dwell average, then to its configured expected dwell. Fleet AI plots recent actual visit dwell against the SLA and planned-arrival prediction, including the model's residual interval and holdout MAE.
-- **Fleet AI Idle-Cost Forecast**: Converts predicted excess dwell into a confidence-range and vehicle-specific operating cost estimate. GPS telemetry is ingested through `/api/v1/gps/events` or the configured Flespi webhook.
+- **Fleet Intelligence Tracking**: `GET /api/v1/predictions/fleet` automatically combines every company vehicle's active trip, latest GPS fix, geofence, and open dwell event into a refreshable asset ledger. It reports current idle cost and predicted excess dwell cost per asset, using the location model when enough history exists and location-history/configured baselines otherwise. GPS telemetry is ingested through `/api/v1/gps/events` or the configured Flespi webhook.
 - **Automated Root Cause Classification**: Identifies and tags chronic bottleneck patterns:
   - `EXCESSIVE_DWELL`: Prolonged loading/unloading exceeding contractual SLA.
   - `RECURRING_BOTTLENECK`: Systemic facility delays across multiple carrier fleets.

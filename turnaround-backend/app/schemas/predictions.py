@@ -37,6 +37,38 @@ class DwellPredictionResponse(BaseModel):
     model_version: str = "statistical-v1"
 
 
+class FleetAssetForecast(BaseModel):
+    vehicle_id: str
+    registration_number: str
+    vehicle_type: str
+    asset_status: str
+    tracking_state: str
+    trip_id: Optional[str] = None
+    trip_status: Optional[str] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
+    gps_recorded_at: Optional[datetime] = None
+    speed_kmh: Optional[float] = None
+    current_dwell_minutes: Optional[float] = None
+    current_idle_cost: float
+    predicted_dwell_minutes: Optional[float] = None
+    expected_dwell_minutes: Optional[float] = None
+    predicted_excess_minutes: Optional[float] = None
+    hourly_operating_cost: float
+    estimated_cost: Optional[float] = None
+    cost_interval_low: Optional[float] = None
+    cost_interval_high: Optional[float] = None
+    model_version: Optional[str] = None
+
+
+class FleetForecastResponse(BaseModel):
+    assets: List[FleetAssetForecast]
+    model_type: str
+    training_samples: int
+    validation_mae_minutes: Optional[float] = None
+    generated_at: datetime
+
+
 class DelayRiskRequest(BaseModel):
     location_id: str = Field(..., description="Destination location UUID")
     planned_arrival: datetime = Field(..., description="Planned arrival timestamp")

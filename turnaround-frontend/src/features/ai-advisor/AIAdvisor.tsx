@@ -4,7 +4,7 @@ import {
   Send, RefreshCw, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
   Sparkles, ShieldCheck, Lightbulb, ExternalLink,
   Package, Leaf, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon,
-  MapPin, Radio
+  MapPin, Radio, Truck
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
@@ -18,7 +18,6 @@ import type { EChartsOption } from 'echarts';
 import { useTheme } from '../../lib/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/Alert';
-import { toast } from 'sonner';
 import { useAuth } from '../../auth/AuthProvider';
 
 /**
@@ -240,6 +239,12 @@ export const AIAdvisor: React.FC = () => {
     queryFn: apiClient.getLiveGPSEvents,
     refetchInterval: 30_000,
   });
+  const { data: fleetForecast, isError: fleetForecastError, isLoading: loadingFleetForecast, refetch: refetchFleetForecast } = useQuery({
+    queryKey: ['predictions', 'fleet'],
+    queryFn: apiClient.getFleetPredictions,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
   const copilotMutation = useCopilotQuery();
   const navigate = useNavigate();
 
@@ -415,6 +420,12 @@ export const AIAdvisor: React.FC = () => {
     ? Math.round((trips.filter((trip) => !['delayed', 'cancelled'].includes(trip.status)).length / trips.length) * 1000) / 10
     : Math.max(0, 100 - delayedTrucks);
   const recentInsights = insights.slice(0, 4);
+  const fleetAssets = fleetForecast?.assets ?? [];
+  const movingAssets = fleetAssets.filter((asset) => asset.tracking_state === 'on_trip').length;
+  const idleAssets = fleetAssets.filter((asset) => ['idling_at_stop', 'at_geofence', 'idle'].includes(asset.tracking_state)).length;
+  const forecastableAssets = fleetAssets.filter((asset) => asset.estimated_cost != null);
+  const fleetForecastCost = forecastableAssets.reduce((total, asset) => total + (asset.estimated_cost ?? 0), 0);
+  const liveIdleCost = fleetAssets.reduce((total, asset) => total + asset.current_idle_cost, 0);
   const selectedLocationId = predictionLocationId || locations[0]?.id || '';
   const selectedVehicleId = predictionVehicleId || vehicles[0]?.id || '';
   const arrivalTimestamp = Date.parse(predictionArrival);
@@ -521,6 +532,64 @@ export const AIAdvisor: React.FC = () => {
       ],
     };
   }, [predictionQuery.data, predictionArrival, isDark]);
+  const fleetDwellChartOption = React.useMemo<EChartsOption>(() => {
+    const chartAssets = forecastableAssets.slice(0, 12);
+    return {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { top: 0, textStyle: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 } },
+      grid: { top: 30, right: 12, bottom: 56, left: 44 },
+      xAxis: {
+        type: 'category',
+        data: chartAssets.map((asset) => asset.registration_number),
+        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9, rotate: 24 },
+      },
+      yAxis: { type: 'value', name: 'Minutes', axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9 } },
+      series: [
+        { name: 'Expected', type: 'bar', data: chartAssets.map((asset) => asset.expected_dwell_minutes), itemStyle: { color: '#250C77', borderRadius: [3, 3, 0, 0] } },
+        { name: 'Forecast', type: 'bar', data: chartAssets.map((asset) => asset.predicted_dwell_minutes), itemStyle: { color: '#ED642B', borderRadius: [3, 3, 0, 0] } },
+      ],
+    };
+  }, [forecastableAssets, isDark]);
+  const fleetCostChartOption = React.useMemo<EChartsOption>(() => {
+    const chartAssets = [...forecastableAssets]
+      .sort((left, right) => (right.estimated_cost ?? 0) - (left.estimated_cost ?? 0))
+      .slice(0, 10)
+      .reverse();
+    return {
+      backgroundColor: 'transparent',
+      grid: { top: 8, right: 18, bottom: 18, left: 92 },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (value) => formatCurrency(Number(value ?? 0)) },
+      xAxis: { type: 'value', axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9 } },
+      yAxis: { type: 'category', data: chartAssets.map((asset) => asset.registration_number), axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9 } },
+      series: [{
+        name: 'Predicted idle cost',
+        type: 'bar',
+        data: chartAssets.map((asset) => asset.estimated_cost),
+        itemStyle: { color: '#ED642B', borderRadius: [0, 4, 4, 0] },
+      }],
+    };
+  }, [forecastableAssets, isDark]);
+  const trackingStateChartOption = React.useMemo<EChartsOption>(() => {
+    const states = [
+      { name: 'On trip', value: fleetAssets.filter((asset) => asset.tracking_state === 'on_trip').length, color: '#250C77' },
+      { name: 'Planned', value: fleetAssets.filter((asset) => asset.tracking_state === 'trip_planned').length, color: '#6366F1' },
+      { name: 'Idling at stop', value: fleetAssets.filter((asset) => asset.tracking_state === 'idling_at_stop').length, color: '#ED642B' },
+      { name: 'Other / idle', value: fleetAssets.filter((asset) => ['idle', 'at_geofence'].includes(asset.tracking_state)).length, color: '#9CA3AF' },
+    ].filter((state) => state.value > 0);
+    return {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'item' },
+      legend: { bottom: 0, textStyle: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9 } },
+      series: [{
+        type: 'pie',
+        radius: ['48%', '72%'],
+        center: ['50%', '42%'],
+        label: { color: isDark ? '#E5E7EB' : '#374151', fontSize: 9 },
+        data: states.map((state) => ({ name: state.name, value: state.value, itemStyle: { color: state.color } })),
+      }],
+    };
+  }, [fleetAssets, isDark]);
 
   // Live prescriptive actions from AI analysis or real location stats
   const liveInterventions = analysis?.primary_bottlenecks && analysis.primary_bottlenecks.length > 0
@@ -542,17 +611,19 @@ export const AIAdvisor: React.FC = () => {
       {/* ── ANALYST WELCOME ── */}
       <section className="relative overflow-hidden rounded-xl border border-[#250C77]/40 bg-[#07092a] px-5 py-5 text-white shadow-sm sm:px-6">
         <div className="relative z-10 max-w-md">
-          <p className="text-lg font-bold tracking-tight sm:text-xl">Hello, {user?.name?.split(' ')[0] || 'there'} <span aria-hidden="true">👋</span></p>
-          <p className="mt-2 text-xs leading-relaxed text-indigo-100/75">I've analyzed your logistics data and generated key insights to help you make smarter decisions.</p>
+          <p className="text-lg font-bold tracking-tight sm:text-xl">Fleet Intelligence</p>
+          <p className="mt-2 text-xs leading-relaxed text-indigo-100/75">
+            Automatic prediction and live cost tracking for {user?.company_name || 'your fleet'} — assets, trips, and trucks idling at stops.
+          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
               variant="primary"
               size="small"
               icon={<Sparkles size={13} />}
               loading={loadingAnalysis}
-              onClick={() => { refetch(); toast.success('Refreshing Analyst Intelligence Model'); }}
+              onClick={() => { refetch(); void refetchFleetForecast(); }}
             >
-              Generate New Analysis
+              Refresh Fleet Intelligence
             </Button>
             <button type="button" onClick={() => document.getElementById('analyst-assistant')?.scrollIntoView({ behavior: 'smooth' })} className="flex items-center gap-1.5 rounded-lg border border-indigo-300/30 px-3 py-2 text-[11px] font-semibold text-white transition-colors hover:bg-white/10">
               <MessageCircle size={13} /> Ask a Question
@@ -612,16 +683,132 @@ export const AIAdvisor: React.FC = () => {
         </div>
       </div>
 
-      {/* ── GPS-BASED PREDICTIVE IDLE COST ── */}
+      {/* ── AUTOMATIC WHOLE-FLEET INTELLIGENCE ── */}
+      <section className="space-y-4 rounded-2xl border border-[#250C77]/15 bg-bg-surface p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col justify-between gap-3 border-b border-border-default pb-4 sm:flex-row sm:items-end">
+          <div>
+            <div className="flex items-center gap-2">
+              <Radio size={15} className="text-emerald-500" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">Automatic · refreshes every minute</span>
+            </div>
+            <h2 className="mt-1 text-lg font-extrabold tracking-tight text-text-primary">Fleet prediction & tracking center</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-secondary">
+              Every asset is matched to its active trip, open stop dwell, or current GPS geofence. Forecasts and idle cost update automatically as new telemetry arrives.
+            </p>
+          </div>
+          <div className="text-[10px] text-text-tertiary">
+            {fleetForecast?.generated_at ? `Updated ${new Date(fleetForecast.generated_at).toLocaleTimeString()}` : 'Waiting for first fleet update'}
+          </div>
+        </div>
+
+        {fleetForecastError && (
+          <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-xs text-status-danger">
+            Fleet predictions are temporarily unavailable. The page will retry automatically.
+          </p>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Assets monitored', value: fleetForecast ? fleetAssets.length.toLocaleString() : '—', note: `${movingAssets} currently on trips`, icon: Truck },
+            { label: 'At stops / idle', value: fleetForecast ? idleAssets.toLocaleString() : '—', note: 'GPS and open dwell state', icon: Clock },
+            { label: 'Forecast excess cost', value: fleetForecast ? formatCurrency(fleetForecastCost) : '—', note: `${forecastableAssets.length} assets with a stop forecast`, icon: DollarSign },
+            { label: 'Live idle cost', value: fleetForecast ? formatCurrency(liveIdleCost) : '—', note: 'Accumulated from open GPS dwell', icon: Radio },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-xl border border-border-default bg-bg-surface-raised/60 p-3">
+              <div className="flex items-center justify-between text-[10px] font-semibold text-text-secondary">
+                <span>{metric.label}</span>
+                <metric.icon size={14} className="text-[#ED642B]" />
+              </div>
+              <p className="mt-1.5 font-numeric text-2xl font-extrabold text-text-primary">{metric.value}</p>
+              <p className="mt-0.5 text-[10px] text-text-tertiary">{metric.note}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-12">
+          <article className="rounded-xl border border-border-default p-3 xl:col-span-5">
+            <h3 className="text-xs font-bold text-text-primary">Expected vs predicted dwell</h3>
+            <p className="mt-0.5 text-[10px] text-text-tertiary">Per asset with an assigned trip or detected stop</p>
+            {loadingFleetForecast ? <div className="flex h-64 items-center justify-center"><Spinner /></div>
+              : forecastableAssets.length ? <ReactECharts option={fleetDwellChartOption} style={{ height: 260 }} opts={{ renderer: 'svg' }} />
+                : <div className="flex h-64 items-center justify-center text-center text-xs text-text-tertiary">No active trips or stop forecasts yet. GPS ingestion and trip assignment will populate this chart.</div>}
+          </article>
+          <article className="rounded-xl border border-border-default p-3 xl:col-span-4">
+            <h3 className="text-xs font-bold text-text-primary">Predicted excess cost by asset</h3>
+            <p className="mt-0.5 text-[10px] text-text-tertiary">Highest forecast idle costs across the fleet</p>
+            {forecastableAssets.length ? <ReactECharts option={fleetCostChartOption} style={{ height: 260 }} opts={{ renderer: 'svg' }} />
+              : <div className="flex h-64 items-center justify-center text-xs text-text-tertiary">Cost forecasts appear when assets have a trip destination or active geofence stop.</div>}
+          </article>
+          <article className="rounded-xl border border-border-default p-3 xl:col-span-3">
+            <h3 className="text-xs font-bold text-text-primary">Live fleet state</h3>
+            <p className="mt-0.5 text-[10px] text-text-tertiary">Automatic trip, dwell, and idle classification</p>
+            {fleetAssets.length ? <ReactECharts option={trackingStateChartOption} style={{ height: 260 }} opts={{ renderer: 'svg' }} />
+              : <div className="flex h-64 items-center justify-center text-xs text-text-tertiary">Fleet state will appear when vehicles are added.</div>}
+          </article>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border-default">
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border-default px-3 py-3">
+            <div>
+              <h3 className="text-xs font-bold text-text-primary">Asset & trip prediction ledger</h3>
+              <p className="mt-0.5 text-[10px] text-text-tertiary">
+                {fleetForecast?.model_type ?? 'Fleet model'} · {fleetForecast?.training_samples ?? 0} completed dwell samples
+                {fleetForecast?.validation_mae_minutes != null ? ` · holdout MAE ${formatMinutes(fleetForecast.validation_mae_minutes)}` : ''}
+              </p>
+            </div>
+            <span className="text-[10px] text-text-tertiary">Each vehicle is tracked automatically</span>
+          </div>
+          {loadingFleetForecast && !fleetAssets.length ? <div className="flex h-28 items-center justify-center"><Spinner /></div>
+            : fleetAssets.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[880px] text-left text-[11px]">
+                  <thead className="bg-bg-surface-raised text-[9px] uppercase tracking-wider text-text-tertiary">
+                    <tr>
+                      <th className="px-3 py-2.5">Asset / trip</th>
+                      <th className="px-3 py-2.5">Tracking state</th>
+                      <th className="px-3 py-2.5">Stop</th>
+                      <th className="px-3 py-2.5 text-right">Live dwell</th>
+                      <th className="px-3 py-2.5 text-right">Predicted</th>
+                      <th className="px-3 py-2.5 text-right">Idle cost</th>
+                      <th className="px-3 py-2.5 text-right">GPS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-default">
+                    {fleetAssets.map((asset) => (
+                      <tr key={asset.vehicle_id} className="hover:bg-bg-surface-raised/50">
+                        <td className="px-3 py-2.5">
+                          <span className="font-bold text-text-primary">
+                            {asset.registration_number}
+                          </span>
+                          <p className="mt-0.5 text-[9px] text-text-tertiary">{asset.trip_id ? `Trip ${asset.trip_id.slice(0, 8)}` : asset.vehicle_type}</p>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={`rounded-full px-2 py-1 text-[9px] font-bold ${asset.tracking_state === 'idling_at_stop' ? 'bg-orange-500/10 text-orange-600' : asset.tracking_state === 'on_trip' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-bg-surface-raised text-text-secondary'}`}>
+                            {asset.tracking_state.replaceAll('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-text-secondary">{asset.location_name || 'No trip / geofence'}</td>
+                        <td className="px-3 py-2.5 text-right font-numeric text-text-secondary">{asset.current_dwell_minutes != null ? formatMinutes(asset.current_dwell_minutes) : '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-numeric text-text-primary">{asset.predicted_dwell_minutes != null ? `${formatMinutes(asset.predicted_dwell_minutes)}${asset.expected_dwell_minutes != null ? ` / ${formatMinutes(asset.expected_dwell_minutes)}` : ''}` : '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-numeric font-bold text-[#ED642B]">{asset.estimated_cost != null ? formatCurrency(asset.estimated_cost) : formatCurrency(asset.current_idle_cost)}</td>
+                        <td className="px-3 py-2.5 text-right font-numeric text-text-secondary">{asset.speed_kmh != null ? `${asset.speed_kmh.toFixed(0)} km/h` : 'No fix'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="px-3 py-8 text-center text-xs text-text-tertiary">No fleet assets are available yet.</p>}
+        </div>
+      </section>
+
+      {/* ── OPTIONAL SINGLE-STOP SCENARIO PLANNER ── */}
       <section className="grid gap-4 rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm lg:grid-cols-[1fr_1.2fr]">
         <div>
           <div className="mb-3 flex items-start gap-2">
             <MapPin size={16} className="mt-0.5 text-[#250C77] dark:text-[#ED642B]" />
             <div>
-              <h2 className="text-xs font-bold text-text-primary">Predict a stop's idle cost</h2>
-              <p className="mt-1 text-[10px] leading-relaxed text-text-secondary">
-                GPS geofence visits train the dwell estimate. Select a planned stop and vehicle to forecast excess time and operating cost.
-              </p>
+              <h2 className="text-xs font-bold text-text-primary">What-if: model a planned stop</h2>
+              <p className="mt-1 text-[10px] leading-relaxed text-text-secondary">Optional scenario controls. Fleet forecasts above run automatically for all assets and trips.</p>
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
