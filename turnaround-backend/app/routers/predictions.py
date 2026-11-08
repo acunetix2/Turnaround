@@ -1,22 +1,28 @@
 import math
 import statistics
+from datetime import datetime, timezone
 from typing import Annotated, List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.db.models.dwell_event import DwellEvent
-from app.db.models.vehicle import Vehicle
+from app.db.models.gps_event import GPSEvent
+from app.db.models.trip import Trip, TripStatus
+from app.db.models.vehicle import Vehicle, VehicleStatus
 from app.db.models.location import Location
 from app.deps import get_current_company
 from app.schemas.predictions import (
     DwellPredictionRequest, DwellPredictionResponse,
     DelayRiskRequest, DelayRiskResponse,
+    FleetAssetForecast, FleetForecastResponse,
 )
 from app.config import settings
 from app.engines.financial import calculate_delay_cost, calculate_excess_minutes
 from app.engines.dwell_prediction import DwellObservation, train_dwell_forecast
+from app.engines.geofencing import haversine_distance
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
@@ -98,10 +104,16 @@ async def predict_dwell(
             raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
 
     training_result = await db.execute(
-        select(DwellEvent.arrival_time, DwellEvent.expected_minutes, DwellEvent.dwell_minutes)
+        select(
+            DwellEvent.arrival_time,
+            DwellEvent.location_id,
+            DwellEvent.expected_minutes,
+            DwellEvent.dwell_minutes,
+        )
         .join(Vehicle, DwellEvent.vehicle_id == Vehicle.id)
         .where(
             Vehicle.company_id == company_id,
+            DwellEvent.location_id == payload.location_id,
             DwellEvent.departure_time.isnot(None),
             DwellEvent.expected_minutes > 0,
         )
@@ -113,6 +125,7 @@ async def predict_dwell(
             arrival_time=row.arrival_time,
             expected_minutes=float(row.expected_minutes),
             actual_minutes=float(row.dwell_minutes),
+            location_id=row.location_id,
         )
         for row in training_result.all()
     ]
@@ -127,6 +140,7 @@ async def predict_dwell(
         training_rows,
         payload.planned_arrival,
         float(loc.expected_dwell_minutes),
+        payload.location_id,
     )
     if forecast:
         predicted = forecast.predicted_minutes
@@ -181,6 +195,248 @@ async def predict_dwell(
         validation_mae_minutes=round(validation_mae, 1) if validation_mae is not None else None,
         history=stats["history"] if stats else [],
         model_version=model_version,
+    )
+
+
+@router.get(
+    "/fleet",
+    response_model=FleetForecastResponse,
+    summary="Automatically track and forecast all company fleet assets",
+)
+async def predict_fleet(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    company_id: Annotated[str, Depends(get_current_company)],
+):
+    """Build per-asset forecasts from active trips, live GPS, and open geofence dwell."""
+    now = datetime.now(timezone.utc)
+    vehicles = (await db.execute(
+        select(Vehicle)
+        .where(Vehicle.company_id == company_id)
+        .order_by(Vehicle.registration_number)
+    )).scalars().all()
+    if not vehicles:
+        return FleetForecastResponse(
+            assets=[],
+            model_type="Historical average / configured baseline",
+            training_samples=0,
+            generated_at=now,
+        )
+
+    vehicle_ids = [vehicle.id for vehicle in vehicles]
+    active_trips = (await db.execute(
+        select(Trip)
+        .where(
+            Trip.vehicle_id.in_(vehicle_ids),
+            Trip.status.in_([
+                TripStatus.PLANNED,
+                TripStatus.IN_PROGRESS,
+                TripStatus.IN_TRANSIT,
+                TripStatus.DELAYED,
+            ]),
+        )
+        .options(selectinload(Trip.destination))
+        .order_by(Trip.planned_arrival.asc())
+    )).scalars().all()
+    trips_by_vehicle: Dict[str, Trip] = {}
+    for trip in active_trips:
+        trips_by_vehicle.setdefault(trip.vehicle_id, trip)
+
+    latest_gps_query = (
+        select(
+            GPSEvent.vehicle_id,
+            GPSEvent.latitude,
+            GPSEvent.longitude,
+            GPSEvent.speed,
+            GPSEvent.recorded_at,
+            func.row_number()
+            .over(partition_by=GPSEvent.vehicle_id, order_by=desc(GPSEvent.recorded_at))
+            .label("row_number"),
+        )
+        .where(GPSEvent.vehicle_id.in_(vehicle_ids))
+        .subquery()
+    )
+    gps_by_vehicle = {
+        row.vehicle_id: row
+        for row in (await db.execute(
+            select(latest_gps_query).where(latest_gps_query.c.row_number == 1)
+        )).all()
+    }
+
+    open_dwells = (await db.execute(
+        select(DwellEvent)
+        .where(DwellEvent.vehicle_id.in_(vehicle_ids), DwellEvent.departure_time.is_(None))
+        .order_by(DwellEvent.arrival_time.desc())
+    )).scalars().all()
+    dwell_by_vehicle: Dict[str, DwellEvent] = {}
+    for dwell in open_dwells:
+        dwell_by_vehicle.setdefault(dwell.vehicle_id, dwell)
+
+    locations = (await db.execute(
+        select(Location).where(Location.company_id == company_id)
+    )).scalars().all()
+    locations_by_id = {location.id: location for location in locations}
+    training_rows_query = (
+        select(
+            DwellEvent.arrival_time,
+            DwellEvent.location_id,
+            DwellEvent.expected_minutes,
+            DwellEvent.dwell_minutes,
+            func.row_number()
+            .over(
+                partition_by=DwellEvent.location_id,
+                order_by=desc(DwellEvent.arrival_time),
+            )
+            .label("row_number"),
+        )
+        .join(Vehicle, DwellEvent.vehicle_id == Vehicle.id)
+        .where(
+            Vehicle.company_id == company_id,
+            DwellEvent.departure_time.isnot(None),
+            DwellEvent.expected_minutes > 0,
+        )
+        .subquery()
+    )
+    training_result = await db.execute(
+        select(training_rows_query).where(training_rows_query.c.row_number <= 5000)
+    )
+    observations = [
+        DwellObservation(
+            row.arrival_time,
+            float(row.expected_minutes),
+            float(row.dwell_minutes),
+            row.location_id,
+        )
+        for row in training_result.all()
+    ]
+
+    assets: List[FleetAssetForecast] = []
+    model_validation_errors: List[float] = []
+    location_stats_cache: Dict[tuple, Optional[Dict]] = {}
+    for vehicle in vehicles:
+        trip = trips_by_vehicle.get(vehicle.id)
+        dwell = dwell_by_vehicle.get(vehicle.id)
+        gps = gps_by_vehicle.get(vehicle.id)
+        location = locations_by_id.get(dwell.location_id) if dwell else None
+        tracking_state = "idle"
+        if dwell:
+            tracking_state = "idling_at_stop"
+        elif trip and trip.status in (TripStatus.IN_TRANSIT, TripStatus.IN_PROGRESS, TripStatus.DELAYED):
+            tracking_state = "on_trip"
+            location = trip.destination
+        elif trip:
+            tracking_state = "trip_planned"
+            location = trip.destination
+        elif gps:
+            nearest_location = min(
+                locations,
+                key=lambda item: haversine_distance(
+                    gps.latitude, gps.longitude, item.latitude, item.longitude
+                ),
+                default=None,
+            )
+            if nearest_location and haversine_distance(
+                gps.latitude, gps.longitude, nearest_location.latitude, nearest_location.longitude
+            ) <= nearest_location.geofence_radius:
+                location = nearest_location
+                tracking_state = "at_geofence"
+
+        current_dwell = None
+        current_idle_cost = 0.0
+        if dwell:
+            arrival = dwell.arrival_time
+            if arrival.tzinfo is None:
+                arrival = arrival.replace(tzinfo=timezone.utc)
+            current_dwell = max(0.0, (now - arrival).total_seconds() / 60)
+            current_idle_cost = calculate_delay_cost(current_dwell, vehicle.hourly_operating_cost)
+
+        prediction = None
+        if location:
+            planned_arrival = trip.planned_arrival if trip else None
+            if planned_arrival and planned_arrival.tzinfo is None:
+                planned_arrival = planned_arrival.replace(tzinfo=timezone.utc)
+            arrival_at = planned_arrival if planned_arrival and planned_arrival > now else now
+            expected = float(location.expected_dwell_minutes)
+            prediction = train_dwell_forecast(observations, arrival_at, expected, location.id)
+            if prediction:
+                model_validation_errors.append(prediction.validation_mae_minutes)
+                predicted = prediction.predicted_minutes
+                low = prediction.confidence_interval_low
+                high = prediction.confidence_interval_high
+                model_version = prediction.model_version
+            else:
+                stats_key = (location.id, arrival_at.hour, arrival_at.weekday())
+                if stats_key not in location_stats_cache:
+                    location_stats_cache[stats_key] = await _get_location_dwell_stats(
+                        db, company_id, location.id, arrival_at.hour, arrival_at.weekday()
+                    )
+                location_stats = location_stats_cache[stats_key]
+                if location_stats:
+                    predicted = location_stats["mean"]
+                    low = location_stats["p10"]
+                    high = location_stats["p90"]
+                    model_version = "statistical-v1"
+                else:
+                    predicted = expected
+                    low = predicted * 0.7
+                    high = predicted * 1.5
+                    model_version = "baseline-v1"
+            excess = calculate_excess_minutes(predicted, expected)
+            assets.append(FleetAssetForecast(
+                vehicle_id=vehicle.id,
+                registration_number=vehicle.registration_number,
+                vehicle_type=vehicle.vehicle_type,
+                asset_status=vehicle.status.value,
+                tracking_state=tracking_state,
+                trip_id=trip.id if trip else None,
+                trip_status=trip.status.value if trip else None,
+                location_id=location.id,
+                location_name=location.name,
+                gps_recorded_at=gps.recorded_at if gps else None,
+                speed_kmh=gps.speed if gps else None,
+                current_dwell_minutes=round(current_dwell, 1) if current_dwell is not None else None,
+                current_idle_cost=round(current_idle_cost, 2),
+                predicted_dwell_minutes=round(predicted, 1),
+                expected_dwell_minutes=round(expected, 1),
+                predicted_excess_minutes=round(excess, 1),
+                hourly_operating_cost=round(float(vehicle.hourly_operating_cost), 2),
+                estimated_cost=calculate_delay_cost(excess, vehicle.hourly_operating_cost),
+                cost_interval_low=calculate_delay_cost(
+                    calculate_excess_minutes(low, expected), vehicle.hourly_operating_cost
+                ),
+                cost_interval_high=calculate_delay_cost(
+                    calculate_excess_minutes(high, expected), vehicle.hourly_operating_cost
+                ),
+                model_version=model_version,
+            ))
+        else:
+            assets.append(FleetAssetForecast(
+                vehicle_id=vehicle.id,
+                registration_number=vehicle.registration_number,
+                vehicle_type=vehicle.vehicle_type,
+                asset_status=vehicle.status.value,
+                tracking_state=tracking_state,
+                trip_id=trip.id if trip else None,
+                trip_status=trip.status.value if trip else None,
+                gps_recorded_at=gps.recorded_at if gps else None,
+                speed_kmh=gps.speed if gps else None,
+                current_dwell_minutes=round(current_dwell, 1) if current_dwell is not None else None,
+                current_idle_cost=round(current_idle_cost, 2),
+                hourly_operating_cost=round(float(vehicle.hourly_operating_cost), 2),
+            ))
+
+    return FleetForecastResponse(
+        assets=assets,
+        model_type=(
+            "Location-specific multiple linear regression"
+            if model_validation_errors
+            else "Historical average / configured baseline"
+        ),
+        training_samples=len(observations),
+        validation_mae_minutes=(
+            round(sum(model_validation_errors) / len(model_validation_errors), 1)
+            if model_validation_errors else None
+        ),
+        generated_at=now,
     )
 
 

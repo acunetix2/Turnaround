@@ -372,6 +372,38 @@ export interface PredictionHistoryPoint {
   estimated_cost: number;
 }
 
+export interface FleetAssetForecast {
+  vehicle_id: string;
+  registration_number: string;
+  vehicle_type: string;
+  asset_status: VehicleStatus;
+  tracking_state: 'on_trip' | 'trip_planned' | 'idling_at_stop' | 'at_geofence' | 'idle';
+  trip_id: string | null;
+  trip_status: Trip['status'] | null;
+  location_id: string | null;
+  location_name: string | null;
+  gps_recorded_at: string | null;
+  speed_kmh: number | null;
+  current_dwell_minutes: number | null;
+  current_idle_cost: number;
+  predicted_dwell_minutes: number | null;
+  expected_dwell_minutes: number | null;
+  predicted_excess_minutes: number | null;
+  hourly_operating_cost: number;
+  estimated_cost: number | null;
+  cost_interval_low: number | null;
+  cost_interval_high: number | null;
+  model_version: string | null;
+}
+
+export interface FleetForecastResponse {
+  assets: FleetAssetForecast[];
+  model_type: string;
+  training_samples: number;
+  validation_mae_minutes: number | null;
+  generated_at: string;
+}
+
 export interface PredictionDwellResponse {
   location_id: string;
   predicted_dwell_minutes: number;

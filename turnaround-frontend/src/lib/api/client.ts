@@ -25,6 +25,7 @@ import type {
   DelayChargeClaim,
   PredictionDwellResponse,
   PredictionDelayRiskResponse,
+  FleetForecastResponse,
   AICorridorAnalysis,
   AICopilotResponse
 } from './types';
@@ -852,6 +853,58 @@ export const apiClient = {
   },
 
   // --- Predictions ---
+  async getFleetPredictions(): Promise<FleetForecastResponse> {
+    if (USE_MOCKS) {
+      await sleep(250);
+      const assets = memoryVehicles.map((vehicle) => {
+        const trip = memoryTrips.find((item) =>
+          item.vehicle_id === vehicle.id && ['planned', 'in_transit', 'in_progress', 'delayed'].includes(item.status || ''),
+        );
+        const location = memoryLocations.find((item) => item.id === trip?.destination_id);
+        const expected = location?.expected_dwell_minutes ?? null;
+        const predicted = expected == null ? null : Math.round(expected * 1.18);
+        const excess = predicted == null || expected == null ? null : Math.max(0, predicted - expected);
+        const speed = mockLiveGpsEvents[vehicle.id]?.speed ?? null;
+        const trackingState = trip
+          ? trip.status === 'planned' ? 'trip_planned' as const : 'on_trip' as const
+          : location ? 'idling_at_stop' as const : 'idle' as const;
+        return {
+          vehicle_id: vehicle.id,
+          registration_number: vehicle.registration_number,
+          vehicle_type: vehicle.vehicle_type,
+          asset_status: vehicle.status,
+          tracking_state: trackingState,
+          trip_id: trip?.id ?? null,
+          trip_status: trip?.status ?? null,
+          location_id: location?.id ?? null,
+          location_name: location?.name ?? null,
+          gps_recorded_at: mockLiveGpsEvents[vehicle.id]?.recorded_at ?? null,
+          speed_kmh: speed,
+          current_dwell_minutes: trackingState === 'idling_at_stop' ? expected : null,
+          current_idle_cost: trackingState === 'idling_at_stop' ? Math.round((expected ?? 0) / 60 * vehicle.hourly_operating_cost) : 0,
+          predicted_dwell_minutes: predicted,
+          expected_dwell_minutes: expected,
+          predicted_excess_minutes: excess,
+          hourly_operating_cost: vehicle.hourly_operating_cost,
+          estimated_cost: excess == null ? null : Math.round(excess / 60 * vehicle.hourly_operating_cost),
+          cost_interval_low: excess == null ? null : Math.round(excess / 120 * vehicle.hourly_operating_cost),
+          cost_interval_high: excess == null ? null : Math.round(excess / 30 * vehicle.hourly_operating_cost),
+          model_version: 'fleet-dwell-linear-v1',
+        };
+      });
+      return {
+        assets,
+        model_type: 'Multiple linear regression',
+        training_samples: 36,
+        validation_mae_minutes: 18.5,
+        generated_at: new Date().toISOString(),
+      };
+    }
+    const res = await fetch(`${API_BASE_URL}/predictions/fleet`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch fleet predictions');
+    return res.json();
+  },
+
   async getPredictionsDwell(destinationId: string, plannedArrival: string, vehicleId?: string): Promise<PredictionDwellResponse> {
     if (USE_MOCKS) {
       await sleep(400);

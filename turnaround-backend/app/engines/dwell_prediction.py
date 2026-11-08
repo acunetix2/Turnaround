@@ -15,6 +15,7 @@ class DwellObservation:
     arrival_time: datetime
     expected_minutes: float
     actual_minutes: float
+    location_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -45,11 +46,13 @@ def train_dwell_forecast(
     observations: Sequence[DwellObservation],
     planned_arrival: datetime,
     expected_minutes: float,
+    location_id: Optional[str] = None,
 ) -> Optional[DwellForecast]:
-    """Fit a company-scoped linear regression and score a chronological holdout."""
+    """Fit a location-scoped linear regression and score a chronological holdout."""
     usable = sorted(
         (
             row for row in observations
+            if (location_id is None or row.location_id == location_id)
             if row.expected_minutes > 0
             and row.actual_minutes >= 0
             and isfinite(row.expected_minutes)

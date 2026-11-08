@@ -33,3 +33,19 @@ def test_linear_model_waits_for_minimum_training_history():
     ]
 
     assert train_dwell_forecast(observations, start, 90) is None
+
+
+def test_linear_model_uses_only_observations_from_the_requested_location():
+    start = datetime(2026, 1, 5, tzinfo=timezone.utc)
+    observations = [
+        DwellObservation(start + timedelta(days=index), 90, 110, "location-1")
+        for index in range(12)
+    ] + [
+        DwellObservation(start + timedelta(days=index), 90, 200, "location-2")
+        for index in range(20)
+    ]
+
+    forecast = train_dwell_forecast(observations, start, 90, "location-1")
+
+    assert forecast is not None
+    assert forecast.training_samples == 12
