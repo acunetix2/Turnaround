@@ -852,27 +852,41 @@ export const apiClient = {
   },
 
   // --- Predictions ---
-  async getPredictionsDwell(destinationId: string, plannedArrival: string): Promise<PredictionDwellResponse> {
+  async getPredictionsDwell(destinationId: string, plannedArrival: string, vehicleId?: string): Promise<PredictionDwellResponse> {
     if (USE_MOCKS) {
       await sleep(400);
-      // statistical mock: find location expected + add some jitter
       const loc = memoryLocations.find(l => l.id === destinationId);
+      const vehicle = memoryVehicles.find(v => v.id === vehicleId);
       const base = loc ? loc.expected_dwell_minutes : 90;
+      const predicted = Math.round(base * 1.35);
+      const excess = Math.max(0, predicted - base);
+      const hourlyCost = vehicle?.hourly_operating_cost ?? memoryCompanyConfig.hourly_operating_rate;
       return {
-        predicted_dwell_minutes: Math.round(base * 1.35),
+        location_id: destinationId,
+        predicted_dwell_minutes: predicted,
+        confidence_interval_low: Math.round(base * 0.9),
+        confidence_interval_high: Math.round(predicted * 1.3),
+        sample_size: 12,
+        expected_dwell_minutes: base,
+        predicted_excess_minutes: excess,
+        hourly_operating_cost: hourlyCost,
+        estimated_cost: Math.round((excess / 60) * hourlyCost * 100) / 100,
+        cost_interval_low: 0,
+        cost_interval_high: Math.round((Math.max(0, predicted * 1.3 - base) / 60) * hourlyCost * 100) / 100,
+        data_source: 'gps_dwell_history',
         model_version: 'statistical-v1'
       };
     }
     const res = await fetch(`${API_BASE_URL}/predictions/dwell`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ destination_id: destinationId, planned_arrival: plannedArrival })
+      body: JSON.stringify({ location_id: destinationId, planned_arrival: plannedArrival, vehicle_id: vehicleId })
     });
-    if (!res.ok) throw new Error('Failed to fetch predicted dwell');
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail?.error?.message || 'Failed to fetch predicted dwell');
     return res.json();
   },
 
-  async getPredictionsDelayRisk(destinationId: string, plannedArrival: string): Promise<PredictionDelayRiskResponse> {
+  async getPredictionsDelayRisk(destinationId: string, plannedArrival: string, vehicleId?: string): Promise<PredictionDelayRiskResponse> {
     if (USE_MOCKS) {
       await sleep(500);
       const loc = memoryLocations.find(l => l.id === destinationId);
@@ -880,9 +894,11 @@ export const apiClient = {
       const predicted = Math.round(expected * 1.45);
       const riskPercent = 78;
       return {
-        predicted_dwell: predicted,
-        expected_dwell: expected,
-        risk_percent: riskPercent,
+        location_id: destinationId,
+        predicted_dwell_minutes: predicted,
+        expected_dwell_minutes: expected,
+        risk_percentage: riskPercent,
+        risk_severity: 'high',
         reason: 'High outbound congestion detected at the facility during typical afternoon hours.',
         recommendation: 'Target arrival before 11:00 AM to benefit from early-day clearance speedups.',
         model_version: 'statistical-v1'
@@ -891,9 +907,9 @@ export const apiClient = {
     const res = await fetch(`${API_BASE_URL}/predictions/delay-risk`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ destination_id: destinationId, planned_arrival: plannedArrival })
+      body: JSON.stringify({ location_id: destinationId, planned_arrival: plannedArrival, vehicle_id: vehicleId })
     });
-    if (!res.ok) throw new Error('Failed to fetch delay risk prediction');
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail?.error?.message || 'Failed to fetch delay risk prediction');
     return res.json();
   },
 
@@ -1339,4 +1355,3 @@ export const apiClient = {
   // Backward compatibility alias
   exportDemurrageClaimsCSV: function(claims: any[]) { return this.exportDelayChargeClaimsCSV(claims); }
 };
-

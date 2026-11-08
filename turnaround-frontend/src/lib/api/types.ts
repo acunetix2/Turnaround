@@ -366,14 +366,27 @@ export interface TrendDataPoint {
 }
 
 export interface PredictionDwellResponse {
+  location_id: string;
   predicted_dwell_minutes: number;
+  confidence_interval_low: number;
+  confidence_interval_high: number;
+  sample_size: number;
+  expected_dwell_minutes: number;
+  predicted_excess_minutes: number;
+  hourly_operating_cost: number;
+  estimated_cost: number;
+  cost_interval_low: number;
+  cost_interval_high: number;
+  data_source: 'gps_dwell_history' | 'location_baseline';
   model_version: string;
 }
 
 export interface PredictionDelayRiskResponse {
-  predicted_dwell: number;
-  expected_dwell: number;
-  risk_percent: number;
+  location_id: string;
+  predicted_dwell_minutes: number;
+  expected_dwell_minutes: number;
+  risk_percentage: number;
+  risk_severity: 'low' | 'medium' | 'high';
   reason: string;
   recommendation: string;
   model_version: string;
@@ -410,4 +423,3 @@ export interface AICopilotResponse {
   suggestions?: string[];
   model_used?: string;
 }
-

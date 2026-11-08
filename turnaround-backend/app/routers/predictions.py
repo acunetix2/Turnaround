@@ -3,7 +3,7 @@ import statistics
 from typing import Annotated, List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.session import get_db
 from app.db.models.dwell_event import DwellEvent
@@ -15,6 +15,7 @@ from app.schemas.predictions import (
     DelayRiskRequest, DelayRiskResponse,
 )
 from app.config import settings
+from app.engines.financial import calculate_delay_cost, calculate_excess_minutes
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
@@ -78,6 +79,14 @@ async def predict_dwell(
     if not loc:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Location not found"}})
 
+    vehicle = None
+    if payload.vehicle_id:
+        vehicle = (await db.execute(select(Vehicle).where(
+            Vehicle.id == payload.vehicle_id, Vehicle.company_id == company_id
+        ))).scalar_one_or_none()
+        if not vehicle:
+            raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Vehicle not found"}})
+
     stats = await _get_location_dwell_stats(
         db, company_id, payload.location_id,
         payload.planned_arrival.hour,
@@ -96,12 +105,28 @@ async def predict_dwell(
         high = predicted * 1.5
         n = 0
 
+    expected = float(loc.expected_dwell_minutes)
+    if vehicle:
+        hourly_cost = float(vehicle.hourly_operating_cost)
+    else:
+        hourly_cost = float((await db.execute(
+            select(func.coalesce(func.avg(Vehicle.hourly_operating_cost), 0.0))
+            .where(Vehicle.company_id == company_id)
+        )).scalar_one())
+
     return DwellPredictionResponse(
         location_id=payload.location_id,
         predicted_dwell_minutes=round(predicted, 1),
         confidence_interval_low=round(low, 1),
         confidence_interval_high=round(high, 1),
         sample_size=n,
+        expected_dwell_minutes=round(expected, 1),
+        predicted_excess_minutes=round(calculate_excess_minutes(predicted, expected), 1),
+        hourly_operating_cost=round(hourly_cost, 2),
+        estimated_cost=calculate_delay_cost(calculate_excess_minutes(predicted, expected), hourly_cost),
+        cost_interval_low=calculate_delay_cost(calculate_excess_minutes(low, expected), hourly_cost),
+        cost_interval_high=calculate_delay_cost(calculate_excess_minutes(high, expected), hourly_cost),
+        data_source="gps_dwell_history" if n else "location_baseline",
         model_version="statistical-v1",
     )
 
