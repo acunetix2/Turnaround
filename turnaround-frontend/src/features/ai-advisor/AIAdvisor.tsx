@@ -428,7 +428,7 @@ export const AIAdvisor: React.FC = () => {
     staleTime: 60_000,
   });
   const selectedGps = selectedVehicleId ? liveGps[selectedVehicleId] : undefined;
-  const gpsIsFresh = selectedGps
+  const gpsIsFresh = selectedGps?.recorded_at
     ? Date.now() - Date.parse(selectedGps.recorded_at) < 5 * 60_000
     : false;
 
@@ -613,7 +613,7 @@ export const AIAdvisor: React.FC = () => {
           </div>
           <p className="mt-3 border-t border-border-default pt-2 text-[10px] text-text-tertiary">
             {selectedGps
-              ? `Latest GPS: ${selectedGps.speed.toFixed(1)} km/h · ${new Date(selectedGps.recorded_at).toLocaleString()}`
+              ? `Latest GPS: ${selectedGps.speed == null ? 'Speed unavailable' : `${selectedGps.speed.toFixed(1)} km/h`} · ${selectedGps.recorded_at ? new Date(selectedGps.recorded_at).toLocaleString() : 'Time unavailable'}`
               : liveGpsError
                 ? 'Could not load the latest vehicle GPS fix.'
                 : 'No GPS fix received for this vehicle yet.'}

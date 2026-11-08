@@ -466,7 +466,7 @@ export const LiveMap: React.FC = () => {
           <span>🚛</span>
           <span>${vh.registration_number}</span>
         </div>
-        ${isMoving && gps.speed > 0 ? `<div style="margin-top: 1px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 4px; font-size: 8.5px; font-weight: 700;">${Math.round(gps.speed)} km/h</div>` : ''}
+        ${isMoving && gps.speed != null && gps.speed > 0 ? `<div style="margin-top: 1px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 4px; font-size: 8.5px; font-weight: 700;">${Math.round(gps.speed)} km/h</div>` : ''}
       `;
 
       el.addEventListener('click', () => {
@@ -983,7 +983,7 @@ export const LiveMap: React.FC = () => {
                       <span className="truncate">{vh.vehicle_type}</span>
                       {gps && (
                         <span className="font-numeric font-bold text-text-primary">
-                          {Math.round(gps.speed)} km/h
+                          {Math.round(gps.speed ?? 0)} km/h
                         </span>
                       )}
                     </div>

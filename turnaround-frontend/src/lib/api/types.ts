@@ -283,8 +283,8 @@ export interface GPSEvent {
   vehicle_id: string;
   latitude: number;
   longitude: number;
-  speed: number; // in km/h
-  recorded_at: string;
+  speed: number | null; // in km/h; live vehicle feed can have no speed fix
+  recorded_at: string | null;
 }
 
 export interface DwellEvent {
