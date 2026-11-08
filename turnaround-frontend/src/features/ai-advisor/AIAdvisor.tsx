@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Send, RefreshCw, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
   Sparkles, ShieldCheck, Lightbulb, ExternalLink,
-  Package, Leaf, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon
+  Package, Leaf, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon,
+  MapPin, Radio
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
@@ -226,10 +227,30 @@ export const AIAdvisor: React.FC = () => {
     queryKey: ['trips'],
     queryFn: apiClient.getTrips,
   });
+  const { data: locations = [] } = useQuery({
+    queryKey: ['locations'],
+    queryFn: apiClient.getLocations,
+  });
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: apiClient.getVehicles,
+  });
+  const { data: liveGps = {}, isError: liveGpsError } = useQuery({
+    queryKey: ['ai', 'live-gps'],
+    queryFn: apiClient.getLiveGPSEvents,
+    refetchInterval: 30_000,
+  });
   const copilotMutation = useCopilotQuery();
   const navigate = useNavigate();
 
   const [input, setInput] = useState('');
+  const [predictionLocationId, setPredictionLocationId] = useState('');
+  const [predictionVehicleId, setPredictionVehicleId] = useState('');
+  const [predictionArrival, setPredictionArrival] = useState(() => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  });
   const [messages, setMessages] = useState<(AICopilotMessage & { chart_data?: ChartData | null })[]>([
     {
       role: 'assistant',
@@ -394,6 +415,22 @@ export const AIAdvisor: React.FC = () => {
     ? Math.round((trips.filter((trip) => !['delayed', 'cancelled'].includes(trip.status)).length / trips.length) * 1000) / 10
     : Math.max(0, 100 - delayedTrucks);
   const recentInsights = insights.slice(0, 4);
+  const selectedLocationId = predictionLocationId || locations[0]?.id || '';
+  const selectedVehicleId = predictionVehicleId || vehicles[0]?.id || '';
+  const arrivalTimestamp = Date.parse(predictionArrival);
+  const plannedArrival = Number.isFinite(arrivalTimestamp)
+    ? new Date(arrivalTimestamp).toISOString()
+    : '';
+  const predictionQuery = useQuery({
+    queryKey: ['predictions', 'dwell', selectedLocationId, selectedVehicleId, plannedArrival],
+    queryFn: () => apiClient.getPredictionsDwell(selectedLocationId, plannedArrival, selectedVehicleId),
+    enabled: Boolean(selectedLocationId && plannedArrival),
+    staleTime: 60_000,
+  });
+  const selectedGps = selectedVehicleId ? liveGps[selectedVehicleId] : undefined;
+  const gpsIsFresh = selectedGps
+    ? Date.now() - Date.parse(selectedGps.recorded_at) < 5 * 60_000
+    : false;
 
   // Live prescriptive actions from AI analysis or real location stats
   const liveInterventions = analysis?.primary_bottlenecks && analysis.primary_bottlenecks.length > 0
@@ -484,6 +521,110 @@ export const AIAdvisor: React.FC = () => {
           <p className="text-[11px] text-text-tertiary mt-0.5">Not tracked in current data</p>
         </div>
       </div>
+
+      {/* ── GPS-BASED PREDICTIVE IDLE COST ── */}
+      <section className="grid gap-4 rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm lg:grid-cols-[1fr_1.2fr]">
+        <div>
+          <div className="mb-3 flex items-start gap-2">
+            <MapPin size={16} className="mt-0.5 text-[#250C77] dark:text-[#ED642B]" />
+            <div>
+              <h2 className="text-xs font-bold text-text-primary">Predict a stop's idle cost</h2>
+              <p className="mt-1 text-[10px] leading-relaxed text-text-secondary">
+                GPS geofence visits train the dwell estimate. Select a planned stop and vehicle to forecast excess time and operating cost.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-[10px] font-semibold text-text-secondary">
+              Destination
+              <select
+                value={selectedLocationId}
+                onChange={(event) => setPredictionLocationId(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-border-default bg-bg-surface px-2.5 py-2 text-xs text-text-primary"
+                disabled={!locations.length}
+              >
+                {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] font-semibold text-text-secondary">
+              Vehicle
+              <select
+                value={selectedVehicleId}
+                onChange={(event) => setPredictionVehicleId(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-border-default bg-bg-surface px-2.5 py-2 text-xs text-text-primary"
+                disabled={!vehicles.length}
+              >
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.registration_number} · {formatCurrency(vehicle.hourly_operating_cost)}/hr
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[10px] font-semibold text-text-secondary sm:col-span-2">
+              Planned arrival
+              <input
+                type="datetime-local"
+                value={predictionArrival}
+                onChange={(event) => setPredictionArrival(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-border-default bg-bg-surface px-2.5 py-2 text-xs text-text-primary"
+              />
+            </label>
+          </div>
+          {(!locations.length || !vehicles.length) && (
+            <p className="mt-2 text-[10px] text-text-tertiary">
+              Add at least one vehicle and destination to generate a forecast.
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col justify-between rounded-lg bg-bg-surface-raised p-3">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Estimated excess idle cost</p>
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-text-secondary">
+                <Radio size={12} className={gpsIsFresh ? 'text-emerald-500' : 'text-text-tertiary'} />
+                {liveGpsError ? 'GPS feed unavailable' : gpsIsFresh ? 'GPS live' : 'GPS signal stale'}
+              </span>
+            </div>
+            {predictionQuery.isLoading ? (
+              <div className="mt-4"><Spinner /></div>
+            ) : predictionQuery.isError ? (
+              <p role="alert" className="mt-3 text-xs text-status-danger">
+                {predictionQuery.error instanceof Error ? predictionQuery.error.message : 'Unable to calculate prediction.'}
+              </p>
+            ) : predictionQuery.data ? (
+              <>
+                <p className="mt-2 font-numeric text-3xl font-extrabold text-[#ED642B]">
+                  {formatCurrency(predictionQuery.data.estimated_cost)}
+                </p>
+                <p className="mt-1 text-[11px] text-text-secondary">
+                  {formatMinutes(predictionQuery.data.predicted_dwell_minutes)} predicted vs. {formatMinutes(predictionQuery.data.expected_dwell_minutes)} expected
+                  {' · '}{formatMinutes(predictionQuery.data.predicted_excess_minutes)} excess
+                </p>
+                <p className="mt-1 text-[10px] text-text-tertiary">
+                  Cost range {formatCurrency(predictionQuery.data.cost_interval_low)}–{formatCurrency(predictionQuery.data.cost_interval_high)}
+                  {' · '}{formatCurrency(predictionQuery.data.hourly_operating_cost)}/vehicle-hour
+                </p>
+              </>
+            ) : (
+              <p className="mt-3 text-xs text-text-tertiary">Select a stop and arrival time to calculate the forecast.</p>
+            )}
+          </div>
+          <p className="mt-3 border-t border-border-default pt-2 text-[10px] text-text-tertiary">
+            {selectedGps
+              ? `Latest GPS: ${selectedGps.speed.toFixed(1)} km/h · ${new Date(selectedGps.recorded_at).toLocaleString()}`
+              : liveGpsError
+                ? 'Could not load the latest vehicle GPS fix.'
+                : 'No GPS fix received for this vehicle yet.'}
+            {predictionQuery.data && (
+              <> · {predictionQuery.data.sample_size
+                ? `${predictionQuery.data.sample_size} completed GPS-derived stops · ${predictionQuery.data.model_version}`
+                : `Using configured stop baseline · ${predictionQuery.data.model_version}`}</>
+            )}
+          </p>
+        </div>
+      </section>
 
       {/* ── LIVE CORRIDOR INTELLIGENCE REPORT ALERT BANNER ── */}
       {analysis?.executive_summary && (
@@ -774,4 +915,3 @@ export const AIAdvisor: React.FC = () => {
     </div>
   );
 };
-
