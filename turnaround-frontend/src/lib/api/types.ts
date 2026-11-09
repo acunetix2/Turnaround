@@ -399,6 +399,7 @@ export interface FleetAssetForecast {
 export interface FleetForecastResponse {
   assets: FleetAssetForecast[];
   model_type: string;
+  model_features: string[];
   training_samples: number;
   validation_mae_minutes: number | null;
   generated_at: string;
@@ -418,6 +419,7 @@ export interface PredictionDwellResponse {
   cost_interval_high: number;
   data_source: 'gps_dwell_history' | 'historical_average' | 'location_baseline';
   model_type: string;
+  model_features: string[];
   training_samples: number;
   validation_mae_minutes: number | null;
   history: PredictionHistoryPoint[];

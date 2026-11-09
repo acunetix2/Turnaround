@@ -31,6 +31,7 @@ class DwellPredictionResponse(BaseModel):
     cost_interval_high: float
     data_source: str
     model_type: str
+    model_features: List[str] = Field(default_factory=list)
     training_samples: int
     validation_mae_minutes: Optional[float] = None
     history: List[DwellHistoryPoint] = Field(default_factory=list)
@@ -64,6 +65,7 @@ class FleetAssetForecast(BaseModel):
 class FleetForecastResponse(BaseModel):
     assets: List[FleetAssetForecast]
     model_type: str
+    model_features: List[str] = Field(default_factory=list)
     training_samples: int
     validation_mae_minutes: Optional[float] = None
     generated_at: datetime

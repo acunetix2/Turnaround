@@ -6,8 +6,17 @@ from typing import Optional, Sequence
 import numpy as np
 
 
-MODEL_VERSION = "fleet-dwell-linear-v1"
-MIN_TRAINING_SAMPLES = 12
+MODEL_VERSION = "fleet-dwell-multisignal-v2"
+MIN_TRAINING_SAMPLES = 30
+MODEL_FEATURES = [
+    "expected_dwell_minutes",
+    "arrival_hour_sin",
+    "arrival_hour_cos",
+    "arrival_weekday_sin",
+    "arrival_weekday_cos",
+    "vehicle_capacity_tonnes",
+    "trip_cargo_weight_tonnes",
+]
 
 
 @dataclass(frozen=True)
@@ -16,6 +25,8 @@ class DwellObservation:
     expected_minutes: float
     actual_minutes: float
     location_id: Optional[str] = None
+    vehicle_capacity_tonnes: Optional[float] = None
+    cargo_weight_tonnes: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -28,7 +39,12 @@ class DwellForecast:
     model_version: str = MODEL_VERSION
 
 
-def _features(arrival_time: datetime, expected_minutes: float) -> np.ndarray:
+def _features(
+    arrival_time: datetime,
+    expected_minutes: float,
+    vehicle_capacity_tonnes: Optional[float],
+    cargo_weight_tonnes: Optional[float],
+) -> np.ndarray:
     hour = arrival_time.hour + arrival_time.minute / 60.0
     hour_angle = 2 * pi * hour / 24
     weekday_angle = 2 * pi * arrival_time.weekday() / 7
@@ -39,6 +55,8 @@ def _features(arrival_time: datetime, expected_minutes: float) -> np.ndarray:
         cos(hour_angle),
         sin(weekday_angle),
         cos(weekday_angle),
+        (vehicle_capacity_tonnes or 0.0) / 40.0,
+        (cargo_weight_tonnes or 0.0) / 30.0,
     ])
 
 
@@ -47,6 +65,8 @@ def train_dwell_forecast(
     planned_arrival: datetime,
     expected_minutes: float,
     location_id: Optional[str] = None,
+    vehicle_capacity_tonnes: Optional[float] = None,
+    cargo_weight_tonnes: Optional[float] = None,
 ) -> Optional[DwellForecast]:
     """Fit a location-scoped linear regression and score a chronological holdout."""
     usable = sorted(
@@ -57,6 +77,14 @@ def train_dwell_forecast(
             and row.actual_minutes >= 0
             and isfinite(row.expected_minutes)
             and isfinite(row.actual_minutes)
+            and (
+                row.vehicle_capacity_tonnes is None
+                or (isfinite(row.vehicle_capacity_tonnes) and row.vehicle_capacity_tonnes >= 0)
+            )
+            and (
+                row.cargo_weight_tonnes is None
+                or (isfinite(row.cargo_weight_tonnes) and row.cargo_weight_tonnes >= 0)
+            )
         ),
         key=lambda row: row.arrival_time,
     )
@@ -70,12 +98,22 @@ def train_dwell_forecast(
     validation_rows = usable[split_at:]
 
     train_matrix = np.vstack([
-        _features(row.arrival_time, row.expected_minutes)
+        _features(
+            row.arrival_time,
+            row.expected_minutes,
+            row.vehicle_capacity_tonnes,
+            row.cargo_weight_tonnes,
+        )
         for row in training_rows
     ])
     train_targets = np.array([row.actual_minutes for row in training_rows])
     validation_matrix = np.vstack([
-        _features(row.arrival_time, row.expected_minutes)
+        _features(
+            row.arrival_time,
+            row.expected_minutes,
+            row.vehicle_capacity_tonnes,
+            row.cargo_weight_tonnes,
+        )
         for row in validation_rows
     ])
     validation_targets = np.array([row.actual_minutes for row in validation_rows])
@@ -85,7 +123,12 @@ def train_dwell_forecast(
     validation_mae = float(np.mean(np.abs(validation_targets - validation_predictions)))
 
     full_matrix = np.vstack([
-        _features(row.arrival_time, row.expected_minutes)
+        _features(
+            row.arrival_time,
+            row.expected_minutes,
+            row.vehicle_capacity_tonnes,
+            row.cargo_weight_tonnes,
+        )
         for row in usable
     ])
     full_targets = np.array([row.actual_minutes for row in usable])
@@ -94,7 +137,12 @@ def train_dwell_forecast(
     residuals = full_targets - fitted
     low_residual, high_residual = np.quantile(residuals, [0.1, 0.9])
 
-    prediction = max(0.0, float(_features(planned_arrival, expected_minutes) @ coefficients))
+    prediction = max(0.0, float(_features(
+        planned_arrival,
+        expected_minutes,
+        vehicle_capacity_tonnes,
+        cargo_weight_tonnes,
+    ) @ coefficients))
     interval_low = min(prediction, max(0.0, prediction + float(low_residual)))
     interval_high = max(prediction, prediction + float(high_residual))
     return DwellForecast(

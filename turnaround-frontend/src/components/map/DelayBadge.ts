@@ -11,6 +11,7 @@ interface DelayBadgeOptions {
   elapsedMinutes: number;
   expectedMinutes: number;
   vehicleId: string;
+  hourlyOperatingCost?: number;
 }
 
 export function delayBadgePopupHtml({
@@ -19,9 +20,10 @@ export function delayBadgePopupHtml({
   elapsedMinutes,
   expectedMinutes,
   vehicleId,
+  hourlyOperatingCost = 2500,
 }: DelayBadgeOptions): string {
   const excessMinutes = Math.max(0, elapsedMinutes - expectedMinutes);
-  const estimatedCost = Math.round((excessMinutes / 60) * 2500); // KES 2,500/hr approx
+  const estimatedCost = Math.round((excessMinutes / 60) * hourlyOperatingCost);
   const isOverdue = elapsedMinutes > expectedMinutes;
 
   const statusColor = isOverdue ? '#F0464C' : '#F5A524';

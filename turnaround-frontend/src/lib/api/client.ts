@@ -894,7 +894,16 @@ export const apiClient = {
       });
       return {
         assets,
-        model_type: 'Multiple linear regression',
+        model_type: 'Mock multi-signal regression',
+        model_features: [
+          'expected_dwell_minutes',
+          'arrival_hour_sin',
+          'arrival_hour_cos',
+          'arrival_weekday_sin',
+          'arrival_weekday_cos',
+          'vehicle_capacity_tonnes',
+          'trip_cargo_weight_tonnes',
+        ],
         training_samples: 36,
         validation_mae_minutes: 18.5,
         generated_at: new Date().toISOString(),
@@ -927,8 +936,17 @@ export const apiClient = {
         cost_interval_low: 0,
         cost_interval_high: Math.round((Math.max(0, predicted * 1.3 - base) / 60) * hourlyCost * 100) / 100,
         data_source: 'gps_dwell_history',
-        model_type: 'Multiple linear regression',
-        training_samples: 12,
+        model_type: 'Mock multi-signal regression',
+        model_features: [
+          'expected_dwell_minutes',
+          'arrival_hour_sin',
+          'arrival_hour_cos',
+          'arrival_weekday_sin',
+          'arrival_weekday_cos',
+          'vehicle_capacity_tonnes',
+          'trip_cargo_weight_tonnes',
+        ],
+        training_samples: 36,
         validation_mae_minutes: 18.5,
         history: Array.from({ length: 7 }, (_, index) => {
           const arrival = new Date();
@@ -941,7 +959,7 @@ export const apiClient = {
             estimated_cost: Math.round((Math.max(0, actualDwell - base) / 60) * hourlyCost * 100) / 100,
           };
         }),
-        model_version: 'fleet-dwell-linear-v1'
+        model_version: 'fleet-dwell-multisignal-v2'
       };
     }
     const res = await fetch(`${API_BASE_URL}/predictions/dwell`, {

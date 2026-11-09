@@ -21,7 +21,7 @@ from app.schemas.predictions import (
 )
 from app.config import settings
 from app.engines.financial import calculate_delay_cost, calculate_excess_minutes
-from app.engines.dwell_prediction import DwellObservation, train_dwell_forecast
+from app.engines.dwell_prediction import MODEL_FEATURES, DwellObservation, train_dwell_forecast
 from app.engines.geofencing import haversine_distance
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
@@ -109,8 +109,11 @@ async def predict_dwell(
             DwellEvent.location_id,
             DwellEvent.expected_minutes,
             DwellEvent.dwell_minutes,
+            Vehicle.capacity.label("vehicle_capacity_tonnes"),
+            Trip.cargo_weight_tonnes.label("cargo_weight_tonnes"),
         )
         .join(Vehicle, DwellEvent.vehicle_id == Vehicle.id)
+        .outerjoin(Trip, DwellEvent.trip_id == Trip.id)
         .where(
             Vehicle.company_id == company_id,
             DwellEvent.location_id == payload.location_id,
@@ -126,6 +129,8 @@ async def predict_dwell(
             expected_minutes=float(row.expected_minutes),
             actual_minutes=float(row.dwell_minutes),
             location_id=row.location_id,
+            vehicle_capacity_tonnes=getattr(row, "vehicle_capacity_tonnes", None),
+            cargo_weight_tonnes=getattr(row, "cargo_weight_tonnes", None),
         )
         for row in training_result.all()
     ]
@@ -141,12 +146,13 @@ async def predict_dwell(
         payload.planned_arrival,
         float(loc.expected_dwell_minutes),
         payload.location_id,
+        getattr(vehicle, "capacity", None) if vehicle else None,
     )
     if forecast:
         predicted = forecast.predicted_minutes
         low = forecast.confidence_interval_low
         high = forecast.confidence_interval_high
-        model_type = "Multiple linear regression"
+        model_type = "Multiple linear regression with trip/asset features"
         model_version = forecast.model_version
         validation_mae = forecast.validation_mae_minutes
     elif stats:
@@ -191,6 +197,7 @@ async def predict_dwell(
             else "location_baseline"
         ),
         model_type=model_type,
+        model_features=MODEL_FEATURES if forecast else [],
         training_samples=forecast.training_samples if forecast else len(training_rows),
         validation_mae_minutes=round(validation_mae, 1) if validation_mae is not None else None,
         history=stats["history"] if stats else [],
@@ -281,6 +288,8 @@ async def predict_fleet(
             DwellEvent.location_id,
             DwellEvent.expected_minutes,
             DwellEvent.dwell_minutes,
+            Vehicle.capacity.label("vehicle_capacity_tonnes"),
+            Trip.cargo_weight_tonnes.label("cargo_weight_tonnes"),
             func.row_number()
             .over(
                 partition_by=DwellEvent.location_id,
@@ -289,6 +298,7 @@ async def predict_fleet(
             .label("row_number"),
         )
         .join(Vehicle, DwellEvent.vehicle_id == Vehicle.id)
+        .outerjoin(Trip, DwellEvent.trip_id == Trip.id)
         .where(
             Vehicle.company_id == company_id,
             DwellEvent.departure_time.isnot(None),
@@ -305,12 +315,14 @@ async def predict_fleet(
             float(row.expected_minutes),
             float(row.dwell_minutes),
             row.location_id,
+            getattr(row, "vehicle_capacity_tonnes", None),
+            getattr(row, "cargo_weight_tonnes", None),
         )
         for row in training_result.all()
     ]
 
     assets: List[FleetAssetForecast] = []
-    model_validation_errors: List[float] = []
+    model_validation_errors: Dict[str, float] = {}
     location_stats_cache: Dict[tuple, Optional[Dict]] = {}
     for vehicle in vehicles:
         trip = trips_by_vehicle.get(vehicle.id)
@@ -356,9 +368,17 @@ async def predict_fleet(
                 planned_arrival = planned_arrival.replace(tzinfo=timezone.utc)
             arrival_at = planned_arrival if planned_arrival and planned_arrival > now else now
             expected = float(location.expected_dwell_minutes)
-            prediction = train_dwell_forecast(observations, arrival_at, expected, location.id)
+            cargo_weight = getattr(trip, "cargo_weight_tonnes", None) if trip else None
+            prediction = train_dwell_forecast(
+                observations,
+                arrival_at,
+                expected,
+                location.id,
+                getattr(vehicle, "capacity", None),
+                cargo_weight,
+            )
             if prediction:
-                model_validation_errors.append(prediction.validation_mae_minutes)
+                model_validation_errors[location.id] = prediction.validation_mae_minutes
                 predicted = prediction.predicted_minutes
                 low = prediction.confidence_interval_low
                 high = prediction.confidence_interval_high
@@ -427,15 +447,16 @@ async def predict_fleet(
     return FleetForecastResponse(
         assets=assets,
         model_type=(
-            "Location-specific multiple linear regression"
+            "Location-specific multi-signal regression"
             if model_validation_errors
             else "Historical average / configured baseline"
         ),
         training_samples=len(observations),
         validation_mae_minutes=(
-            round(sum(model_validation_errors) / len(model_validation_errors), 1)
+            round(sum(model_validation_errors.values()) / len(model_validation_errors), 1)
             if model_validation_errors else None
         ),
+        model_features=MODEL_FEATURES if model_validation_errors else [],
         generated_at=now,
     )
 

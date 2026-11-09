@@ -693,7 +693,7 @@ export const AIAdvisor: React.FC = () => {
             </div>
             <h2 className="mt-1 text-lg font-extrabold tracking-tight text-text-primary">Fleet prediction & tracking center</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-secondary">
-              Every asset is matched to its active trip, open stop dwell, or current GPS geofence. Forecasts and idle cost update automatically as new telemetry arrives.
+              Forecasts combine completed dwell outcomes, stop expectations, arrival timing, vehicle capacity, and recorded trip cargo. Live GPS and trip state identify each asset's current context; the vehicle's operating rate converts excess dwell into cost.
             </p>
           </div>
           <div className="text-[10px] text-text-tertiary">
@@ -754,6 +754,7 @@ export const AIAdvisor: React.FC = () => {
               <p className="mt-0.5 text-[10px] text-text-tertiary">
                 {fleetForecast?.model_type ?? 'Fleet model'} · {fleetForecast?.training_samples ?? 0} completed dwell samples
                 {fleetForecast?.validation_mae_minutes != null ? ` · holdout MAE ${formatMinutes(fleetForecast.validation_mae_minutes)}` : ''}
+                {fleetForecast?.model_features?.length ? ` · inputs: ${fleetForecast.model_features.join(', ')}` : ' · insufficient history for multi-signal model; using historical/configured baseline'}
               </p>
             </div>
             <span className="text-[10px] text-text-tertiary">Each vehicle is tracked automatically</span>

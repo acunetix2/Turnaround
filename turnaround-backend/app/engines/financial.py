@@ -8,6 +8,18 @@ def calculate_excess_minutes(actual_dwell_minutes: float, expected_dwell_minutes
     return max(0.0, float(actual_dwell_minutes) - float(expected_dwell_minutes))
 
 
+def calculate_financial_loss(
+    actual_dwell_minutes: float,
+    expected_dwell_minutes: float,
+    hourly_operating_cost: float,
+) -> float:
+    """Financial loss = max(0, actual_dwell - expected_dwell) / 60 * hourly_operating_cost."""
+    excess_minutes = calculate_excess_minutes(actual_dwell_minutes, expected_dwell_minutes)
+    if excess_minutes <= 0.0 or hourly_operating_cost <= 0.0:
+        return 0.0
+    return round((float(excess_minutes) / 60.0) * float(hourly_operating_cost), 2)
+
+
 def calculate_delay_cost(excess_minutes: float, hourly_operating_cost: float) -> float:
     """
     Core financial formula: delay_cost = (excess_minutes / 60.0) * vehicle.hourly_operating_cost
@@ -34,7 +46,7 @@ def assess_dwell_cost(
 ) -> FinancialAssessment:
     """Computes complete dwell delay and financial loss assessment."""
     excess = calculate_excess_minutes(actual_dwell_minutes, expected_dwell_minutes)
-    cost = calculate_delay_cost(excess, hourly_operating_cost)
+    cost = calculate_financial_loss(actual_dwell_minutes, expected_dwell_minutes, hourly_operating_cost)
     return FinancialAssessment(
         dwell_minutes=round(actual_dwell_minutes, 2),
         expected_minutes=round(expected_dwell_minutes, 2),

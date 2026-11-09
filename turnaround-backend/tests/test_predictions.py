@@ -105,15 +105,17 @@ async def test_dwell_prediction_uses_location_baseline_without_gps_history():
 async def test_dwell_prediction_trains_location_model_and_returns_validation_metrics():
     planned_arrival = datetime(2026, 11, 9, 10, tzinfo=timezone.utc)
     location = SimpleNamespace(id="location-1", expected_dwell_minutes=120)
-    vehicle = SimpleNamespace(id="vehicle-1", hourly_operating_cost=3000)
+    vehicle = SimpleNamespace(id="vehicle-1", hourly_operating_cost=3000, capacity=30)
     training_rows = [
         SimpleNamespace(
-            arrival_time=planned_arrival.replace(day=index + 1),
+            arrival_time=planned_arrival + timedelta(days=index),
             location_id=location.id,
             expected_minutes=120,
             dwell_minutes=145 + (index % 4) * 5,
+            vehicle_capacity_tonnes=18 + (index % 5) * 4,
+            cargo_weight_tonnes=2 + (index * 7 % 24),
         )
-        for index in range(14)
+        for index in range(32)
     ]
     historical_visit = SimpleNamespace(
         arrival_time=planned_arrival,
@@ -138,9 +140,11 @@ async def test_dwell_prediction_trains_location_model_and_returns_validation_met
         "company-1",
     )
 
-    assert response.model_version == "fleet-dwell-linear-v1"
-    assert response.model_type == "Multiple linear regression"
-    assert response.training_samples == 14
+    assert response.model_version == "fleet-dwell-multisignal-v2"
+    assert response.model_type == "Multiple linear regression with trip/asset features"
+    assert response.training_samples == 32
+    assert "trip_cargo_weight_tonnes" in response.model_features
+    assert "vehicle_capacity_tonnes" in response.model_features
     assert response.validation_mae_minutes is not None
     assert response.predicted_dwell_minutes > 0
 
