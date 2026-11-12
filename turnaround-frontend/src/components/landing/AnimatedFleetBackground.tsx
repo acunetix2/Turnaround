@@ -2,7 +2,7 @@ import React from 'react';
 
 export const AnimatedFleetBackground: React.FC = () => {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
       <svg
         className="w-full h-full"
         viewBox="0 0 1440 900"

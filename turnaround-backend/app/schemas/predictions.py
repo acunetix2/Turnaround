@@ -60,6 +60,15 @@ class FleetAssetForecast(BaseModel):
     cost_interval_low: Optional[float] = None
     cost_interval_high: Optional[float] = None
     model_version: Optional[str] = None
+    predicted_arrival: Optional[datetime] = None
+    predicted_travel_minutes: Optional[float] = None
+    predicted_delay_minutes: Optional[float] = None
+    travel_time_estimate_p10_minutes: Optional[float] = None
+    travel_time_estimate_p90_minutes: Optional[float] = None
+    travel_time_training_samples: int = 0
+    travel_time_training_trips: int = 0
+    travel_time_validation_mae_minutes: Optional[float] = None
+    travel_time_model_version: Optional[str] = None
 
 
 class FleetForecastResponse(BaseModel):

@@ -146,6 +146,70 @@ html.light {
   color-scheme: light;
 }
 
+.landing-page[data-landing-theme="light"] {
+  color: #250C77;
+}
+
+.landing-page[data-landing-theme="light"] [class*="text-white"]:not(a):not(button) {
+  color: #55488A !important;
+}
+
+.landing-page[data-landing-theme="light"] [class*="text-[#F4F5F7]"]:not(a):not(button),
+.landing-page[data-landing-theme="light"] [class*="text-[#D1D5DB]"]:not(a):not(button),
+.landing-page[data-landing-theme="light"] [class*="text-[#9CA3AF]"]:not(a):not(button),
+.landing-page[data-landing-theme="light"] [class*="text-[#6B7280]"]:not(a):not(button) {
+  color: #55488A !important;
+}
+
+.landing-page[data-landing-theme="light"] [class*="bg-[#07051A]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#07080A]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#040507]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#0A051B]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#0E0724]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#0E0A2C]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#0B0928]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#0B0F17]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#0B1713]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#180B4A]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#140938]"],
+.landing-page[data-landing-theme="light"] [class*="bg-[#141721]"],
+.landing-page[data-landing-theme="light"] [class*="bg-black/"] {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+
+.landing-page[data-landing-theme="light"] [class*="border-white"] {
+  border-color: rgba(37, 12, 119, 0.16) !important;
+}
+
+.landing-page[data-landing-theme="light"] [class*="hover:text-white"]:hover {
+  color: #250C77 !important;
+}
+
+.landing-page[data-landing-theme="light"] a[class*="text-[#9CA3AF]"],
+.landing-page[data-landing-theme="light"] a[class*="text-[#6B7280]"],
+.landing-page[data-landing-theme="light"] a[class*="text-[#D1D5DB]"] {
+  color: #55488A !important;
+}
+
+.landing-page[data-landing-theme="light"] a[class*="hover:text-white"]:hover,
+.landing-page[data-landing-theme="light"] button[class*="hover:text-white"]:hover {
+  color: #250C77 !important;
+}
+
+.landing-page[data-landing-theme="light"] [data-theme-overlay] {
+  background-image: none !important;
+  background-color: rgba(245, 243, 251, 0.86) !important;
+}
+
+.landing-page[data-landing-theme="light"] .cinematic-vignette {
+  opacity: 0.08 !important;
+}
+
+.landing-page[data-landing-theme="light"] a[class*="bg-black/"],
+.landing-page[data-landing-theme="light"] button[class*="bg-black/"] {
+  color: #250C77 !important;
+}
+
 /* Keep legacy fixed-color utilities readable on dark surfaces. */
 html.dark .text-\[\#250C77\],
 [data-theme="dark"] .text-\[\#250C77\],

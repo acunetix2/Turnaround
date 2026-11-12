@@ -1,24 +1,55 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Send, RefreshCw, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
-  Sparkles, ShieldCheck, Lightbulb, ExternalLink,
-  Package, Leaf, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon,
+  Send, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
+  Lightbulb, ExternalLink,
+  Package, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon,
   MapPin, Radio, Truck
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 import { useCorridorAnalysis, useCopilotQuery } from '../../hooks/useAIAdvisor';
 import { formatCurrency, formatMinutes } from '../../lib/format';
+import { getOnTimeDeliveryMetrics } from '../../lib/onTimeDelivery';
 import { Spinner } from '../../components/common/Loader';
-import type { AICopilotMessage } from '../../lib/api/types';
-import type { ChartData } from '../../lib/api/types';
+import type { AICopilotMessage, ChartData } from '../../lib/api/types';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { useTheme } from '../../lib/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/Alert';
 import { useAuth } from '../../auth/AuthProvider';
+
+const advisorModules = [
+  {
+    id: 'predictions',
+    title: 'Predictions',
+    description: 'Live fleet ETAs, dwell forecasts, and what-if stop scenarios.',
+    path: '/ai-advisor/predictions',
+    icon: TrendingUp,
+  },
+  {
+    id: 'insights',
+    title: 'Insights',
+    description: 'Key findings, shipment trends, and route performance.',
+    path: '/ai-advisor/insights',
+    icon: Lightbulb,
+  },
+  {
+    id: 'recommendations',
+    title: 'Recommendations',
+    description: 'Operational actions and dwell performance analysis.',
+    path: '/ai-advisor/recommendations',
+    icon: CheckCircle2,
+  },
+  {
+    id: 'assistant',
+    title: 'AI Analyst',
+    description: 'Ask questions about your fleet and operational data.',
+    path: '/ai-advisor/assistant',
+    icon: MessageCircle,
+  },
+] as const;
 
 /**
  * Rich Markdown parser and renderer tailored for Turnaround AI operations output.
@@ -132,7 +163,7 @@ const FormattedMarkdownMessage: React.FC<{ content: string; isUser: boolean }> =
     if (trimmed.startsWith('### ')) {
       elements.push(
         <h4 key={idx} className="font-extrabold text-sm text-text-primary mt-3 mb-1.5 flex items-center gap-1.5 border-b border-border-default pb-1">
-          <Sparkles size={13} className="text-[#ED642B]" />
+          <Lightbulb size={13} className="text-[#ED642B]" />
           <span>{renderInlineMarkdown(trimmed.replace('### ', ''))}</span>
         </h4>
       );
@@ -205,6 +236,8 @@ const FormattedMarkdownMessage: React.FC<{ content: string; isUser: boolean }> =
 
 export const AIAdvisor: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const activeModule = advisorModules.find((module) => module.path === location.pathname);
   const { data: analysis, isLoading: loadingAnalysis, refetch } = useCorridorAnalysis();
   const { data: locationStats } = useQuery({
     queryKey: ['locationStats'],
@@ -412,18 +445,17 @@ export const AIAdvisor: React.FC = () => {
     };
   }, [chartData, isDark]);
 
-  const delayedTrucks = dashboardStats?.trucks_delayed ?? 0;
   const totalCostToday = dashboardStats?.estimated_financial_impact ?? 0;
-  const excessDwellToday = dashboardStats?.excess_dwell_today_minutes ?? 0;
   const totalShipments = trips.length || locationStats?.reduce((sum, location) => sum + (location.total_visits || 0), 0) || 0;
-  const onTimeDelivery = trips.length > 0
-    ? Math.round((trips.filter((trip) => !['delayed', 'cancelled'].includes(trip.status)).length / trips.length) * 1000) / 10
-    : Math.max(0, 100 - delayedTrucks);
+  const onTimeDelivery = getOnTimeDeliveryMetrics(trips);
   const recentInsights = insights.slice(0, 4);
   const fleetAssets = fleetForecast?.assets ?? [];
   const movingAssets = fleetAssets.filter((asset) => asset.tracking_state === 'on_trip').length;
   const idleAssets = fleetAssets.filter((asset) => ['idling_at_stop', 'at_geofence', 'idle'].includes(asset.tracking_state)).length;
   const forecastableAssets = fleetAssets.filter((asset) => asset.estimated_cost != null);
+  const etaForecastAssets = fleetAssets.filter((asset) => asset.predicted_arrival != null);
+  const lateEtaForecastAssets = etaForecastAssets.filter((asset) => (asset.predicted_delay_minutes ?? 0) > 0);
+  const tripsById = new Map(trips.map((trip) => [trip.id, trip]));
   const fleetForecastCost = forecastableAssets.reduce((total, asset) => total + (asset.estimated_cost ?? 0), 0);
   const liveIdleCost = fleetAssets.reduce((total, asset) => total + asset.current_idle_cost, 0);
   const selectedLocationId = predictionLocationId || locations[0]?.id || '';
@@ -606,8 +638,72 @@ export const AIAdvisor: React.FC = () => {
         tag: 'IMMEDIATE'
       }));
 
+  if (!activeModule) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-5">
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight text-text-primary">Analytics and Prediction</h1>
+          <p className="mt-1 text-sm text-text-secondary">Choose a module to get started.</p>
+        </header>
+
+        <nav aria-label="Analytics and Prediction modules" className="grid gap-3 sm:grid-cols-2">
+          {advisorModules.map((module) => {
+            const Icon = module.icon;
+            return (
+              <Link
+                key={module.id}
+                to={module.path}
+                className="group flex items-center gap-4 rounded-xl border border-border-default bg-bg-surface p-4 transition-colors hover:border-[#ED642B]/50 hover:bg-bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED642B]"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#250C77]/10 text-[#250C77] dark:text-[#ED642B]">
+                  <Icon size={20} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-text-primary">{module.title}</span>
+                    <ArrowRight size={15} className="shrink-0 text-text-tertiary transition group-hover:translate-x-1 group-hover:text-[#ED642B]" />
+                  </span>
+                  <span className="mt-1 block text-xs leading-relaxed text-text-secondary">{module.description}</span>
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      <header className="space-y-4">
+        <Link to="/ai-advisor" className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary transition-colors hover:text-[#ED642B]">
+          <ArrowRight size={13} className="rotate-180" />
+          All Analytics and Prediction modules
+        </Link>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-text-primary">{activeModule.title}</h1>
+          <p className="mt-1 text-sm text-text-secondary">{activeModule.description}</p>
+        </div>
+        <nav aria-label="Analytics and Prediction modules" className="flex flex-wrap gap-2">
+          {advisorModules.map((module) => (
+            <Link
+              key={module.id}
+              to={module.path}
+              aria-current={module.id === activeModule.id ? 'page' : undefined}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                module.id === activeModule.id
+                  ? 'border-[#250C77] bg-[#250C77] text-white'
+                  : 'border-border-default bg-bg-surface text-text-secondary hover:border-[#ED642B]/50 hover:text-text-primary'
+              }`}
+            >
+              {module.title}
+            </Link>
+          ))}
+        </nav>
+      </header>
+
+      {activeModule.id === 'predictions' && (
+        <>
       {/* ── ANALYST WELCOME ── */}
       <section className="relative overflow-hidden rounded-xl border border-[#250C77]/40 bg-[#07092a] px-5 py-5 text-white shadow-sm sm:px-6">
         <div className="relative z-10 max-w-md">
@@ -619,7 +715,7 @@ export const AIAdvisor: React.FC = () => {
             <Button
               variant="primary"
               size="small"
-              icon={<Sparkles size={13} />}
+              icon={<BarChart3 size={13} />}
               loading={loadingAnalysis}
               onClick={() => { refetch(); void refetchFleetForecast(); }}
             >
@@ -633,7 +729,6 @@ export const AIAdvisor: React.FC = () => {
         <div className="pointer-events-none absolute -right-12 -top-20 h-64 w-64 rounded-full border border-violet-400/30 bg-violet-500/10 blur-[1px]" />
         <div className="pointer-events-none absolute right-12 top-8 h-32 w-56 rotate-12 rounded-[50%] border border-violet-400/30 opacity-70" />
         <div className="pointer-events-none absolute right-24 top-20 h-20 w-32 rounded-[50%] border border-violet-300/30 opacity-60" />
-        <Sparkles className="pointer-events-none absolute right-16 top-12 h-28 w-28 text-violet-300/60" strokeWidth={1} />
       </section>
 
       {/* ── EXECUTIVE KPI STRIP ── */}
@@ -655,9 +750,13 @@ export const AIAdvisor: React.FC = () => {
             <Clock size={14} className="text-[#250C77]" />
           </div>
           <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
-            {onTimeDelivery}%
+            {onTimeDelivery.rate === null ? '—' : `${onTimeDelivery.rate}%`}
           </p>
-          <p className="text-[11px] text-status-good mt-0.5">{delayedTrucks > 0 ? `${delayedTrucks} delayed now` : 'No active delays'}</p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">
+            {onTimeDelivery.rate === null
+              ? 'Completed trips with schedule data required'
+              : `${onTimeDelivery.onTimeTrips} of ${onTimeDelivery.completedTrips} completed trips on time`}
+          </p>
         </div>
 
         <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
@@ -673,13 +772,15 @@ export const AIAdvisor: React.FC = () => {
 
         <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">
           <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-            <span>CO₂ Emissions Saved</span>
-            <Leaf size={14} className="text-status-good" />
+            <span>Live ETA forecasts</span>
+            <Radio size={14} className="text-[#ED642B]" />
           </div>
           <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
-            —
+            {fleetForecast ? etaForecastAssets.length.toLocaleString() : '—'}
           </p>
-          <p className="text-[11px] text-text-tertiary mt-0.5">Not tracked in current data</p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">
+            {fleetForecast ? `${lateEtaForecastAssets.length} at risk · route history required` : 'Waiting for fleet forecasts'}
+          </p>
         </div>
       </div>
 
@@ -691,9 +792,9 @@ export const AIAdvisor: React.FC = () => {
               <Radio size={15} className="text-emerald-500" />
               <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">Automatic · refreshes every minute</span>
             </div>
-            <h2 className="mt-1 text-lg font-extrabold tracking-tight text-text-primary">Fleet prediction & tracking center</h2>
+            <h2 className="mt-1 text-lg font-extrabold tracking-tight text-text-primary">Live corridor predictions</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-secondary">
-              Forecasts combine completed dwell outcomes, stop expectations, arrival timing, vehicle capacity, and recorded trip cargo. Live GPS and trip state identify each asset's current context; the vehicle's operating rate converts excess dwell into cost.
+              Fresh GPS and completed trips on the same corridor power estimated arrival times. Facility history estimates dwell; excess minutes are priced using each vehicle's hourly operating rate. An ETA is shown only when route history supports a model.
             </p>
           </div>
           <div className="text-[10px] text-text-tertiary">
@@ -707,10 +808,11 @@ export const AIAdvisor: React.FC = () => {
           </p>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
             { label: 'Assets monitored', value: fleetForecast ? fleetAssets.length.toLocaleString() : '—', note: `${movingAssets} currently on trips`, icon: Truck },
             { label: 'At stops / idle', value: fleetForecast ? idleAssets.toLocaleString() : '—', note: 'GPS and open dwell state', icon: Clock },
+            { label: 'Late ETA forecasts', value: fleetForecast ? lateEtaForecastAssets.length.toLocaleString() : '—', note: `${etaForecastAssets.length} evidence-backed route ETAs`, icon: MapPin },
             { label: 'Forecast excess cost', value: fleetForecast ? formatCurrency(fleetForecastCost) : '—', note: `${forecastableAssets.length} assets with a stop forecast`, icon: DollarSign },
             { label: 'Live idle cost', value: fleetForecast ? formatCurrency(liveIdleCost) : '—', note: 'Accumulated from open GPS dwell', icon: Radio },
           ].map((metric) => (
@@ -754,7 +856,7 @@ export const AIAdvisor: React.FC = () => {
               <p className="mt-0.5 text-[10px] text-text-tertiary">
                 {fleetForecast?.model_type ?? 'Fleet model'} · {fleetForecast?.training_samples ?? 0} completed dwell samples
                 {fleetForecast?.validation_mae_minutes != null ? ` · holdout MAE ${formatMinutes(fleetForecast.validation_mae_minutes)}` : ''}
-                {fleetForecast?.model_features?.length ? ` · inputs: ${fleetForecast.model_features.join(', ')}` : ' · insufficient history for multi-signal model; using historical/configured baseline'}
+                {fleetForecast?.model_features?.length ? ` · dwell inputs: ${fleetForecast.model_features.join(', ')}` : ' · dwell forecast uses historical/configured baseline when model history is limited'}
               </p>
             </div>
             <span className="text-[10px] text-text-tertiary">Each vehicle is tracked automatically</span>
@@ -762,14 +864,16 @@ export const AIAdvisor: React.FC = () => {
           {loadingFleetForecast && !fleetAssets.length ? <div className="flex h-28 items-center justify-center"><Spinner /></div>
             : fleetAssets.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[880px] text-left text-[11px]">
+                <table className="w-full min-w-[1080px] text-left text-[11px]">
                   <thead className="bg-bg-surface-raised text-[9px] uppercase tracking-wider text-text-tertiary">
                     <tr>
                       <th className="px-3 py-2.5">Asset / trip</th>
                       <th className="px-3 py-2.5">Tracking state</th>
                       <th className="px-3 py-2.5">Stop</th>
                       <th className="px-3 py-2.5 text-right">Live dwell</th>
-                      <th className="px-3 py-2.5 text-right">Predicted</th>
+                      <th className="px-3 py-2.5 text-right">Predicted dwell / SLA</th>
+                      <th className="px-3 py-2.5 text-right">ETA</th>
+                      <th className="px-3 py-2.5 text-right">Delay risk</th>
                       <th className="px-3 py-2.5 text-right">Idle cost</th>
                       <th className="px-3 py-2.5 text-right">GPS</th>
                     </tr>
@@ -791,6 +895,26 @@ export const AIAdvisor: React.FC = () => {
                         <td className="px-3 py-2.5 text-text-secondary">{asset.location_name || 'No trip / geofence'}</td>
                         <td className="px-3 py-2.5 text-right font-numeric text-text-secondary">{asset.current_dwell_minutes != null ? formatMinutes(asset.current_dwell_minutes) : '—'}</td>
                         <td className="px-3 py-2.5 text-right font-numeric text-text-primary">{asset.predicted_dwell_minutes != null ? `${formatMinutes(asset.predicted_dwell_minutes)}${asset.expected_dwell_minutes != null ? ` / ${formatMinutes(asset.expected_dwell_minutes)}` : ''}` : '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-numeric text-text-primary">
+                          {asset.predicted_arrival ? (
+                            <>
+                              {new Date(asset.predicted_arrival).toLocaleString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              <p className="text-[9px] text-emerald-600">Route model · ±{formatMinutes(asset.travel_time_validation_mae_minutes ?? 0)} MAE</p>
+                            </>
+                          ) : tripsById.get(asset.trip_id ?? '')?.planned_arrival ? (
+                            <>
+                              {new Date(tripsById.get(asset.trip_id ?? '')!.planned_arrival).toLocaleString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              <p className="text-[9px] text-text-tertiary">Scheduled · no route model</p>
+                            </>
+                          ) : '—'}
+                        </td>
+                        <td className={`px-3 py-2.5 text-right font-numeric ${asset.predicted_delay_minutes != null && asset.predicted_delay_minutes > 0 ? 'font-bold text-[#ED642B]' : 'text-text-secondary'}`}>
+                          {asset.predicted_delay_minutes == null
+                            ? '—'
+                            : asset.predicted_delay_minutes > 0
+                              ? `+${formatMinutes(asset.predicted_delay_minutes)}`
+                              : 'On time'}
+                        </td>
                         <td className="px-3 py-2.5 text-right font-numeric font-bold text-[#ED642B]">{asset.estimated_cost != null ? formatCurrency(asset.estimated_cost) : formatCurrency(asset.current_idle_cost)}</td>
                         <td className="px-3 py-2.5 text-right font-numeric text-text-secondary">{asset.speed_kmh != null ? `${asset.speed_kmh.toFixed(0)} km/h` : 'No fix'}</td>
                       </tr>
@@ -935,6 +1059,11 @@ export const AIAdvisor: React.FC = () => {
         </div>
       </section>
 
+        </>
+      )}
+
+      {activeModule.id === 'insights' && (
+        <>
       {/* ── LIVE CORRIDOR INTELLIGENCE REPORT ALERT BANNER ── */}
       {analysis?.executive_summary && (
         <Alert variant="info" className="border-[#250C77]/30 bg-[#250C77]/10">
@@ -959,7 +1088,7 @@ export const AIAdvisor: React.FC = () => {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <section className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm xl:col-span-4">
           <div className="mb-3 flex items-start gap-2 border-b border-border-default pb-3">
-            <Sparkles size={16} className="mt-0.5 text-[#250C77]" />
+            <Lightbulb size={16} className="mt-0.5 text-[#250C77]" />
             <div>
               <h2 className="text-xs font-bold text-text-primary">AI Insight Summary</h2>
               <p className="text-[10px] text-text-secondary">Key findings from your logistics data</p>
@@ -1028,6 +1157,11 @@ export const AIAdvisor: React.FC = () => {
         </section>
       </div>
 
+        </>
+      )}
+
+      {activeModule.id === 'recommendations' && (
+        <>
       {/* ── VISUAL ANALYTICS SECTION ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left Chart: Stop Dwell vs Target (7 cols) */}
@@ -1077,7 +1211,7 @@ export const AIAdvisor: React.FC = () => {
           <div>
             <div className="flex items-center justify-between border-b border-border-default pb-3 mb-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                <Sparkles size={14} className="text-[#ED642B]" />
+                <Lightbulb size={14} className="text-[#ED642B]" />
                 Prescriptive Interventions
               </h2>
               <span className="text-[10px] text-text-tertiary font-numeric">Live Formulated</span>
@@ -1121,6 +1255,11 @@ export const AIAdvisor: React.FC = () => {
         </div>
       </div>
 
+        </>
+      )}
+
+      {activeModule.id === 'assistant' && (
+        <>
       {/* ── LIVE INTERACTIVE ANALYST TERMINAL (WITH RICH MARKDOWN RENDERING) ── */}
       <div id="analyst-assistant" className="rounded-2xl border border-border-strong bg-bg-surface shadow-xl flex flex-col h-[580px] overflow-hidden">
         {/* Terminal Header */}
@@ -1155,10 +1294,10 @@ export const AIAdvisor: React.FC = () => {
                 >
                   <FormattedMarkdownMessage content={msg.content} isUser={isUser} />
                   {/* View in Visuals button — only on assistant messages with chart_data */}
-                  {!isUser && (msg as any).chart_data && (
+                  {!isUser && msg.chart_data && (
                     <button
                       onClick={() => navigate('/analytics', {
-                        state: { injectChart: (msg as any).chart_data }
+                        state: { injectChart: msg.chart_data }
                       })}
                       className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#250C77]/10 hover:bg-[#250C77]/20 border border-[#250C77]/30 text-[11px] font-bold text-[#250C77] dark:text-[#ED642B] transition-colors cursor-pointer"
                     >
@@ -1221,6 +1360,8 @@ export const AIAdvisor: React.FC = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

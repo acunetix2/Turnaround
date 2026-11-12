@@ -89,11 +89,11 @@ export const Landing: React.FC = () => {
   }, []);
 
   return (
-    <div className={`relative min-h-screen overflow-x-hidden selection:bg-[#ED642B]/30 ${theme === 'dark' ? 'bg-[#0A051B] text-[#F4F5F7]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
+    <div data-landing-theme={theme} className={`landing-page relative min-h-screen overflow-x-hidden selection:bg-[#ED642B]/30 ${theme === 'dark' ? 'bg-[#0A051B] text-[#F4F5F7]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
 
       {/* ── FLEXPORT-STYLE SYSTEM MEGA-NAVBAR ── */}
       <header
-        className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.08] bg-[#07051A]/80 backdrop-blur-2xl transition-all"
+        className="sticky top-0 inset-x-0 z-50 border-b border-white/[0.08] bg-[#07051A]/80 backdrop-blur-2xl transition-all"
         onMouseLeave={handleMouseLeave}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
@@ -449,7 +449,7 @@ export const Landing: React.FC = () => {
       </header>
 
       {/* ── HERO SECTION ── */}
-      <section className="relative min-h-[92vh] flex items-center overflow-hidden pt-24 z-10">
+      <section className="relative min-h-[92vh] flex items-center overflow-hidden pt-8 z-10">
         
         {/* Crisp, clear background photo with subtle parallax */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -461,8 +461,8 @@ export const Landing: React.FC = () => {
             />
           </div>
           {/* Directional gradient and cinematic vignette */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#07051A]/95 via-[#07051A]/68 to-[#07051A]/10" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#07080A] via-transparent to-[#07080A]/30" />
+          <div data-theme-overlay className="absolute inset-0 bg-gradient-to-r from-[#07051A]/95 via-[#07051A]/68 to-[#07051A]/10" />
+          <div data-theme-overlay className="absolute inset-0 bg-gradient-to-t from-[#07080A] via-transparent to-[#07080A]/30" />
           <div className="absolute inset-0 cinematic-vignette opacity-70" />
           {/* Subtle Anamorphic Optical Flare Sweep */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -473,7 +473,7 @@ export const Landing: React.FC = () => {
         {/* ── MOVING TRUCKS ON ASPHALT ROADS ANIMATION LAYER ── */}
         <AnimatedFleetBackground />
 
-        <div className="relative z-10 mx-auto max-w-7xl px-6 py-20 lg:px-10 lg:py-28">
+        <div className="relative z-20 mx-auto max-w-7xl px-6 py-20 lg:px-10 lg:py-28">
           <div className="grid lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Copy Column */}
@@ -569,7 +569,7 @@ export const Landing: React.FC = () => {
             alt="Articulated lorries and haulage trucks on freight highway corridor"
             className="h-full w-full object-cover brightness-[0.75] contrast-[1.10] animate-cinematic-dolly"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/40 to-[#07080A]/90" />
+          <div data-theme-overlay className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/40 to-[#07080A]/90" />
           <div className="absolute inset-0 cinematic-vignette opacity-70" />
         </div>
 
@@ -638,7 +638,7 @@ export const Landing: React.FC = () => {
             alt="Warehouse loading docks and commercial trucks"
             className="h-full w-full object-cover brightness-[0.82] contrast-[1.10] animate-cinematic-push"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/60 to-[#07080A]/90" />
+          <div data-theme-overlay className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/60 to-[#07080A]/90" />
           <div className="absolute inset-0 cinematic-vignette opacity-70" />
         </div>
 
@@ -679,7 +679,7 @@ export const Landing: React.FC = () => {
             alt="Container port terminal with heavy haulage lorries"
             className="h-full w-full object-cover brightness-[0.84] contrast-[1.12] animate-cinematic-crane"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/55 to-[#07080A]/90" />
+          <div data-theme-overlay className="absolute inset-0 bg-gradient-to-b from-[#07080A]/90 via-[#07080A]/55 to-[#07080A]/90" />
           <div className="absolute inset-0 cinematic-vignette opacity-70" />
         </div>
 
@@ -735,7 +735,7 @@ export const Landing: React.FC = () => {
       {/* ── DEMO VIDEO SECTION ── */}
       <section id="demo" className="relative py-28 overflow-hidden z-10 border-t border-white/[0.08]">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(237,100,43,0.18),_transparent_45%),linear-gradient(180deg,rgba(7,8,10,0.94),rgba(7,8,10,0.88))]" />
+          <div data-theme-overlay className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(237,100,43,0.18),_transparent_45%),linear-gradient(180deg,rgba(7,8,10,0.94),rgba(7,8,10,0.88))]" />
         </div>
 
         <div className="relative z-10 mx-auto max-w-7xl px-6">
@@ -774,7 +774,7 @@ export const Landing: React.FC = () => {
             alt="Turnaround fleet distribution yard"
             className="w-full h-full object-cover brightness-[0.86] contrast-[1.10] animate-cinematic-push"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#07080A]/95 via-[#07080A]/60 to-[#07080A]/95" />
+          <div data-theme-overlay className="absolute inset-0 bg-gradient-to-t from-[#07080A]/95 via-[#07080A]/60 to-[#07080A]/95" />
           <div className="absolute inset-0 cinematic-vignette opacity-70" />
         </div>
 

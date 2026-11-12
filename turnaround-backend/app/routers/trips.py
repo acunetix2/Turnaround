@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -288,6 +289,21 @@ async def update_trip(
 
     previous_status = trip.status
     update_data = payload.model_dump(exclude_unset=True)
+    next_status = update_data.get("status", trip.status)
+    recorded_at = datetime.now(timezone.utc)
+    if (
+        next_status in (TripStatus.IN_PROGRESS, TripStatus.IN_TRANSIT, TripStatus.DELAYED)
+        and trip.actual_departure is None
+        and update_data.get("actual_departure") is None
+    ):
+        update_data["actual_departure"] = recorded_at
+    if (
+        next_status == TripStatus.COMPLETED
+        and trip.actual_arrival is None
+        and update_data.get("actual_arrival") is None
+    ):
+        update_data["actual_arrival"] = recorded_at
+
     candidate_vehicle_id = update_data.get("vehicle_id", trip.vehicle_id)
     candidate_departure = update_data.get("planned_departure", trip.planned_departure)
     candidate_arrival = update_data.get("planned_arrival", trip.planned_arrival)

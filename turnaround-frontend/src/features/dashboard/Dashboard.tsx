@@ -5,6 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatMinutes } from '../../lib/format';
+import { getOnTimeDeliveryMetrics } from '../../lib/onTimeDelivery';
 import { useTheme } from '../../lib/ThemeContext';
 import {
   Truck, AlertTriangle, Clock, DollarSign,
@@ -119,9 +120,8 @@ export const Dashboard: React.FC = () => {
   const activeTrucks  = stats?.active_trucks ?? 0;
   const delayedTrucks = stats?.trucks_delayed ?? 0;
   const totalFleet    = vehiclesData?.length ?? 0;
-  const onTimeRate    = totalFleet > 0
-    ? ((totalFleet - delayedTrucks) / totalFleet * 100).toFixed(1)
-    : '0.0';
+  const onTimeDelivery = getOnTimeDeliveryMetrics(trips ?? []);
+  const onTimeRate = onTimeDelivery.rate;
   const idleLoss = stats?.estimated_financial_impact ?? 0;
   const onScheduleCount = Math.max(0, activeTrucks - delayedTrucks);
 
@@ -473,22 +473,20 @@ export const Dashboard: React.FC = () => {
           <MetricCard isLoading={isLoading}>
             <MetricCardHeader href="/analytics">
               <MetricCardLabel
-                tooltip="Percentage of fleet on schedule according to planned turnaround SLA"
+                tooltip="Percentage of completed trips that arrived by their planned arrival time"
                 icon={<CheckCircle2 size={13} className="text-[#250C77]" />}
               >
                 On-Time Rate
               </MetricCardLabel>
             </MetricCardHeader>
             <MetricCardContent>
-              <MetricCardValue>{onTimeRate}%</MetricCardValue>
-              <MetricCardDifferential variant={Number(onTimeRate) >= 80 ? 'positive' : 'negative'}>
-                {Number(onTimeRate) >= 80 ? 'Optimal' : 'Attention'}
+              <MetricCardValue>{onTimeRate === null ? '—' : `${onTimeRate}%`}</MetricCardValue>
+              <MetricCardDifferential variant={onTimeRate === null ? 'neutral' : onTimeRate >= 80 ? 'positive' : 'negative'}>
+                {onTimeRate === null
+                  ? 'Schedule data needed'
+                  : `${onTimeDelivery.onTimeTrips} of ${onTimeDelivery.completedTrips} on time`}
               </MetricCardDifferential>
             </MetricCardContent>
-            <MetricCardSparkline
-              data={Array.from({ length: 8 }, (_, i) => ({ value: 75 + i * 3 + Math.sin(i) * 4 }))}
-              color="#10B981"
-            />
           </MetricCard>
 
           <MetricCard isLoading={isLoading}>
@@ -1161,7 +1159,7 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
           {/* On time positive */}
-          {Number(onTimeRate) >= 90 && (
+          {onTimeRate !== null && onTimeRate >= 90 && (
             <div className="flex items-start gap-3 p-3 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
               <div className="h-6 w-6 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0 mt-0.5">
                 <CheckCircle2 size={12} className="text-emerald-500" />
@@ -1186,7 +1184,7 @@ export const Dashboard: React.FC = () => {
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#250C77]/15 text-[#250C77] border border-[#250C77]/25 shrink-0">INFO</span>
             </div>
           )}
-          {delayedTrucks === 0 && !stats?.top_bottleneck && Number(onTimeRate) < 90 && totalTrips === 0 && (
+          {delayedTrucks === 0 && !stats?.top_bottleneck && (onTimeRate === null || onTimeRate < 90) && totalTrips === 0 && (
             <div className="py-6 text-center text-xs text-text-tertiary">
               <CheckCircle2 size={20} className="mx-auto mb-2 text-status-good" />
               No active alerts. All systems nominal.

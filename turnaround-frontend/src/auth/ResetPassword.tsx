@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBackground';
 import { useTheme } from '../lib/ThemeContext';
+import { getAuthStyles } from './authStyles';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL || '',
@@ -22,6 +23,7 @@ export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const authStyles = getAuthStyles(theme);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -108,7 +110,7 @@ export const ResetPassword: React.FC = () => {
   };
 
   return (
-    <div className={`flex h-screen w-screen overflow-hidden text-[#F4F5F7] ${theme === 'dark' ? 'bg-[#0A051B]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
+    <div className={`flex h-screen w-screen overflow-hidden ${authStyles.page}`}>
       <div className="relative hidden lg:flex lg:w-[50%] flex-col overflow-hidden">
         <img
           src="/hero-fleet.jpg"
@@ -144,8 +146,8 @@ export const ResetPassword: React.FC = () => {
         </div>
       </div>
 
-      <div className={`relative flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto ${theme === 'dark' ? 'bg-[#0E0724]/90' : 'bg-white/90'}`}>
-        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? '☾' : '☀'}</button>
+      <div className={`relative flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto ${authStyles.formPanel}`}>
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className={`absolute right-6 top-6 rounded-lg border p-2 transition-colors cursor-pointer ${authStyles.toggle}`}>{theme === 'dark' ? '☾' : '☀'}</button>
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
           <BrandLogo size={34} showText={true} />
         </Link>
@@ -158,8 +160,8 @@ export const ResetPassword: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-white tracking-tight">Password updated</h2>
-                <p className="text-sm text-text-secondary leading-relaxed">
+                <h2 className={`text-2xl font-extrabold tracking-tight ${authStyles.title}`}>Password updated</h2>
+                <p className={`text-sm leading-relaxed ${authStyles.text}`}>
                   Your password has been reset successfully. You can now sign in with your new credentials.
                 </p>
               </div>
@@ -175,29 +177,29 @@ export const ResetPassword: React.FC = () => {
           ) : (
             <>
               <div className="mb-8">
-                <h2 className="text-2xl font-extrabold text-white tracking-tight">Create new password</h2>
-                <p className="mt-1.5 text-sm text-text-secondary leading-relaxed">
+                <h2 className={`text-2xl font-extrabold tracking-tight ${authStyles.title}`}>Create new password</h2>
+                <p className={`mt-1.5 text-sm leading-relaxed ${authStyles.text}`}>
                   Choose a secure password for your Turnaround account.
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1.5">New password</label>
+                  <label className={`mb-1.5 block text-xs font-semibold ${authStyles.label}`}>New password</label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter a new password"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                      className={`w-full rounded-xl border px-4 py-3 pl-10 text-sm transition-colors focus:border-[#ED642B] focus:outline-none ${authStyles.input}`}
                     />
-                    <LockKeyhole size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <LockKeyhole size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${authStyles.icon}`} />
                     <button
                       type="button"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-white"
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 ${authStyles.icon} ${authStyles.hoverText}`}
                     >
                       {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
@@ -205,28 +207,28 @@ export const ResetPassword: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1.5">Confirm password</label>
+                  <label className={`mb-1.5 block text-xs font-semibold ${authStyles.label}`}>Confirm password</label>
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirm your new password"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                      className={`w-full rounded-xl border px-4 py-3 pl-10 text-sm transition-colors focus:border-[#ED642B] focus:outline-none ${authStyles.input}`}
                     />
-                    <LockKeyhole size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <LockKeyhole size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${authStyles.icon}`} />
                     <button
                       type="button"
                       aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                       onClick={() => setShowConfirmPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-white"
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 ${authStyles.icon} ${authStyles.hoverText}`}
                     >
                       {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
                 </div>
 
-                {error && <p className="text-[11px] text-red-400">{error}</p>}
+                {error && <p className={`text-[11px] ${authStyles.error}`}>{error}</p>}
 
                 <button
                   type="submit"
@@ -238,7 +240,7 @@ export const ResetPassword: React.FC = () => {
                 </button>
               </form>
 
-              <p className="mt-8 text-center text-sm text-text-tertiary">
+              <p className={`mt-8 text-center text-sm ${authStyles.muted}`}>
                 Need help?{' '}
                 <Link to="/login" className="font-bold text-[#ED642B] hover:underline transition-colors">
                   Back to sign in

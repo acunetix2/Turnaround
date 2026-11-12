@@ -6,6 +6,7 @@ import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBack
 import { BrandLogo } from '../components/common/BrandLogo';
 import { useAuth } from './AuthProvider';
 import { useTheme } from '../lib/ThemeContext';
+import { getAuthStyles } from './authStyles';
 
 const PERKS = [
   { icon: BarChart3, title: 'Real-time dwell intelligence', desc: 'Know exactly where time and money are lost across every location.' },
@@ -23,6 +24,7 @@ const FLEET_SIZE_OPTIONS = [
 export const Signup: React.FC = () => {
   const { signup } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const authStyles = getAuthStyles(theme);
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -82,8 +84,8 @@ export const Signup: React.FC = () => {
     }
   };
 
-  const inputCls = 'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors';
-  const labelCls = 'block text-xs font-semibold text-text-secondary mb-1.5';
+  const inputCls = `w-full rounded-xl border px-4 py-3 text-sm transition-colors focus:border-[#ED642B] focus:outline-none ${authStyles.input}`;
+  const labelCls = `mb-1.5 block text-xs font-semibold ${authStyles.label}`;
 
   return (
     <div className={`flex min-h-screen w-screen overflow-x-hidden text-[#F4F5F7] ${theme === 'dark' ? 'bg-[#0A051B]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
@@ -148,15 +150,15 @@ export const Signup: React.FC = () => {
       </div>
 
       {/* ── RIGHT: Form panel ── */}
-      <div className={`flex min-h-screen flex-1 flex-col items-center justify-start px-6 py-8 overflow-y-auto lg:justify-center lg:py-10 ${theme === 'dark' ? 'bg-[#0E0724]/90' : 'bg-white/90'}`}>
+      <div className={`flex min-h-screen flex-1 flex-col items-center justify-start px-6 py-8 overflow-y-auto lg:justify-center lg:py-10 ${authStyles.formPanel}`}>
         {/* Mobile logo */}
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-6">
           <BrandLogo size={34} showText={true} />
         </Link>
 
-        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className={`absolute right-6 top-6 rounded-lg border p-2 transition-colors cursor-pointer ${authStyles.toggle}`}>{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
 
-        <div className={`w-full max-w-[440px] rounded-2xl border p-6 shadow-2xl backdrop-blur-md sm:p-8 ${theme === 'dark' ? 'border-white/10 bg-[#0B0928]/80' : 'border-[#250C77]/15 bg-white/90'}`}>
+        <div className={`w-full max-w-[440px] rounded-2xl border p-6 shadow-2xl backdrop-blur-md sm:p-8 ${authStyles.card}`}>
           <div className="mb-7 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#250C77] ring-8 ring-[#250C77]/20"><BrandLogo size={48} showText={false} /></div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#ED642B]">Create your workspace</p>
@@ -168,8 +170,8 @@ export const Signup: React.FC = () => {
               <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-status-good/20 text-status-good">
                 <CheckCircle size={28} />
               </div>
-              <h2 className="text-xl font-extrabold text-white">{requiresEmailConfirmation ? 'Confirm your email' : 'Account Created Successfully'}</h2>
-              <p className="text-xs text-text-secondary leading-relaxed">
+              <h2 className={`text-xl font-extrabold ${authStyles.title}`}>{requiresEmailConfirmation ? 'Confirm your email' : 'Account Created Successfully'}</h2>
+              <p className={`text-xs leading-relaxed ${authStyles.text}`}>
                 {requiresEmailConfirmation
                   ? `We sent a confirmation link to ${form.email}. Confirm your email, then return here to sign in.`
                   : 'Welcome to Turnaround. Your organisation profile is ready to explore.'}
@@ -196,27 +198,27 @@ export const Signup: React.FC = () => {
                             ? 'bg-[#ED642B] text-white'
                             : step > s
                             ? 'bg-status-good text-white'
-                            : 'bg-white/10 text-text-tertiary',
+                            : `${theme === 'dark' ? 'bg-white/10' : 'bg-[#250C77]/10'} ${authStyles.muted}`,
                         ].join(' ')}
                       >
                         {step > s ? '✓' : s}
                       </div>
-                      <span className="text-xs font-medium text-text-secondary">
+                      <span className={`text-xs font-medium ${authStyles.text}`}>
                         {s === 1 ? 'Organisation' : 'Credentials'}
                       </span>
                     </div>
                     {s < 2 && (
-                      <div className={['h-px flex-1 transition-all', step > s ? 'bg-[#ED642B]' : 'bg-white/10'].join(' ')} />
+                      <div className={['h-px flex-1 transition-all', step > s ? 'bg-[#ED642B]' : theme === 'dark' ? 'bg-white/10' : 'bg-[#250C77]/10'].join(' ')} />
                     )}
                   </React.Fragment>
                 ))}
               </div>
 
               <div className="mb-6">
-                <h2 className="text-2xl font-extrabold text-white tracking-tight">
+                <h2 className={`text-2xl font-extrabold tracking-tight ${authStyles.title}`}>
                   {step === 1 ? 'Tell us about your fleet' : 'Set your account password'}
                 </h2>
-                <p className="mt-1 text-xs text-text-secondary">
+                <p className={`mt-1 text-xs ${authStyles.text}`}>
                   {step === 1
                     ? 'We will tailor your metrics and corridor baselines to your operation.'
                     : `Account email: ${form.email}`
@@ -245,7 +247,7 @@ export const Signup: React.FC = () => {
                         placeholder="James"
                         className={inputCls}
                       />
-                      {fieldErrors.firstName && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.firstName}</p>}
+                      {fieldErrors.firstName && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.firstName}</p>}
                     </div>
                     <div>
                       <label className={labelCls}>Last name</label>
@@ -257,7 +259,7 @@ export const Signup: React.FC = () => {
                         placeholder="Mwangi"
                         className={inputCls}
                       />
-                      {fieldErrors.lastName && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.lastName}</p>}
+                      {fieldErrors.lastName && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.lastName}</p>}
                     </div>
                   </div>
 
@@ -271,7 +273,7 @@ export const Signup: React.FC = () => {
                         placeholder="james.mwangi@turnaround.com"
                       className={inputCls}
                     />
-                    {fieldErrors.email && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.email}</p>}
+                    {fieldErrors.email && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.email}</p>}
                   </div>
 
                   <div>
@@ -284,7 +286,7 @@ export const Signup: React.FC = () => {
                       placeholder="East Africa Haulage Ltd"
                       className={inputCls}
                     />
-                    {fieldErrors.company && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.company}</p>}
+                    {fieldErrors.company && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.company}</p>}
                   </div>
 
                   <div>
@@ -321,7 +323,7 @@ export const Signup: React.FC = () => {
                       placeholder="At least 8 characters"
                       className={inputCls}
                     />
-                    {fieldErrors.password && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.password}</p>}
+                    {fieldErrors.password && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.password}</p>}
                     {/* Strength indicator */}
                     <div className="mt-2 flex gap-1">
                       {[8, 12, 16].map((n) => (
@@ -346,10 +348,10 @@ export const Signup: React.FC = () => {
                       placeholder="Repeat your password"
                       className={inputCls}
                     />
-                    {fieldErrors.confirmPassword && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.confirmPassword}</p>}
+                    {fieldErrors.confirmPassword && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.confirmPassword}</p>}
                   </div>
 
-                  <p className="text-[11px] text-text-tertiary">
+                  <p className={`text-[11px] ${authStyles.muted}`}>
                     By registering, you agree to Turnaround's{' '}
                     <Link to="/terms" className="text-[#ED642B] hover:underline">Terms of Service</Link> and{' '}
                     <Link to="/privacy" className="text-[#ED642B] hover:underline">Privacy Policy</Link>.
@@ -359,7 +361,7 @@ export const Signup: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setStep(1)}
-                      className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors cursor-pointer"
+                      className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors cursor-pointer ${authStyles.secondaryButton}`}
                     >
                       Back
                     </button>
@@ -375,7 +377,7 @@ export const Signup: React.FC = () => {
                 </form>
               )}
 
-              <p className="mt-6 text-center text-xs text-text-tertiary">
+              <p className={`mt-6 text-center text-xs ${authStyles.muted}`}>
                 Already have an account?{' '}
                 <Link to="/login" className="font-bold text-[#ED642B] hover:underline transition-colors">
                   Sign in instead

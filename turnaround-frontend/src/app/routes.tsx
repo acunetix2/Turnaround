@@ -95,6 +95,10 @@ export const router = createBrowserRouter([
       { path: '/insights',         element: guard(<Insights />, ALL_STAFF),            errorElement: <RouteErrorBoundary /> },
       { path: '/analytics',        element: guard(<Analytics />, ALL_STAFF),           errorElement: <RouteErrorBoundary /> },
       { path: '/ai-advisor',       element: guard(<AIAdvisor />, ALL_STAFF),           errorElement: <RouteErrorBoundary /> },
+      { path: '/ai-advisor/predictions',     element: guard(<AIAdvisor />, ALL_STAFF), errorElement: <RouteErrorBoundary /> },
+      { path: '/ai-advisor/insights',        element: guard(<AIAdvisor />, ALL_STAFF), errorElement: <RouteErrorBoundary /> },
+      { path: '/ai-advisor/recommendations', element: guard(<AIAdvisor />, ALL_STAFF), errorElement: <RouteErrorBoundary /> },
+      { path: '/ai-advisor/assistant',       element: guard(<AIAdvisor />, ALL_STAFF), errorElement: <RouteErrorBoundary /> },
 
       // ── Settings (fleet manager and above) ────────────────────────────────
       { path: '/settings',         element: guard(<Settings />, ADMIN_MANAGER),        errorElement: <RouteErrorBoundary /> },
