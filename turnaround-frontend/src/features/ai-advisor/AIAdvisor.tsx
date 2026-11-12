@@ -91,7 +91,7 @@ const FormattedMarkdownMessage: React.FC<{ content: string; isUser: boolean }> =
           <thead className="bg-[#250C77]/10 dark:bg-[#250C77]/30 text-[#250C77] dark:text-[#ED642B] font-extrabold border-b border-border-default">
             <tr>
               {headers.map((h, hIdx) => (
-                <th key={hIdx} className="px-3 py-2 text-[11px] uppercase tracking-wider">
+                <th key={hIdx} className="px-3 py-2 text-[11px] tracking-wide">
                   {renderInlineMarkdown(h)}
                 </th>
               ))}
@@ -587,18 +587,53 @@ export const AIAdvisor: React.FC = () => {
     const chartAssets = [...forecastableAssets]
       .sort((left, right) => (right.estimated_cost ?? 0) - (left.estimated_cost ?? 0))
       .slice(0, 10)
-      .reverse();
+    const maxCost = Math.max(...chartAssets.map((asset) => asset.estimated_cost ?? 0), 0);
     return {
       backgroundColor: 'transparent',
-      grid: { top: 8, right: 18, bottom: 18, left: 92 },
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (value) => formatCurrency(Number(value ?? 0)) },
-      xAxis: { type: 'value', axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9 } },
-      yAxis: { type: 'category', data: chartAssets.map((asset) => asset.registration_number), axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9 } },
+      grid: { top: 32, right: 18, bottom: 58, left: 62, containLabel: true },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'line' },
+        valueFormatter: (value) => formatCurrency(Number(value ?? 0)),
+      },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: chartAssets.map((asset) => asset.registration_number),
+        axisTick: { alignWithLabel: true },
+        axisLine: { lineStyle: { color: isDark ? '#4B5563' : '#D1D5DB' } },
+        axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 9, rotate: chartAssets.length > 4 ? 24 : 0 },
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: maxCost > 0 ? maxCost * 1.25 : 100,
+        splitNumber: 4,
+        axisLabel: {
+          color: isDark ? '#9CA3AF' : '#6B7280',
+          fontSize: 9,
+          formatter: (value) => formatCurrency(Number(value)),
+        },
+        splitLine: { lineStyle: { color: isDark ? '#374151' : '#E5E7EB', type: 'dashed' } },
+      },
       series: [{
         name: 'Predicted idle cost',
-        type: 'bar',
-        data: chartAssets.map((asset) => asset.estimated_cost),
-        itemStyle: { color: '#ED642B', borderRadius: [0, 4, 4, 0] },
+        type: 'line',
+        data: chartAssets.map((asset) => asset.estimated_cost ?? 0),
+        smooth: true,
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 9,
+        lineStyle: { color: '#ED642B', width: 3 },
+        itemStyle: { color: '#ED642B', borderColor: isDark ? '#111827' : '#FFFFFF', borderWidth: 2 },
+        areaStyle: { color: 'rgba(237, 100, 43, 0.12)' },
+        label: {
+          show: chartAssets.length <= 5,
+          position: 'top',
+          color: isDark ? '#E5E7EB' : '#4B5563',
+          fontSize: 9,
+          formatter: (params) => formatCurrency(Number(params.value ?? 0)),
+        },
       }],
     };
   }, [forecastableAssets, isDark]);
@@ -790,7 +825,7 @@ export const AIAdvisor: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <Radio size={15} className="text-emerald-500" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">Automatic · refreshes every minute</span>
+              <span className="text-[10px] font-bold tracking-wide text-emerald-600 dark:text-emerald-400">Automatic · refreshes every minute</span>
             </div>
             <h2 className="mt-1 text-lg font-extrabold tracking-tight text-text-primary">Live corridor predictions</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-secondary">
@@ -865,7 +900,7 @@ export const AIAdvisor: React.FC = () => {
             : fleetAssets.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1080px] text-left text-[11px]">
-                  <thead className="bg-bg-surface-raised text-[9px] uppercase tracking-wider text-text-tertiary">
+                  <thead className="bg-bg-surface-raised text-[9px] tracking-wide text-text-tertiary">
                     <tr>
                       <th className="px-3 py-2.5">Asset / trip</th>
                       <th className="px-3 py-2.5">Tracking state</th>
@@ -983,7 +1018,7 @@ export const AIAdvisor: React.FC = () => {
         <div className="flex flex-col justify-between rounded-lg bg-bg-surface-raised p-3">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Estimated excess idle cost</p>
+              <p className="text-[10px] font-bold tracking-wide text-text-secondary">Estimated excess idle cost</p>
               <span className="flex items-center gap-1 text-[10px] font-semibold text-text-secondary">
                 <Radio size={12} className={gpsIsFresh ? 'text-emerald-500' : 'text-text-tertiary'} />
                 {liveGpsError ? 'GPS feed unavailable' : gpsIsFresh ? 'GPS live' : 'GPS signal stale'}
@@ -1068,7 +1103,7 @@ export const AIAdvisor: React.FC = () => {
       {analysis?.executive_summary && (
         <Alert variant="info" className="border-[#250C77]/30 bg-[#250C77]/10">
           <Lightbulb size={16} className="text-[#ED642B]" />
-          <AlertTitle className="text-[#250C77] dark:text-[#ED642B] font-bold uppercase tracking-wider text-[11px]">
+          <AlertTitle className="text-[#250C77] dark:text-[#ED642B] font-bold tracking-wide text-[11px]">
             Executive Intelligence Summary
           </AlertTitle>
           <AlertDescription className="mt-1 space-y-1">
@@ -1168,7 +1203,7 @@ export const AIAdvisor: React.FC = () => {
         <div className="lg:col-span-7 rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-border-default pb-3">
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+              <h2 className="text-xs font-bold tracking-wide text-text-primary flex items-center gap-2">
                 <BarChart3 size={14} className="text-[#ED642B]" />
                 Stop Dwell vs Target Duration (Minutes)
               </h2>
@@ -1210,7 +1245,7 @@ export const AIAdvisor: React.FC = () => {
         <div className="lg:col-span-5 rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm space-y-3 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-border-default pb-3 mb-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+              <h2 className="text-xs font-bold tracking-wide text-text-primary flex items-center gap-1.5">
                 <Lightbulb size={14} className="text-[#ED642B]" />
                 Prescriptive Interventions
               </h2>
