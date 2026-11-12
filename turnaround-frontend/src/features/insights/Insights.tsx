@@ -4,7 +4,7 @@ import { apiClient } from '../../lib/api/client';
 import { formatCurrency, formatDateTime } from '../../lib/format';
 import { Link } from 'react-router-dom';
 import {
-  Brain, ArrowRight, RefreshCw, Sparkles,
+  Brain, ArrowRight, RefreshCw,
   AlertTriangle, MapPin, CheckCircle2
 } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
@@ -120,7 +120,7 @@ export const Insights: React.FC = () => {
             to="/ai-advisor"
             className="flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-500/10 hover:bg-brand-500/20 px-3 py-2 text-xs font-semibold text-brand-400 transition-colors"
           >
-            <Sparkles size={13} />
+            <Brain size={13} />
             Smart Assistant
           </Link>
 

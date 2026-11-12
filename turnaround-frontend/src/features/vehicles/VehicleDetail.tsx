@@ -11,7 +11,7 @@ import {
   ArrowLeft, Clock, Edit2, Truck, MapPin, X, BarChart2, DollarSign, ShieldCheck,
   User, Container, Radio, Settings, Camera, Package, Navigation2, AlertTriangle,
   CheckCircle2, Fuel, Phone, Save, FileText, Download, Printer,
-  Sparkles, Ticket
+  Ticket
 } from 'lucide-react';
 import type { Vehicle } from '../../lib/api/types';
 import { ASSET_TYPE_OPTIONS } from '../../lib/api/types';
@@ -574,7 +574,7 @@ export const VehicleDetail: React.FC = () => {
 
                 {/* AI Predictive Risk Badge */}
                 <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bg-surface-raised border border-border-default text-[11px]">
-                  <Sparkles size={12} className={delayRiskProbability > 50 ? 'text-[#ED642B]' : 'text-status-good'} />
+                  <AlertTriangle size={12} className={delayRiskProbability > 50 ? 'text-[#ED642B]' : 'text-status-good'} />
                   <span className="text-text-secondary">AI Corridor Delay Risk:</span>
                   <span className={`font-bold font-numeric ${delayRiskProbability > 50 ? 'text-[#ED642B]' : 'text-status-good'}`}>
                     {delayRiskProbability}% {delayRiskProbability > 50 ? '(Elevated)' : '(Optimal)'}

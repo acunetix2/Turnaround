@@ -82,7 +82,7 @@ const TopAppBar: React.FC = () => {
   const queryClient = useQueryClient()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationsRef = useRef<HTMLDivElement>(null)
-  const pageTitle = location.pathname.startsWith('/ai-advisor') ? 'AI Advisor' : 'Turnaround Operations'
+  const pageTitle = location.pathname.startsWith('/ai-advisor') ? 'Analytics and Prediction' : 'Turnaround Operations'
   const { data: notificationsData } = useQuery({
     queryKey: ['notifications', 'navbar'],
     queryFn: () => apiClient.getNotifications({ limit: 8 }),
@@ -295,7 +295,7 @@ function SidebarNavContent() {
     // ── Analytics (all staff) ────────────────────────────────────────────
     { name: 'Delay Alerts',     path: '/insights',      icon: AlertOctagon },
     { name: 'Analytics',        path: '/analytics',     icon: BarChart3 },
-    { name: 'Fleet Intelligence', path: '/ai-advisor',  icon: BrainCircuit },
+    { name: 'Analytics and Prediction', path: '/ai-advisor',  icon: BrainCircuit },
     { name: 'Notifications',    path: '/notifications', icon: Bell, badgeCount: unreadNotifCount > 0 ? unreadNotifCount : undefined, badgeDanger: unreadNotifCount > 0 },
     // ── Settings (fleet_manager+) ────────────────────────────────────────
     ...(['admin','fleet_manager'].includes(user?.role || '') ? [
@@ -581,11 +581,11 @@ function SidebarNavContent() {
                 <span>Register Fleet Asset</span>
               </CommandItem>
               <CommandItem
-                value="AI Diagnostic Advisor"
+                value="Analytics and Prediction"
                 onSelect={() => handleCommandSelect('/ai-advisor')}
               >
                 <BrainCircuit className="mr-2.5 h-4 w-4 text-[#250C77]" />
-                <span>Run AI Corridor Performance Diagnostic</span>
+                <span>Open Analytics and Prediction</span>
               </CommandItem>
             </CommandGroup>
 

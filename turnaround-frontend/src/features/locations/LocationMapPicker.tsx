@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Navigation, Compass, Sparkles } from 'lucide-react';
+import { Search, MapPin, Navigation, Compass } from 'lucide-react';
 import type { LocationType } from '../../lib/api/types';
 
 export interface LocationPreset {
@@ -427,7 +427,7 @@ export const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
             onClick={() => setShowPresetsDropdown(!showPresetsDropdown)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#ED642B]/15 border border-[#ED642B]/35 hover:bg-[#ED642B]/25 text-[#ED642B] text-xs font-bold transition-colors cursor-pointer shrink-0"
           >
-            <Sparkles size={13} />
+            <MapPin size={13} />
             <span>Select Popular Terminal</span>
           </button>
 

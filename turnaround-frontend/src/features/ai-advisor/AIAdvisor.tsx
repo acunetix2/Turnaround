@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Send, BarChart3, TrendingUp, DollarSign, Clock, ArrowRight,
-  Sparkles, Lightbulb, ExternalLink,
+  Lightbulb, ExternalLink,
   Package, AlertTriangle, CheckCircle2, MessageCircle, Route as RouteIcon,
   MapPin, Radio, Truck
 } from 'lucide-react';
@@ -162,7 +162,7 @@ const FormattedMarkdownMessage: React.FC<{ content: string; isUser: boolean }> =
     if (trimmed.startsWith('### ')) {
       elements.push(
         <h4 key={idx} className="font-extrabold text-sm text-text-primary mt-3 mb-1.5 flex items-center gap-1.5 border-b border-border-default pb-1">
-          <Sparkles size={13} className="text-[#ED642B]" />
+          <Lightbulb size={13} className="text-[#ED642B]" />
           <span>{renderInlineMarkdown(trimmed.replace('### ', ''))}</span>
         </h4>
       );
@@ -644,11 +644,11 @@ export const AIAdvisor: React.FC = () => {
     return (
       <div className="mx-auto w-full max-w-5xl space-y-5">
         <header>
-          <h1 className="text-2xl font-bold tracking-tight text-text-primary">AI Advisor</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-text-primary">Analytics and Prediction</h1>
           <p className="mt-1 text-sm text-text-secondary">Choose a module to get started.</p>
         </header>
 
-        <nav aria-label="AI Advisor modules" className="grid gap-3 sm:grid-cols-2">
+        <nav aria-label="Analytics and Prediction modules" className="grid gap-3 sm:grid-cols-2">
           {advisorModules.map((module) => {
             const Icon = module.icon;
             return (
@@ -680,13 +680,13 @@ export const AIAdvisor: React.FC = () => {
       <header className="space-y-4">
         <Link to="/ai-advisor" className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary transition-colors hover:text-[#ED642B]">
           <ArrowRight size={13} className="rotate-180" />
-          All AI Advisor modules
+          All Analytics and Prediction modules
         </Link>
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-text-primary">{activeModule.title}</h1>
           <p className="mt-1 text-sm text-text-secondary">{activeModule.description}</p>
         </div>
-        <nav aria-label="AI Advisor modules" className="flex flex-wrap gap-2">
+        <nav aria-label="Analytics and Prediction modules" className="flex flex-wrap gap-2">
           {advisorModules.map((module) => (
             <Link
               key={module.id}
@@ -717,7 +717,7 @@ export const AIAdvisor: React.FC = () => {
             <Button
               variant="primary"
               size="small"
-              icon={<Sparkles size={13} />}
+              icon={<BarChart3 size={13} />}
               loading={loadingAnalysis}
               onClick={() => { refetch(); void refetchFleetForecast(); }}
             >
@@ -731,7 +731,6 @@ export const AIAdvisor: React.FC = () => {
         <div className="pointer-events-none absolute -right-12 -top-20 h-64 w-64 rounded-full border border-violet-400/30 bg-violet-500/10 blur-[1px]" />
         <div className="pointer-events-none absolute right-12 top-8 h-32 w-56 rotate-12 rounded-[50%] border border-violet-400/30 opacity-70" />
         <div className="pointer-events-none absolute right-24 top-20 h-20 w-32 rounded-[50%] border border-violet-300/30 opacity-60" />
-        <Sparkles className="pointer-events-none absolute right-16 top-12 h-28 w-28 text-violet-300/60" strokeWidth={1} />
       </section>
 
       {/* ── EXECUTIVE KPI STRIP ── */}
@@ -1087,7 +1086,7 @@ export const AIAdvisor: React.FC = () => {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <section className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm xl:col-span-4">
           <div className="mb-3 flex items-start gap-2 border-b border-border-default pb-3">
-            <Sparkles size={16} className="mt-0.5 text-[#250C77]" />
+            <Lightbulb size={16} className="mt-0.5 text-[#250C77]" />
             <div>
               <h2 className="text-xs font-bold text-text-primary">AI Insight Summary</h2>
               <p className="text-[10px] text-text-secondary">Key findings from your logistics data</p>
@@ -1210,7 +1209,7 @@ export const AIAdvisor: React.FC = () => {
           <div>
             <div className="flex items-center justify-between border-b border-border-default pb-3 mb-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                <Sparkles size={14} className="text-[#ED642B]" />
+                <Lightbulb size={14} className="text-[#ED642B]" />
                 Prescriptive Interventions
               </h2>
               <span className="text-[10px] text-text-tertiary font-numeric">Live Formulated</span>
