@@ -16,10 +16,20 @@ async def test_copilot_query_distinguishes_platform_from_turnaround_time(monkeyp
 
     await engine.copilot_query(
         query="What is the Turnaround platform?",
-        fleet_context={"company_name": "Demo Fleet"},
+        fleet_context={
+            "company_name": "Demo Fleet",
+            "live_predictions": [{
+                "vehicle": "TRUCK-1",
+                "predicted_arrival": "2026-11-12T12:00:00+00:00",
+                "travel_time_validation_mae_minutes": 18,
+            }],
+        },
     )
 
     system_prompt = captured["messages"][0]["content"]
     assert "Turnaround platform" in system_prompt or "operating platform" in system_prompt.lower()
     assert "turnaround time" in system_prompt.lower()
     assert "product" in system_prompt.lower()
+    assert "live_predictions" in system_prompt
+    assert "validation error" in system_prompt.lower()
+    assert "inventing one" in system_prompt.lower()

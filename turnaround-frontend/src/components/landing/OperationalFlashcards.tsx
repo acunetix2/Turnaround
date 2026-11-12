@@ -123,7 +123,7 @@ export const OperationalFlashcards: React.FC = () => {
           alt="Freight operations"
           className="h-full w-full object-cover brightness-[0.70] contrast-[1.10] animate-cinematic-dolly"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#07080A]/95 via-[#07080A]/85 to-[#07080A]/95" />
+        <div data-theme-overlay className="absolute inset-0 bg-gradient-to-b from-[#07080A]/95 via-[#07080A]/85 to-[#07080A]/95" />
         <div className="absolute inset-0 cinematic-vignette opacity-80" />
       </div>
 
@@ -169,7 +169,7 @@ export const OperationalFlashcards: React.FC = () => {
                         alt={card.location}
                         className="w-full h-full object-cover brightness-[0.88] contrast-[1.08] group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#12141C] via-transparent to-black/40" />
+                      <div data-theme-overlay className="absolute inset-0 bg-gradient-to-t from-[#12141C] via-transparent to-black/40" />
 
                       {/* Pill Badge on Top of Image */}
                       <div className="absolute top-3 inset-x-3 flex items-center justify-between">
@@ -236,7 +236,7 @@ export const OperationalFlashcards: React.FC = () => {
                         alt={card.location}
                         className="w-full h-full object-cover brightness-[0.75] contrast-[1.10]"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0B1713] via-emerald-950/30 to-black/50" />
+                      <div data-theme-overlay className="absolute inset-0 bg-gradient-to-t from-[#0B1713] via-emerald-950/30 to-black/50" />
 
                       {/* Success Pill on Top */}
                       <div className="absolute top-3 inset-x-3 flex items-center justify-between">

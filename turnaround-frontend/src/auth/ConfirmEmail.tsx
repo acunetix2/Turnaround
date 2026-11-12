@@ -4,11 +4,13 @@ import { ArrowRight, CheckCircle2, Loader2, MailWarning } from 'lucide-react';
 import { apiClient } from '../lib/api/client';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { useTheme } from '../lib/ThemeContext';
+import { getAuthStyles } from './authStyles';
 
 export const ConfirmEmail: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const authStyles = getAuthStyles(theme);
   const [state, setState] = useState<'ready' | 'confirming' | 'confirmed' | 'error'>('ready');
   const [message, setMessage] = useState('Click below to confirm your email address and activate your account.');
   const [tokenHash, setTokenHash] = useState<string | null>(null);
@@ -63,8 +65,8 @@ export const ConfirmEmail: React.FC = () => {
   };
 
   return (
-    <main className={`flex min-h-screen items-center justify-center px-6 py-10 ${theme === 'dark' ? 'bg-[#0A051B]' : 'bg-[#F5F3FB]'}`}>
-      <section className={`w-full max-w-md rounded-2xl border p-8 text-center shadow-2xl ${theme === 'dark' ? 'border-white/10 bg-[#0B0928]' : 'border-[#250C77]/15 bg-white'}`}>
+    <main className={`flex min-h-screen items-center justify-center px-6 py-10 ${authStyles.page}`}>
+      <section className={`w-full max-w-md rounded-2xl border p-8 text-center shadow-2xl ${authStyles.card}`}>
         <Link to="/" className="mb-8 inline-flex justify-center">
           <BrandLogo size={38} showText />
         </Link>
@@ -75,14 +77,14 @@ export const ConfirmEmail: React.FC = () => {
           {state === 'error' && <MailWarning size={30} />}
         </div>
 
-        <h1 className={`text-xl font-extrabold ${theme === 'dark' ? 'text-white' : 'text-[#250C77]'}`}>
+        <h1 className={`text-xl font-extrabold ${authStyles.title}`}>
           {state === 'ready' ? 'Confirm your email' : state === 'confirming' ? 'Confirming your email' : state === 'confirmed' ? 'Email confirmed' : 'Confirmation unsuccessful'}
         </h1>
-        <p className="mt-3 text-sm leading-relaxed text-text-secondary">{message}</p>
+        <p className={`mt-3 text-sm leading-relaxed ${authStyles.text}`}>{message}</p>
 
         {state === 'confirmed' && (
           <div className="mt-5 space-y-3">
-            <p className="text-xs text-text-secondary">
+            <p className={`text-xs ${authStyles.text}`}>
               Redirecting to login in {countdown} second{countdown === 1 ? '' : 's'}.
             </p>
             <div className="flex gap-3">

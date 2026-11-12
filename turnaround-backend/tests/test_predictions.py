@@ -274,3 +274,75 @@ async def test_fleet_prediction_handles_naive_trip_arrival_timestamps():
     assert asset.tracking_state == "on_trip"
     assert asset.location_id == location.id
     assert asset.predicted_dwell_minutes == 60
+
+
+@pytest.mark.asyncio
+async def test_fleet_prediction_uses_completed_route_gps_history_for_eta():
+    now = datetime.now(timezone.utc)
+    vehicle = SimpleNamespace(
+        id="vehicle-1",
+        registration_number="TRUCK-1",
+        vehicle_type="Truck",
+        status=VehicleStatus.IN_TRANSIT,
+        hourly_operating_cost=2400,
+        capacity=30,
+    )
+    location = SimpleNamespace(
+        id="location-1",
+        name="Mombasa Port",
+        latitude=0,
+        longitude=1,
+        geofence_radius=1000,
+        expected_dwell_minutes=120,
+    )
+    trip = SimpleNamespace(
+        id="trip-live",
+        vehicle_id=vehicle.id,
+        origin_id="origin-1",
+        destination_id=location.id,
+        status=TripStatus.IN_TRANSIT,
+        planned_arrival=now + timedelta(hours=1),
+        destination=location,
+        cargo_weight_tonnes=18,
+    )
+    gps = SimpleNamespace(
+        vehicle_id=vehicle.id,
+        latitude=0,
+        longitude=0.5,
+        speed=50,
+        recorded_at=now,
+        row_number=1,
+    )
+    history = []
+    for trip_index in range(8):
+        departure = now - timedelta(days=trip_index + 1)
+        actual_arrival = departure + timedelta(hours=3)
+        for point_index in range(6):
+            history.append(SimpleNamespace(
+                trip_id=f"completed-{trip_index}",
+                actual_arrival=actual_arrival,
+                recorded_at=departure + timedelta(minutes=point_index * 20),
+                latitude=0,
+                longitude=0.15 + point_index * 0.12,
+                speed=45 + point_index,
+            ))
+    db = SimpleNamespace(execute=AsyncMock(side_effect=[
+        RowsResult([vehicle]),
+        RowsResult([trip]),
+        RowsResult([gps]),
+        RowsResult(history),
+        RowsResult([]),
+        RowsResult([location]),
+        RowsResult([]),
+        RowsResult([]),
+    ]))
+
+    response = await predict_fleet(db, "company-1")
+
+    asset = response.assets[0]
+    assert asset.predicted_arrival is not None
+    assert asset.predicted_travel_minutes is not None
+    assert asset.travel_time_training_trips == 8
+    assert asset.travel_time_training_samples == 48
+    assert asset.travel_time_validation_mae_minutes is not None
+    assert asset.travel_time_model_version == "route-travel-time-v1"

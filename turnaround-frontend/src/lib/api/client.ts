@@ -890,6 +890,15 @@ export const apiClient = {
           cost_interval_low: excess == null ? null : Math.round(excess / 120 * vehicle.hourly_operating_cost),
           cost_interval_high: excess == null ? null : Math.round(excess / 30 * vehicle.hourly_operating_cost),
           model_version: 'fleet-dwell-linear-v1',
+          predicted_arrival: null,
+          predicted_travel_minutes: null,
+          predicted_delay_minutes: null,
+          travel_time_estimate_p10_minutes: null,
+          travel_time_estimate_p90_minutes: null,
+          travel_time_training_samples: 0,
+          travel_time_training_trips: 0,
+          travel_time_validation_mae_minutes: null,
+          travel_time_model_version: null,
         };
       });
       return {
@@ -1056,7 +1065,8 @@ export const apiClient = {
     return {
       response: data.answer || data.response || 'No response provided by AI engine.',
       model_used: data.model || data.model_used,
-      suggestions: data.suggestions
+      suggestions: data.suggestions,
+      chart_data: data.chart_data,
     };
   },
 

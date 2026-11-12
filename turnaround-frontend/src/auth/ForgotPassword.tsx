@@ -5,6 +5,7 @@ import { AnimatedFleetBackground } from '../components/landing/AnimatedFleetBack
 import { BrandLogo } from '../components/common/BrandLogo';
 import { apiClient } from '../lib/api/client';
 import { useTheme } from '../lib/ThemeContext';
+import { getAuthStyles } from './authStyles';
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export const ForgotPassword: React.FC = () => {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const { theme, toggleTheme } = useTheme();
+  const authStyles = getAuthStyles(theme);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +36,7 @@ export const ForgotPassword: React.FC = () => {
   };
 
   return (
-    <div className={`flex h-screen w-screen overflow-hidden text-[#F4F5F7] ${theme === 'dark' ? 'bg-[#0A051B]' : 'bg-[#F5F3FB] text-[#250C77]'}`}>
+    <div className={`flex h-screen w-screen overflow-hidden ${authStyles.page}`}>
 
       {/* ── LEFT PANEL: Hero photography + animated moving fleet ── */}
       <div className="relative hidden lg:flex lg:w-[50%] flex-col overflow-hidden">
@@ -78,8 +80,8 @@ export const ForgotPassword: React.FC = () => {
       </div>
 
       {/* ── RIGHT PANEL: Recovery form ── */}
-      <div className={`relative flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto ${theme === 'dark' ? 'bg-[#0E0724]/90' : 'bg-white/90'}`}>
-        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
+      <div className={`relative flex flex-1 flex-col items-center justify-center px-6 py-12 overflow-y-auto ${authStyles.formPanel}`}>
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className={`absolute right-6 top-6 rounded-lg border p-2 transition-colors cursor-pointer ${authStyles.toggle}`}>{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
           <BrandLogo size={34} showText={true} />
         </Link>
@@ -92,9 +94,9 @@ export const ForgotPassword: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-white tracking-tight">Check your email</h2>
-                <p className="text-sm text-text-secondary leading-relaxed">
-                  We've sent password reset instructions to <span className="text-white font-bold">{email}</span>.
+                <h2 className={`text-2xl font-extrabold tracking-tight ${authStyles.title}`}>Check your email</h2>
+                <p className={`text-sm leading-relaxed ${authStyles.text}`}>
+                  We've sent password reset instructions to <span className={`font-bold ${authStyles.title}`}>{email}</span>.
                 </p>
               </div>
 
@@ -109,7 +111,7 @@ export const ForgotPassword: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSent(false)}
-                  className="text-xs text-text-secondary hover:text-white transition-colors cursor-pointer"
+                  className={`text-xs transition-colors ${authStyles.text} ${authStyles.hoverText} cursor-pointer`}
                 >
                   Didn't receive instructions? Try another email
                 </button>
@@ -118,15 +120,15 @@ export const ForgotPassword: React.FC = () => {
           ) : (
             <>
               <div className="mb-8">
-                <h2 className="text-2xl font-extrabold text-white tracking-tight">Reset your password</h2>
-                <p className="mt-1.5 text-sm text-text-secondary leading-relaxed">
+                <h2 className={`text-2xl font-extrabold tracking-tight ${authStyles.title}`}>Reset your password</h2>
+                <p className={`mt-1.5 text-sm leading-relaxed ${authStyles.text}`}>
                   Enter your registered work email and we'll send you instructions to reset your password.
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                  <label className={`mb-1.5 block text-xs font-semibold ${authStyles.label}`}>
                     Work email address
                   </label>
                   <div className="relative">
@@ -136,11 +138,11 @@ export const ForgotPassword: React.FC = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="dispatcher@turnaround.com"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                      className={`w-full rounded-xl border px-4 py-3 pl-10 text-sm transition-colors focus:border-[#ED642B] focus:outline-none ${authStyles.input}`}
                     />
-                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <Mail size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${authStyles.icon}`} />
                   </div>
-                  {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}
+                  {error && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{error}</p>}
                 </div>
 
                 <button
@@ -164,7 +166,7 @@ export const ForgotPassword: React.FC = () => {
                 </button>
               </form>
 
-              <p className="mt-8 text-center text-sm text-text-tertiary">
+              <p className={`mt-8 text-center text-sm ${authStyles.muted}`}>
                 Remembered your password?{' '}
                 <Link to="/login" className="font-bold text-[#ED642B] hover:underline transition-colors">
                   Back to sign in

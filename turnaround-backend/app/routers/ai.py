@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Any, Dict, List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,7 @@ from app.db.models.insight import Insight
 from app.deps import get_current_company
 from app.engines.ai_advisor import advisor
 from app.routers.analytics import get_dashboard, get_location_analytics
+from app.routers.predictions import predict_fleet
 
 router = APIRouter(prefix="/ai", tags=["AI Operational Advisor"])
 
@@ -153,6 +155,42 @@ async def copilot_query(
             "Western Lake Link (Nakuru -> Kericho -> Kisumu Container Port)"
         ]
     }
+
+    if re.search(
+        r"\b(?:predict(?:ed|ions?)?|forecast|eta|arrival|delay|late|projected)\b",
+        payload.query.lower(),
+    ):
+        prediction_result = await predict_fleet(db, company_id)
+        fleet_context["live_predictions"] = [
+            {
+                "vehicle": asset.registration_number,
+                "destination": asset.location_name,
+                "tracking_state": asset.tracking_state,
+                "predicted_arrival": (
+                    asset.predicted_arrival.isoformat() if asset.predicted_arrival else None
+                ),
+                "predicted_travel_minutes": asset.predicted_travel_minutes,
+                "predicted_delay_minutes": asset.predicted_delay_minutes,
+                "travel_time_estimate_p10_p90_minutes": (
+                    [
+                        asset.travel_time_estimate_p10_minutes,
+                        asset.travel_time_estimate_p90_minutes,
+                    ]
+                    if asset.travel_time_model_version
+                    else None
+                ),
+                "travel_time_model": asset.travel_time_model_version,
+                "travel_time_training_trips": asset.travel_time_training_trips,
+                "travel_time_validation_mae_minutes": asset.travel_time_validation_mae_minutes,
+                "predicted_dwell_minutes": asset.predicted_dwell_minutes,
+                "expected_dwell_minutes": asset.expected_dwell_minutes,
+                "projected_excess_dwell_cost_kes": asset.estimated_cost,
+                "current_accumulated_idle_cost_kes": asset.current_idle_cost,
+            }
+            for asset in prediction_result.assets
+            if asset.trip_status in ("in_transit", "in_progress", "delayed")
+            or asset.tracking_state == "idling_at_stop"
+        ][:20]
 
     result = await advisor.copilot_query(
         query=payload.query,

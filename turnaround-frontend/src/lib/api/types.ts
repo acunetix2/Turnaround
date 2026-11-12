@@ -394,6 +394,15 @@ export interface FleetAssetForecast {
   cost_interval_low: number | null;
   cost_interval_high: number | null;
   model_version: string | null;
+  predicted_arrival: string | null;
+  predicted_travel_minutes: number | null;
+  predicted_delay_minutes: number | null;
+  travel_time_estimate_p10_minutes: number | null;
+  travel_time_estimate_p90_minutes: number | null;
+  travel_time_training_samples: number;
+  travel_time_training_trips: number;
+  travel_time_validation_mae_minutes: number | null;
+  travel_time_model_version: string | null;
 }
 
 export interface FleetForecastResponse {
@@ -463,8 +472,16 @@ export interface AICopilotMessage {
   timestamp: string;
 }
 
+export interface ChartData {
+  type: 'bar' | 'line' | 'pie';
+  title: string;
+  labels: string[];
+  values: number[];
+}
+
 export interface AICopilotResponse {
   response: string;
   suggestions?: string[];
   model_used?: string;
+  chart_data?: ChartData | null;
 }

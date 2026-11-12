@@ -5,10 +5,12 @@ import { useToast } from '../components/ui/Toast';
 import { Eye, EyeOff, ArrowRight, ShieldCheck, TrendingUp, Lock, Mail, Moon, Sun, Truck } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { useTheme } from '../lib/ThemeContext';
+import { getAuthStyles } from './authStyles';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const authStyles = getAuthStyles(theme);
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,7 +48,7 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-screen overflow-hidden bg-[#08051C] text-[#F4F5F7]">
+    <div className={`flex min-h-screen w-screen overflow-hidden ${authStyles.page}`}>
 
       {/* ── LEFT PANEL: Hero photography + animated moving fleet ── */}
       <div className="relative hidden lg:flex lg:w-1/2 flex-col overflow-hidden border-r border-white/10">
@@ -100,19 +102,19 @@ export const Login: React.FC = () => {
       </div>
 
       {/* ── RIGHT PANEL: Sign in form ── */}
-      <div className="relative flex flex-1 flex-col items-center justify-center px-5 py-8 sm:px-10 overflow-y-auto bg-[#08051C]">
-        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="absolute right-6 top-6 rounded-lg border border-white/10 bg-white/[0.03] p-2 text-white/70 hover:text-white cursor-pointer">{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
+      <div className={`relative flex flex-1 flex-col items-center justify-center px-5 py-8 sm:px-10 overflow-y-auto ${authStyles.formPanel}`}>
+        <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className={`absolute right-6 top-6 rounded-lg border p-2 transition-colors cursor-pointer ${authStyles.toggle}`}>{theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}</button>
         {/* Mobile logo */}
         <Link to="/" className="flex lg:hidden items-center gap-2 mb-8">
           <BrandLogo size={34} showText={true} />
         </Link>
 
-        <div className="w-full max-w-[458px] rounded-xl border border-white/10 bg-[#0B0928]/80 p-6 shadow-2xl backdrop-blur-md sm:p-7">
+        <div className={`w-full max-w-[458px] rounded-xl border p-6 shadow-2xl backdrop-blur-md sm:p-7 ${authStyles.card}`}>
           <div className="mb-7 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#250C77] ring-8 ring-[#250C77]/20">
               <BrandLogo size={48} showText={false} />
             </div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Welcome back</h2><p className="mt-1.5 text-sm text-text-secondary">Sign in to your Turnaround account</p>
+            <h2 className={`text-2xl font-extrabold tracking-tight ${authStyles.title}`}>Welcome back</h2><p className={`mt-1.5 text-sm ${authStyles.text}`}>Sign in to your Turnaround account</p>
           </div>
 
           {/* Error */}
@@ -125,7 +127,7 @@ export const Login: React.FC = () => {
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Email */}
             <div>
-                <label className="block text-xs font-semibold text-white mb-1.5">
+                <label className={`mb-1.5 block text-xs font-semibold ${authStyles.label}`}>
                 Email Address
               </label>
               <div className="relative">
@@ -135,17 +137,17 @@ export const Login: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="operations@turnaround.com"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 pl-10 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                  className={`w-full rounded-lg border px-4 py-3 pl-10 text-sm transition-colors focus:border-[#ED642B] focus:outline-none ${authStyles.input}`}
                 />
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                <Mail size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${authStyles.icon}`} />
               </div>
-              {fieldErrors.email && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.email}</p>}
+              {fieldErrors.email && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.email}</p>}
             </div>
 
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-white">Password</label>
+                <label className={`text-xs font-semibold ${authStyles.label}`}>Password</label>
                 <Link
                   to="/forgot-password"
                   className="text-xs font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors cursor-pointer"
@@ -160,22 +162,22 @@ export const Login: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 pl-10 pr-11 text-sm text-white placeholder:text-text-tertiary focus:border-[#ED642B] focus:bg-white/10 focus:outline-none transition-colors"
+                  className={`w-full rounded-lg border px-4 py-3 pl-10 pr-11 text-sm transition-colors focus:border-[#ED642B] focus:outline-none ${authStyles.input}`}
                 />
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                <Lock size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${authStyles.icon}`} />
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-white transition-colors cursor-pointer"
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 ${authStyles.icon} transition-colors ${authStyles.hoverText} cursor-pointer`}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              {fieldErrors.password && <p className="mt-1 text-[11px] text-red-400">{fieldErrors.password}</p>}
+              {fieldErrors.password && <p className={`mt-1 text-[11px] ${authStyles.error}`}>{fieldErrors.password}</p>}
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer"><input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-white/5 accent-[#ED642B]" /> Remember me <span className="ml-auto">Keep me signed in</span></label>
+            <label className={`flex cursor-pointer items-center gap-2 text-xs ${authStyles.text}`}><input type="checkbox" className={`h-4 w-4 rounded accent-[#ED642B] ${theme === 'dark' ? 'border-white/20 bg-white/5' : 'border-[#250C77]/20 bg-white'}`} /> Remember me <span className="ml-auto">Keep me signed in</span></label>
             <button
               type="submit"
               disabled={submitting}
@@ -198,12 +200,12 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-text-tertiary">Don't have an account? <Link to="/signup" className="font-bold text-[#ED642B] hover:text-[#D4521D] hover:underline transition-colors">Create an account</Link>
+          <p className={`mt-6 text-center text-sm ${authStyles.muted}`}>Don't have an account? <Link to="/signup" className="font-bold text-[#ED642B] transition-colors hover:text-[#D4521D] hover:underline">Create an account</Link>
           </p>
-          <p className="mt-5 text-center text-[11px] text-text-tertiary">
-            <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+          <p className={`mt-5 text-center text-[11px] ${authStyles.muted}`}>
+            <Link to="/privacy" className={`transition-colors ${authStyles.hoverText}`}>Privacy Policy</Link>
             <span className="mx-2">·</span>
-            <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+            <Link to="/terms" className={`transition-colors ${authStyles.hoverText}`}>Terms of Service</Link>
           </p>
         </div>
       </div>

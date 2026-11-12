@@ -1,6 +1,5 @@
-import math
 import statistics
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +10,7 @@ from app.db.session import get_db
 from app.db.models.dwell_event import DwellEvent
 from app.db.models.gps_event import GPSEvent
 from app.db.models.trip import Trip, TripStatus
-from app.db.models.vehicle import Vehicle, VehicleStatus
+from app.db.models.vehicle import Vehicle
 from app.db.models.location import Location
 from app.deps import get_current_company
 from app.schemas.predictions import (
@@ -23,6 +22,10 @@ from app.config import settings
 from app.engines.financial import calculate_delay_cost, calculate_excess_minutes
 from app.engines.dwell_prediction import MODEL_FEATURES, DwellObservation, train_dwell_forecast
 from app.engines.geofencing import haversine_distance
+from app.engines.travel_time_prediction import (
+    TravelTimeObservation,
+    train_travel_time_forecast,
+)
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
@@ -269,6 +272,72 @@ async def predict_fleet(
         )).all()
     }
 
+    travel_time_forecasts = {}
+    route_history_cache: Dict[tuple, list[TravelTimeObservation]] = {}
+    for trip in trips_by_vehicle.values():
+        if trip.status not in (TripStatus.IN_TRANSIT, TripStatus.IN_PROGRESS, TripStatus.DELAYED):
+            continue
+        gps = gps_by_vehicle.get(trip.vehicle_id)
+        if not gps or not trip.destination:
+            continue
+        recorded_at = gps.recorded_at
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+        gps_age_seconds = (now - recorded_at).total_seconds()
+        if gps_age_seconds < -5 * 60 or gps_age_seconds > 30 * 60:
+            continue
+        route_key = (trip.origin_id, trip.destination_id)
+        if route_key not in route_history_cache:
+            history_result = await db.execute(
+                select(
+                    Trip.id.label("trip_id"),
+                    Trip.actual_arrival,
+                    GPSEvent.recorded_at,
+                    GPSEvent.latitude,
+                    GPSEvent.longitude,
+                    GPSEvent.speed,
+                )
+                .join(Vehicle, Trip.vehicle_id == Vehicle.id)
+                .join(GPSEvent, GPSEvent.vehicle_id == Trip.vehicle_id)
+                .where(
+                    Vehicle.company_id == company_id,
+                    Trip.status == TripStatus.COMPLETED,
+                    Trip.origin_id == trip.origin_id,
+                    Trip.destination_id == trip.destination_id,
+                    Trip.actual_arrival.isnot(None),
+                    func.coalesce(Trip.actual_departure, Trip.planned_departure).isnot(None),
+                    GPSEvent.recorded_at >= func.coalesce(
+                        Trip.actual_departure, Trip.planned_departure
+                    ),
+                    GPSEvent.recorded_at < Trip.actual_arrival,
+                    GPSEvent.speed >= 5,
+                )
+                .order_by(desc(GPSEvent.recorded_at))
+                .limit(5000)
+            )
+            route_history_cache[route_key] = [
+                TravelTimeObservation(
+                    trip_id=row.trip_id,
+                    recorded_at=row.recorded_at,
+                    actual_arrival=row.actual_arrival,
+                    latitude=float(row.latitude),
+                    longitude=float(row.longitude),
+                    speed_kmh=float(row.speed),
+                    destination_latitude=float(trip.destination.latitude),
+                    destination_longitude=float(trip.destination.longitude),
+                )
+                for row in history_result.all()
+            ]
+        travel_time_forecasts[trip.vehicle_id] = train_travel_time_forecast(
+            route_history_cache[route_key],
+            recorded_at,
+            gps.latitude,
+            gps.longitude,
+            float(gps.speed or 0),
+            float(trip.destination.latitude),
+            float(trip.destination.longitude),
+        )
+
     open_dwells = (await db.execute(
         select(DwellEvent)
         .where(DwellEvent.vehicle_id.in_(vehicle_ids), DwellEvent.departure_time.is_(None))
@@ -401,6 +470,19 @@ async def predict_fleet(
                     high = predicted * 1.5
                     model_version = "baseline-v1"
             excess = calculate_excess_minutes(predicted, expected)
+            travel_forecast = travel_time_forecasts.get(vehicle.id)
+            predicted_arrival = None
+            predicted_delay = None
+            if travel_forecast and gps:
+                eta_base = gps.recorded_at
+                if eta_base.tzinfo is None:
+                    eta_base = eta_base.replace(tzinfo=timezone.utc)
+                predicted_arrival = eta_base + timedelta(minutes=travel_forecast.estimated_minutes)
+                predicted_delay = (
+                    max(0.0, (predicted_arrival - planned_arrival).total_seconds() / 60)
+                    if planned_arrival
+                    else None
+                )
             assets.append(FleetAssetForecast(
                 vehicle_id=vehicle.id,
                 registration_number=vehicle.registration_number,
@@ -427,6 +509,31 @@ async def predict_fleet(
                     calculate_excess_minutes(high, expected), vehicle.hourly_operating_cost
                 ),
                 model_version=model_version,
+                predicted_arrival=predicted_arrival,
+                predicted_travel_minutes=(
+                    round(travel_forecast.estimated_minutes, 1) if travel_forecast else None
+                ),
+                predicted_delay_minutes=(
+                    round(predicted_delay, 1) if predicted_delay is not None else None
+                ),
+                travel_time_estimate_p10_minutes=(
+                    round(travel_forecast.estimate_p10_minutes, 1) if travel_forecast else None
+                ),
+                travel_time_estimate_p90_minutes=(
+                    round(travel_forecast.estimate_p90_minutes, 1) if travel_forecast else None
+                ),
+                travel_time_training_samples=(
+                    travel_forecast.training_samples if travel_forecast else 0
+                ),
+                travel_time_training_trips=(
+                    travel_forecast.training_trips if travel_forecast else 0
+                ),
+                travel_time_validation_mae_minutes=(
+                    round(travel_forecast.validation_mae_minutes, 1) if travel_forecast else None
+                ),
+                travel_time_model_version=(
+                    travel_forecast.model_version if travel_forecast else None
+                ),
             ))
         else:
             assets.append(FleetAssetForecast(
@@ -442,6 +549,13 @@ async def predict_fleet(
                 current_dwell_minutes=round(current_dwell, 1) if current_dwell is not None else None,
                 current_idle_cost=round(current_idle_cost, 2),
                 hourly_operating_cost=round(float(vehicle.hourly_operating_cost), 2),
+                predicted_arrival=(
+                    trip.planned_arrival
+                    if trip and trip.status in (
+                        TripStatus.IN_TRANSIT, TripStatus.IN_PROGRESS, TripStatus.DELAYED
+                    ) and not travel_time_forecasts.get(vehicle.id)
+                    else None
+                ),
             ))
 
     return FleetForecastResponse(
