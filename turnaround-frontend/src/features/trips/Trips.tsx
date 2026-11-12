@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../lib/api/client';
 import { formatDateTime } from '../../lib/format';
+import { getOnTimeDeliveryMetrics } from '../../lib/onTimeDelivery';
 import { useAuth } from '../../auth/AuthProvider';
 import { queryKeys } from '../../lib/query-keys';
 import { useForm } from 'react-hook-form';
@@ -773,9 +774,7 @@ export const Trips: React.FC = () => {
   const activeTripsCount = trips.filter(t => t.status === 'in_transit' || t.status === 'delayed').length;
   const delayedTripsCount = trips.filter(t => t.status === 'delayed').length;
   const completedTripsCount = trips.filter(t => t.status === 'completed').length;
-  const onTimePercentage = trips.length > 0
-    ? Math.round(((trips.length - delayedTripsCount) / trips.length) * 100)
-    : 100;
+  const onTimeDelivery = getOnTimeDeliveryMetrics(trips);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -912,15 +911,18 @@ export const Trips: React.FC = () => {
 
         <MetricCard isLoading={loadingTrips}>
           <MetricCardHeader href="/trips">
-            <MetricCardLabel tooltip="Trips not marked delayed" icon={<ShieldCheck size={13} className="text-[#250C77]" />}>
+            <MetricCardLabel tooltip="Completed trips that arrived by their planned arrival time" icon={<ShieldCheck size={13} className="text-[#250C77]" />}>
               On Time
             </MetricCardLabel>
           </MetricCardHeader>
           <MetricCardContent>
-            <MetricCardValue>{trips.length - delayedTripsCount}</MetricCardValue>
-            <MetricCardDifferential variant="positive">{onTimePercentage}% on-time rate</MetricCardDifferential>
+            <MetricCardValue>{onTimeDelivery.rate === null ? '—' : onTimeDelivery.onTimeTrips}</MetricCardValue>
+            <MetricCardDifferential variant={onTimeDelivery.rate === null ? 'neutral' : onTimeDelivery.rate >= 80 ? 'positive' : 'negative'}>
+              {onTimeDelivery.rate === null
+                ? 'Schedule data needed'
+                : `${onTimeDelivery.rate}% of completed trips`}
+            </MetricCardDifferential>
           </MetricCardContent>
-          <MetricCardSparkline data={[{ value: 86 }, { value: 90 }, { value: 92 }, { value: onTimePercentage }]} color="#8B5CF6" />
         </MetricCard>
       </div>
 

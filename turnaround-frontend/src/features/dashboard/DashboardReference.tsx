@@ -16,6 +16,7 @@ import { format } from 'date-fns'
 import type { Trip, Insight, LocationStats, TrendDataPoint } from '../../lib/api/types'
 import { useCompany } from '../../lib/CompanyContext'
 import { getOperatingZone } from '../../lib/operatingZones'
+import { getOnTimeDeliveryMetrics } from '../../lib/onTimeDelivery'
 
 type Tone = 'violet' | 'orange' | 'green' | 'blue'
 
@@ -133,18 +134,19 @@ export const DashboardReference: React.FC = () => {
   const inTransit = tripList.filter((trip) => ['in_transit', 'in_progress'].includes(trip.status || '')).length
   const pending = Math.max(0, tripList.length - delivered - inTransit)
   const delayed = stats?.trucks_delayed ?? tripList.filter((trip) => trip.status === 'delayed').length
-  const onTimeFromTrips = tripList.length ? ((tripList.filter((trip) => !['delayed', 'cancelled'].includes(trip.status || '')).length / tripList.length) * 100) : 0
-  const trendOnTimeValues = (trends as TrendDataPoint[]).slice(-20).map((point) => {
-    const visits = Math.max(1, point.visit_count || 0)
+  const onTimeDelivery = getOnTimeDeliveryMetrics(tripList)
+  const trendDwellSlaValues = (trends as TrendDataPoint[]).slice(-20).flatMap((point) => {
+    const visits = point.visit_count || 0
+    if (visits <= 0) return []
     const delayedVisits = Math.max(0, point.delayed_visit_count || 0)
-    return visits ? Math.max(0, 100 - ((delayedVisits / visits) * 100)) : 100
+    return [Math.max(0, 100 - ((delayedVisits / visits) * 100))]
   })
-  const onTime = (trendOnTimeValues.length ? trendOnTimeValues[trendOnTimeValues.length - 1] : onTimeFromTrips)
+  const dwellSlaRate = trendDwellSlaValues.length ? trendDwellSlaValues[trendDwellSlaValues.length - 1] : null
   const cost = stats?.estimated_financial_impact ?? 0
   const trendValues = (trends as TrendDataPoint[]).map((point) => point.visit_count || 0)
   const visibleTrendValues = trendValues.length ? trendValues : [2, 4, 3, 5]
   const maxTrend = Math.max(...visibleTrendValues, 1)
-  const onTimeChartValues = trendOnTimeValues.length ? trendOnTimeValues : Array.from({ length: 12 }, (_, index) => 78 + ((index % 5) * 3) - (index % 3))
+  const dwellSlaChartValues = trendDwellSlaValues
   const topLocations = (locationStats as LocationStats[]).slice().sort((a, b) => (b.total_visits || 0) - (a.total_visits || 0)).slice(0, 5)
   const routeRate = (location: LocationStats) => Math.max(0, Math.min(100, 100 - ((location.avg_excess_delay_minutes || 0) / Math.max(location.expected_dwell_minutes || 1, 1) * 100)))
   const modeCounts = useMemo(() => {
@@ -164,7 +166,7 @@ export const DashboardReference: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[{ label: 'Total Shipments', value: tripList.length.toLocaleString(), note: 'vs last 30 days', icon: Package, tone: 'violet' as Tone, values: trendValues.length ? trendValues : [2, 4, 3, 5] }, { label: 'On-Time Delivery', value: `${onTime.toFixed(1)}%`, note: 'vs last 30 days', icon: Clock, tone: 'violet' as Tone, values: [70, 75, 73, onTime] }, { label: 'Logistics Cost', value: formatCurrency(cost), note: 'estimated idle cost', icon: DollarSign, tone: 'orange' as Tone, values: [20, 25, 21, cost || 25] }, { label: 'CO₂ Emissions Saved', value: '—', note: 'not tracked in current data', icon: Leaf, tone: 'green' as Tone, values: [1, 1, 1, 1] }].map((metric) => <Card key={metric.label} className="flex min-h-[92px] items-center gap-3"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${toneStyles[metric.tone]}`}><metric.icon size={18} /></div><div className="min-w-0 flex-1"><p className="text-[10px] text-text-secondary">{metric.label}</p><p className="font-numeric text-xl font-bold text-text-primary">{metric.value}</p><p className="text-[9px] text-text-tertiary">{metric.note}</p></div><Sparkline values={metric.values} color={metric.tone === 'orange' ? '#ED642B' : metric.tone === 'green' ? '#10B981' : '#8b5cf6'} /></Card>)}
+        {[{ label: 'Total Shipments', value: tripList.length.toLocaleString(), note: 'Across monitored operations', icon: Package, tone: 'violet' as Tone, values: trendValues.length ? trendValues : [2, 4, 3, 5] }, { label: 'On-Time Delivery', value: onTimeDelivery.rate === null ? '—' : `${onTimeDelivery.rate.toFixed(1)}%`, note: onTimeDelivery.rate === null ? 'Completed trips with schedule data needed' : `${onTimeDelivery.onTimeTrips} of ${onTimeDelivery.completedTrips} completed trips on time`, icon: Clock, tone: 'violet' as Tone, values: [] }, { label: 'Logistics Cost', value: formatCurrency(cost), note: 'Estimated idle cost today', icon: DollarSign, tone: 'orange' as Tone, values: [20, 25, 21, cost || 25] }, { label: 'CO₂ Emissions Saved', value: '—', note: 'not tracked in current data', icon: Leaf, tone: 'green' as Tone, values: [1, 1, 1, 1] }].map((metric) => <Card key={metric.label} className="flex min-h-[92px] items-center gap-3"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${toneStyles[metric.tone]}`}><metric.icon size={18} /></div><div className="min-w-0 flex-1"><p className="text-[10px] text-text-secondary">{metric.label}</p><p className="font-numeric text-xl font-bold text-text-primary">{metric.value}</p><p className="text-[9px] text-text-tertiary">{metric.note}</p></div>{metric.values.length > 1 && <Sparkline values={metric.values} color={metric.tone === 'orange' ? '#ED642B' : metric.tone === 'green' ? '#10B981' : '#8b5cf6'} />}</Card>)}
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
@@ -182,7 +184,7 @@ export const DashboardReference: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Card><SectionTitle title="Shipments by Mode" action="30 Days" /><div className="flex items-center gap-3"><Donut values={modeCounts.map(([, value]) => value)} colors={['#8b5cf6', '#ED642B', '#0ea5e9', '#F59E0B']} total={String(tripList.length)} /><div className="space-y-1.5 text-[9px]">{modeCounts.map(([mode, value], index) => <p key={mode}><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: ['#8b5cf6', '#ED642B', '#0ea5e9', '#F59E0B'][index] }} />{mode} <strong className="text-text-primary">{value}</strong></p>)}</div></div></Card>
-        <Card><SectionTitle title="On-Time Delivery Performance" action="30 Days" /><p className="font-numeric text-2xl font-bold text-text-primary">{onTime.toFixed(1)}%</p><p className="text-[9px] text-status-good">{delayed ? `${delayed} delayed units` : 'No delayed units'} vs last 30 days</p><div className="mt-3 flex h-20 items-end gap-1 overflow-hidden">{onTimeChartValues.map((value, index) => <div key={`${value}-${index}`} className="min-h-1 flex-1 rounded-t bg-emerald-500/80" style={{ height: `${Math.min(100, Math.max(10, value))}%` }} title={`${value.toFixed(1)}%`} />)}</div></Card>
+        <Card><SectionTitle title="Dwell SLA Compliance" action="30 Days" /><p className="font-numeric text-2xl font-bold text-text-primary">{dwellSlaRate === null ? '—' : `${dwellSlaRate.toFixed(1)}%`}</p><p className="text-[9px] text-text-secondary">Visits within expected dwell time</p>{dwellSlaChartValues.length ? <div className="mt-3 flex h-20 items-end gap-1 overflow-hidden">{dwellSlaChartValues.map((value, index) => <div key={`${value}-${index}`} className="min-h-1 flex-1 rounded-t bg-emerald-500/80" style={{ height: `${Math.min(100, Math.max(10, value))}%` }} title={`${value.toFixed(1)}%`} />)}</div> : <p className="mt-5 text-[10px] text-text-tertiary">No dwell trend data available.</p>}</Card>
         <Card><SectionTitle title="Quick Actions" /><div className="grid grid-cols-2 gap-2">{[{ label: 'New Shipment', to: '/trips', icon: Plus }, { label: 'Track Shipment', to: '/map', icon: Map }, { label: 'Schedule Pickup', to: '/trips', icon: Truck }, { label: 'Create Report', to: '/analytics', icon: BarChart3 }].map((action) => <Link key={action.label} to={action.to} className="flex items-center gap-2 rounded-lg border border-border-default bg-bg-surface-raised p-2 text-[9px] font-semibold text-text-primary hover:border-[#8b5cf6]"><action.icon size={13} className="text-[#8b5cf6]" />{action.label}</Link>)}<Link to="/ai-advisor" className="col-span-2 flex items-center gap-2 rounded-lg bg-[#250C77] p-2 text-[10px] font-bold text-white"><BarChart3 size={13} className="text-[#ED642B]" />AI Analyst <ArrowRight size={12} className="ml-auto" /></Link></div></Card>
       </div>
     </div>

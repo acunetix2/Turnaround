@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 import { useCorridorAnalysis, useCopilotQuery } from '../../hooks/useAIAdvisor';
 import { formatCurrency, formatMinutes } from '../../lib/format';
+import { getOnTimeDeliveryMetrics } from '../../lib/onTimeDelivery';
 import { Spinner } from '../../components/common/Loader';
 import type { AICopilotMessage, ChartData } from '../../lib/api/types';
 import ReactECharts from 'echarts-for-react';
@@ -444,12 +445,9 @@ export const AIAdvisor: React.FC = () => {
     };
   }, [chartData, isDark]);
 
-  const delayedTrucks = dashboardStats?.trucks_delayed ?? 0;
   const totalCostToday = dashboardStats?.estimated_financial_impact ?? 0;
   const totalShipments = trips.length || locationStats?.reduce((sum, location) => sum + (location.total_visits || 0), 0) || 0;
-  const onTimeDelivery = trips.length > 0
-    ? Math.round((trips.filter((trip) => trip.status && !['delayed', 'cancelled'].includes(trip.status)).length / trips.length) * 1000) / 10
-    : Math.max(0, 100 - delayedTrucks);
+  const onTimeDelivery = getOnTimeDeliveryMetrics(trips);
   const recentInsights = insights.slice(0, 4);
   const fleetAssets = fleetForecast?.assets ?? [];
   const movingAssets = fleetAssets.filter((asset) => asset.tracking_state === 'on_trip').length;
@@ -752,9 +750,13 @@ export const AIAdvisor: React.FC = () => {
             <Clock size={14} className="text-[#250C77]" />
           </div>
           <p className="font-numeric text-2xl font-extrabold text-text-primary mt-2">
-            {onTimeDelivery}%
+            {onTimeDelivery.rate === null ? '—' : `${onTimeDelivery.rate}%`}
           </p>
-          <p className="text-[11px] text-status-good mt-0.5">{delayedTrucks > 0 ? `${delayedTrucks} delayed now` : 'No active delays'}</p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">
+            {onTimeDelivery.rate === null
+              ? 'Completed trips with schedule data required'
+              : `${onTimeDelivery.onTimeTrips} of ${onTimeDelivery.completedTrips} completed trips on time`}
+          </p>
         </div>
 
         <div className="rounded-xl border border-border-default bg-bg-surface p-4 shadow-sm">

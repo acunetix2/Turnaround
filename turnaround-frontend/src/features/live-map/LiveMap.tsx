@@ -7,6 +7,7 @@ import { useLocations } from '../../hooks/useLocations';
 import { useLiveGPSEvents } from '../../hooks/useLiveMap';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
+import { getOnTimeDeliveryMetrics } from '../../lib/onTimeDelivery';
 import { useCompany } from '../../lib/CompanyContext';
 import { getOperatingZone } from '../../lib/operatingZones';
 import { formatMinutes } from '../../lib/format';
@@ -606,15 +607,14 @@ export const LiveMap: React.FC = () => {
   const activeVehicleCount = (vehicles || []).filter(vehicle => ['active', 'in_transit', 'delayed'].includes(vehicle.status)).length;
   const movingVehicleCount = (vehicles || []).filter(vehicle => vehicle.status === 'in_transit').length;
   const completedShipmentCount = trips.filter(trip => trip.status === 'completed').length;
-  const onTimeShipmentCount = trips.filter(trip => trip.status !== 'delayed').length;
-  const onTimeShipmentRate = trips.length ? Math.round((onTimeShipmentCount / trips.length) * 1000) / 10 : 100;
+  const onTimeDelivery = getOnTimeDeliveryMetrics(trips);
   const activeCorridorCount = CORRIDOR_ROUTES_GEOJSON.features.length;
   const dashboardMetrics: Array<{ label: string; value: string | number; detail: string; icon: React.ElementType }> = [
     { label: 'Active Corridors', value: activeCorridorCount, detail: 'All major routes operational', icon: Route },
     { label: 'Active Vehicles', value: activeVehicleCount, detail: `${movingVehicleCount} currently moving`, icon: Truck },
     { label: 'Avg. Transit Time', value: '—', detail: 'Live route estimate pending', icon: Compass },
     { label: 'Total Shipments', value: trips.length, detail: `${completedShipmentCount} completed`, icon: MapPin },
-    { label: 'On-Time Delivery', value: `${onTimeShipmentRate}%`, detail: `${onTimeShipmentCount} on time`, icon: Route },
+    { label: 'On-Time Delivery', value: onTimeDelivery.rate === null ? '—' : `${onTimeDelivery.rate}%`, detail: onTimeDelivery.rate === null ? 'Completed trips with schedule data needed' : `${onTimeDelivery.onTimeTrips} of ${onTimeDelivery.completedTrips} completed trips on time`, icon: Route },
   ];
 
   return (
